@@ -860,9 +860,13 @@ window.addEventListener('beforeunload', ()=>{
   } catch(e){}
 });
 
-// Persist periodically + on tab close
-window.addEventListener('beforeunload', saveAll);
-setInterval(saveAll, 1500);
+// Persist on tab close (final, non-debounced flush)
+window.addEventListener('beforeunload', () => {
+  try { saveAll(); } catch(e){}
+});
+
+// We no longer run a 1.5s heartbeat save – the 30s safety net below is enough.
+
 
 // Last non-zero pace we painted with (for tint fallback)
 let uiLastPaceUh = 0;
@@ -931,8 +935,8 @@ let snakeUnlocked = false; // Gate: Snake congestion game
 // Persisted preference: one-time shift length (hours)
 const SHIFT_PREF = 'wqt.shiftLenH';
 
-// Extra safety net save in case the main 1500ms one misses something
-setInterval(function(){ saveAll(); }, 30000);
+// Extra safety net save (very infrequent; use debounced saver)
+setInterval(function(){ saveAllDebounced(0); }, 30000);
 
 // Clear the "snapped to" hint text
 function clearStartHint(){
@@ -1500,6 +1504,17 @@ function loadAll(){
   }
 }
 
+// ---- Debounced wrapper around saveAll (for noisy UI paths) ----
+let _saveTimeout = null;
+
+function saveAllDebounced(delayMs = 500) {
+  clearTimeout(_saveTimeout);
+  _saveTimeout = setTimeout(() => {
+    _saveTimeout = null;
+    saveAll();                  // call the real saver once
+  }, delayMs);
+}
+
 // Main save: in-memory state → localStorage
 function saveAll(){
   try {
@@ -1860,7 +1875,7 @@ function showTab(which){
     updateEndPickingVisibility?.();
     updateCloseEarlyVisibility?.();
     renderShiftPanel?.();
-    saveAll();
+    saveAllDebounced();
     return;
   }
 
@@ -1869,5 +1884,5 @@ function showTab(which){
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  saveAll();
+  saveAllDebounced();
 }
