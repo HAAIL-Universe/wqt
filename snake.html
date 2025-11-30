@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Snake Lab – Congestion Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      /* Match QuickCalc / Tracker theme */
+      --bg:#0b0d10;
+      --card:#141821;
+      --ink:#e8eef7;
+      --muted:#9fb3c8;
+
+      --accent:#b4363a;   /* maroon accent */
+      --line:#5a1e25;
+      --ok:#1b6e36;       /* green OK (for Start button) */
+      --warn:#8a6a15;
+      --bad:#7a2b2b;
+
+      --rim1:#d84b52;     /* red rim gradient – same as tracker */
+      --rim2:#5e1a1e;
+
+      --grid:#1b1f28;
+      --snake:#6dd6ff;
+      --food:#ffb347;
+    }
+
+    *{box-sizing:border-box;}
+
+    body{
+      margin:0;
+      padding:16px;
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      background:var(--bg);
+      color:var(--ink);
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+      align-items:center;
+    }
+
+    h1{
+      font-size:1.25rem;
+      margin:0 0 4px;
+      text-align:center;
+    }
+
+    .card{
+      width:100%;
+      max-width:420px;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid transparent;
+      background:
+        linear-gradient(var(--card),var(--card)) padding-box,
+        linear-gradient(180deg,var(--rim1),var(--rim2)) border-box;
+      box-shadow:
+        inset 0 0 0 1px rgba(212,64,72,0.06),
+        0 0 12px rgba(212,64,72,0.10);
+    }
+
+    .row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    label{
+      font-size:0.8rem;
+      color:var(--muted);
+    }
+
+    input[type="number"]{
+      width:100%;
+      padding:6px 8px;
+      border-radius:8px;
+      border:1px solid #252b42;
+      background:#080a13;
+      color:var(--ink);
+      font-size:0.9rem;
+    }
+
+    .btn{
+      border:none;
+      border-radius:999px;
+      padding:8px 14px;
+      font-size:0.85rem;
+      font-weight:500;
+      cursor:pointer;
+      background:#141821;     /* same dark as tracker cards */
+      color:var(--ink);
+    }
+
+    .btn.primary{
+      background:var(--ok);   /* green like OK buttons in tracker */
+      color:#e8f5ec;
+    }
+
+    .btn.danger{
+      background:var(--bad);
+      color:#140308;
+    }
+
+    .btn:disabled{
+      opacity:0.4;
+      cursor:default;
+    }
+
+    #hud{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px 12px;
+      font-size:0.8rem;
+      color:var(--muted);
+      margin-top:6px;
+    }
+
+    .badge{
+      padding:4px 8px;
+      border-radius:999px;
+      background:#171c2e;
+      color:var(--ink);
+      font-size:0.75rem;
+    }
+
+    #gameShell{
+      margin-top:12px;
+      display:flex;
+      justify-content:center;
+    }
+
+    /* Enlarged + responsive canvas */
+    #snakeCanvas{
+      width:100%;
+      max-width:360px;
+      height:auto;
+      border-radius:12px;
+      border:1px solid transparent;
+      background:
+        linear-gradient(#050711,#050711) padding-box,
+        linear-gradient(180deg,var(--rim1),var(--rim2)) border-box;
+      box-shadow:
+        inset 0 0 0 1px rgba(212,64,72,0.10),
+        0 0 18px rgba(212,64,72,0.25);
+      image-rendering:pixelated;
+      touch-action:none; /* don’t treat touches as scroll/zoom */
+    }
+
+    #status{
+      margin-top:8px;
+      font-size:0.8rem;
+      color:var(--muted);
+      text-align:center;
+    }
+
+    #status span.live{
+      color:var(--accent);
+    }
+
+    /* Break countdown bar while playing Snake */
+    .snake-breakbar{
+      position:fixed;
+      left:50%;
+      bottom:24px;
+      transform:translateX(-50%);
+      z-index:50;
+      min-width:260px;
+      max-width:90vw;
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid rgba(216,75,82,0.85);
+      background:rgba(7,7,12,0.96);
+      box-shadow:0 0 18px rgba(0,0,0,0.75);
+      display:none;
+      align-items:center;
+      gap:12px;
+      font-size:0.85rem;
+    }
+    .snake-breakbar .sb-main{ flex:1; }
+    .snake-breakbar .sb-title{ font-weight:700; }
+    .snake-breakbar .sb-meta{
+      font-size:0.75rem;
+      color:var(--muted);
+    }
+    .snake-breakbar .sb-count{
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .snake-breakbar.green .sb-count{ color:#55d67b; }
+    .snake-breakbar.amber .sb-count{ color:#f4c45f; }
+
+    .hidden{
+      display:none;
+    }
+
+    /* Force-hidden overlays to properly disappear */
+    .overlay.hidden {
+      display: none !important;
+      pointer-events: none !important;
+    }
+    .overlay{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(0,0,0,0.65);
+      z-index:1000;
+    }
+    .overlay .panel{
+      background:var(--card);
+      padding:14px 16px;
+      border-radius:12px;
+      width:90%;
+      max-width:320px;
+      box-shadow:0 12px 32px rgba(0,0,0,0.7);
+      text-align:center;
+    }
+    .overlay h2{
+      margin:0 0 6px;
+      font-size:1rem;
+    }
+    .overlay p{
+      margin:0 0 10px;
+      font-size:0.8rem;
+      color:var(--muted);
+    }
+    .overlay .btn-row{
+      display:flex;
+      gap:8px;
+      justify-content:center;
+    }
+
+    /* Phone width */
+    @media (max-width:480px){
+      body{padding:12px;}
+    }
+
+    /* Compact mode for short viewports (e.g. inside QuickCalc modal iframe) */
+    @media (max-height:520px){
+      body{
+        padding:8px;
+      }
+      .card{
+        padding:8px 10px;
+      }
+      #gameShell{
+        margin-top:8px;
+      }
+      #snakeCanvas{
+        height:260px;          /* shrink visual height to avoid scrolling */
+      }
+      #status{
+        margin-top:4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Snake Lab – Break Game</h1>
+    <p style="font-size:0.8rem;color:var(--muted);margin:0 0 8px;">
+      Sandbox version for breaks. Score per apple = <code>0.001 × live&nbsp;rate&nbsp;at&nbsp;start&nbsp;of&nbsp;the&nbsp;game</code>.
+    </p>
+
+    <div class="row" style="margin-bottom:6px;">
+      <div style="flex:1 1 50%;">
+        <label>Using live pick rate</label>
+        <div id="snakeRateLabel" style="font-size:0.95rem;font-weight:600;margin-top:2px;">
+          —
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button id="btnStartCongestion" class="btn primary" type="button">
+          Start Snake
+        </button>
+        <button id="btnEndCongestion" class="btn danger" type="button" disabled>
+          Stop Snake
+        </button>
+      </div>
+    </div>
+
+    <div id="hud">
+      <span class="badge" id="hudRate">Using pick rate: 0.0 /h</span>
+      <span class="badge" id="hudValue">Points per apple: 0.000</span>
+      <span class="badge" id="hudApples">Apples (total): 0</span>
+      <span class="badge" id="hudScore">Score (total): 0.000</span>
+      <span class="badge" id="hudHighScore">Shift high score: 0.000</span>
+    </div>
+
+    <div id="gameShell">
+      <canvas id="snakeCanvas" width="360" height="360"></canvas>
+    </div>
+
+    <div id="status">
+      <span id="statusText">
+        Set a pick rate and press <strong>Start Snake</strong>.
+      </span>
+    </div>
+  </div>
+
+  <!-- Congestion check overlay -->
+  <div id="checkOverlay" class="overlay hidden">
+    <div class="panel">
+      <h2>Still congested?</h2>
+      <p>
+        If your aisle is clear and you can move again, end congestion so Snake stops.
+      </p>
+      <div class="btn-row">
+        <button id="btnStillCongested" class="btn primary" type="button">Yes, still blocked</button>
+        <button id="btnNoLongerCongested" class="btn danger" type="button">No, it's clear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resume previous run overlay -->
+  <div id="resumeOverlay" class="overlay hidden">
+    <div class="panel">
+      <h2>Resume last Snake run?</h2>
+      <p>
+        Your last congestion game was paused. New apples will use the current
+        live rate as multiplier for this congestion.
+      </p>
+      <div class="btn-row">
+        <button id="btnResumeRun" class="btn primary" type="button">Resume last run</button>
+        <button id="btnNewRun" class="btn" type="button">Start new run</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("snakeCanvas");
+    const ctx    = canvas.getContext("2d");
+
+    // --- Touch / tap controls on the game box ---
+    function handleTapDirection(evt){
+      if (!gameAlive) return;
+
+      const touch = evt.touches ? evt.touches[0] : evt;
+      const rect  = canvas.getBoundingClientRect();
+      const cx    = rect.left + rect.width / 2;
+      const cy    = rect.top  + rect.height / 2;
+      const x     = touch.clientX;
+      const y     = touch.clientY;
+      const dx    = x - cx;
+      const dy    = y - cy;
+
+      // Decide dominant axis: horizontal vs vertical
+      if (Math.abs(dx) > Math.abs(dy)){
+        // Horizontal move
+        if (dx < 0 && dirX !== 1){      // tap left side
+          dirX = -1; dirY = 0;
+        } else if (dx > 0 && dirX !== -1){ // tap right side
+          dirX = 1; dirY = 0;
+        }
+      } else {
+        // Vertical move
+        if (dy < 0 && dirY !== 1){      // tap upper half
+          dirX = 0; dirY = -1;
+        } else if (dy > 0 && dirY !== -1){ // tap lower half
+          dirX = 0; dirY = 1;
+        }
+      }
+
+      evt.preventDefault();
+    }
+
+    // Attach both touch and mouse click for flexibility
+    canvas.addEventListener("touchstart", handleTapDirection, { passive:false });
+    canvas.addEventListener("click", handleTapDirection);
+
+    const gridSize = 20;
+    const cells    = canvas.width / gridSize;
+
+    // Dynamic speed + hazard config
+    const SPEED_STAGE0_MS    = 160;    // initial (slower than old 120ms)
+    const SPEED_STAGE1_MS    = 190;    // after 30 apples, slow a little more
+    const HAZARD_INTERVAL_MS = 15000;  // every 15s after 50 apples
+
+    let tickIntervalMs      = SPEED_STAGE0_MS;
+    let speedStage          = 0;       // 0 = <30 apples, 1 = >=30 apples
+    let explosionTriggered  = false;
+
+    let hazards     = [];
+    let hazardTimer = null;
+
+    let snake = [];
+    let dirX  = 1;
+    let dirY  = 0;
+    let food  = { x: 5, y: 5 };
+
+    let applesEaten          = 0;  // total apples across whole run
+    let totalScore           = 0;  // cumulative score across all congestions
+    let currentRateSegment   = 0;  // live rate for THIS congestion
+    let currentValuePerApple = 0;  // 0.001 × currentRateSegment
+    // High score per "shift" (currently = per calendar day)
+    let highScore      = 0;
+    let highScoreMeta  = null;
+    const HIGH_SCORE_KEY = "snakeHighScoreV1";
+    // Rate used for this congestion run (u/h), fed from main app
+    let snakeRateUh = 250;
+
+    function initSnakeRateFromStorage(){
+      let rate = 0;
+      try {
+        const raw = localStorage.getItem("snakeLiveRateUh");
+        if (raw != null) {
+          rate = parseInt(raw, 10);
+        }
+      } catch(e){
+        rate = 0;
+      }
+
+      if (!Number.isFinite(rate) || rate <= 0) {
+        rate = 250;  // default if no live rate available
+      }
+
+      snakeRateUh = rate;
+
+      if (typeof snakeRateLabel !== "undefined" && snakeRateLabel) {
+        snakeRateLabel.textContent = rate + " u/h";
+      }
+    }
+
+    // === High score helpers ===
+    function getTodayShiftId(){
+      const d = new Date();
+      // For now, treat each calendar day as a separate "shift"
+      return d.toISOString().slice(0,10); // YYYY-MM-DD
+    }
+
+    function loadHighScore(){
+      try{
+        const raw = localStorage.getItem(HIGH_SCORE_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+
+        // If the stored score is from a previous day, treat as new shift
+        if (!data || data.shiftId !== getTodayShiftId()) return;
+
+        highScore     = data.score || 0;
+        highScoreMeta = data;
+      } catch(err){
+        console.warn("Failed to load Snake high score", err);
+      }
+    }
+
+    function saveHighScore(){
+      const payload = {
+        score:   highScore,
+        apples:  highScoreMeta?.apples ?? applesEaten,
+        rate:    highScoreMeta?.rate   ?? currentRateSegment,
+        at:      Date.now(),
+        shiftId: getTodayShiftId()
+      };
+      highScoreMeta = payload;
+      try{
+        localStorage.setItem(HIGH_SCORE_KEY, JSON.stringify(payload));
+      } catch(err){
+        console.warn("Failed to save Snake high score", err);
+      }
+    }
+
+    function maybeUpdateHighScore(){
+      if (totalScore > highScore){
+        highScore = totalScore;
+        highScoreMeta = {
+          score:   totalScore,
+          apples:  applesEaten,
+          rate:    currentRateSegment,
+          at:      Date.now(),
+          shiftId: getTodayShiftId()
+        };
+        saveHighScore();
+      }
+    }
+
+    let gameLoop   = null;
+    let congested  = false;
+    let gameAlive  = false;
+
+    let savedGame = null;
+    let pendingNewRunRate = 0;
+
+    let congestionCheckTimer = null;
+    const CHECK_INTERVAL_MS  = 45000;
+
+    const hudRate   = document.getElementById("hudRate");
+    const hudValue  = document.getElementById("hudValue");
+    const hudApples = document.getElementById("hudApples");
+    const hudScore  = document.getElementById("hudScore");
+    const hudHighScore = document.getElementById("hudHighScore");
+    const statusEl  = document.getElementById("statusText");
+
+    const btnStart       = document.getElementById("btnStartCongestion");
+    const btnEnd         = document.getElementById("btnEndCongestion");
+    const snakeRateLabel = document.getElementById("snakeRateLabel");
+
+    const overlayCheck   = document.getElementById("checkOverlay");
+    const btnStill       = document.getElementById("btnStillCongested");
+    const btnNotStill    = document.getElementById("btnNoLongerCongested");
+
+    const overlayResume  = document.getElementById("resumeOverlay");
+    const btnResumeRun   = document.getElementById("btnResumeRun");
+    const btnNewRun      = document.getElementById("btnNewRun");
+
+    function cloneSnakeBody(body){
+      return body.map(seg => ({ x: seg.x, y: seg.y }));
+    }
+
+    function clearHazardTimer(){
+      if (hazardTimer){
+        clearInterval(hazardTimer);
+        hazardTimer = null;
+      }
+    }
+
+    function resetSnake(){
+      snake = [
+        { x: Math.floor(cells / 2), y: Math.floor(cells / 2) },
+      ];
+      dirX = 1;
+      dirY = 0;
+      applesEaten = 0;
+      totalScore  = 0;
+      explosionTriggered = false;
+      speedStage = 0;
+      tickIntervalMs = SPEED_STAGE0_MS;
+      hazards = [];
+      clearHazardTimer();
+      placeFood();
+      updateHud();
+    }
+
+    function cellIsHazard(x, y){
+      return hazards.some(h => h.x === x && h.y === y);
+    }
+
+    function placeFood(){
+      let valid = false;
+      while (!valid){
+        food.x = Math.floor(Math.random() * cells);
+        food.y = Math.floor(Math.random() * cells);
+        const onSnake  = snake.some(seg => seg.x === food.x && seg.y === food.y);
+        const onHazard = cellIsHazard(food.x, food.y);
+        valid = !onSnake && !onHazard;
+      }
+    }
+
+    function updateHud(){
+      hudRate.textContent      = "Rate this congestion: " + currentRateSegment.toFixed(1) + " /h";
+      hudValue.textContent     = "Points per apple (this congestion): " + currentValuePerApple.toFixed(3);
+      hudApples.textContent    = "Apples (total): " + applesEaten;
+      hudScore.textContent     = "Score (total): " + totalScore.toFixed(3);
+      hudHighScore.textContent = "Shift high score: " + highScore.toFixed(3);
+    }
+
+    function drawBoard(){
+      ctx.fillStyle = "#050711";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.03)";
+      for (let i = 0; i <= cells; i++){
+        ctx.beginPath();
+        ctx.moveTo(i * gridSize + 0.5, 0);
+        ctx.lineTo(i * gridSize + 0.5, canvas.height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, i * gridSize + 0.5);
+        ctx.lineTo(canvas.width, i * gridSize + 0.5);
+        ctx.stroke();
+      }
+
+      // Hazard tiles (blocked squares)
+      if (hazards.length){
+        ctx.fillStyle = "#5e1a1e";
+        hazards.forEach(h => {
+          ctx.fillRect(h.x * gridSize, h.y * gridSize, gridSize, gridSize);
+        });
+      }
+
+      // Food
+      ctx.fillStyle = "#ffb347";
+      ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+
+      // Snake
+      ctx.fillStyle = "#6dd6ff";
+      snake.forEach((seg, index) => {
+        const inset = index === 0 ? 2 : 3;
+        ctx.fillRect(
+          seg.x * gridSize + inset,
+          seg.y * gridSize + inset,
+          gridSize - inset * 2,
+          gridSize - inset * 2
+        );
+      });
+    }
+
+    function explodeSnakeQuarter(){
+      if (snake.length <= 4) return;
+      const targetLen = Math.max(3, Math.floor(snake.length * 0.75));
+      snake = snake.slice(0, targetLen);
+    }
+
+    function addRandomHazardCell(){
+      // avoid completely filling the board
+      if (hazards.length >= cells * cells - snake.length - 2) return;
+
+      let attempts = 0;
+      while (attempts < 50){
+        const hx = Math.floor(Math.random() * cells);
+        const hy = Math.floor(Math.random() * cells);
+        const occupiedBySnake  = snake.some(seg => seg.x === hx && seg.y === hy);
+        const occupiedByFood   = (food.x === hx && food.y === hy);
+        const occupiedByHazard = cellIsHazard(hx, hy);
+
+        if (!occupiedBySnake && !occupiedByFood && !occupiedByHazard){
+          hazards.push({ x: hx, y: hy });
+          break;
+        }
+        attempts++;
+      }
+    }
+
+    function startHazardMode(){
+      if (hazardTimer) return;
+      // drop one immediately
+      addRandomHazardCell();
+      hazardTimer = setInterval(() => {
+        if (!gameAlive || !congested) return;
+        addRandomHazardCell();
+        drawBoard();
+      }, HAZARD_INTERVAL_MS);
+    }
+
+    function tick(){
+      if (!congested || !gameAlive) return;
+
+      const head = snake[0];
+
+      let nextX = head.x + dirX;
+      let nextY = head.y + dirY;
+
+      // Wrap around edges
+      if (nextX < 0) nextX = cells - 1;
+      else if (nextX >= cells) nextX = 0;
+      if (nextY < 0) nextY = cells - 1;
+      else if (nextY >= cells) nextY = 0;
+
+      // If next cell is a hazard, try to bounce with guard logic
+      if (cellIsHazard(nextX, nextY)){
+        const candidateDirs = [];
+
+        // 1) Reverse
+        candidateDirs.push({ dx: -dirX, dy: -dirY });
+
+        // 2) Perpendiculars
+        if (dirX !== 0){
+          candidateDirs.push({ dx: 0, dy: 1 });
+          candidateDirs.push({ dx: 0, dy: -1 });
+        } else {
+          candidateDirs.push({ dx: 1, dy: 0 });
+          candidateDirs.push({ dx: -1, dy: 0 });
+        }
+
+        let foundSafe = false;
+
+        for (const cand of candidateDirs){
+          let tx = head.x + cand.dx;
+          let ty = head.y + cand.dy;
+
+          // Wrap around edges for candidate
+          if (tx < 0) tx = cells - 1;
+          else if (tx >= cells) tx = 0;
+          if (ty < 0) ty = cells - 1;
+          else if (ty >= cells) ty = 0;
+
+          // Skip if hazard or body collision
+          if (cellIsHazard(tx, ty)) continue;
+          const hitsBody = snake.some(seg => seg.x === tx && seg.y === ty);
+          if (hitsBody) continue;
+
+          // Use this safe direction
+          dirX = cand.dx;
+          dirY = cand.dy;
+          nextX = tx;
+          nextY = ty;
+          foundSafe = true;
+          break;
+        }
+
+        if (!foundSafe){
+          endGame("Trapped by hazards");
+          return;
+        }
+      }
+
+      // Self-collision check
+      if (snake.some(seg => seg.x === nextX && seg.y === nextY)){
+        endGame("Hit yourself");
+        return;
+      }
+
+      const newHead = { x: nextX, y: nextY };
+      snake.unshift(newHead);
+
+      let ate = false;
+      if (newHead.x === food.x && newHead.y === food.y){
+        applesEaten += 1;
+        totalScore  += currentValuePerApple;
+        ate = true;
+
+        // Speed + funkiness thresholds
+        if (applesEaten >= 30 && speedStage === 0){
+          speedStage     = 1;
+          tickIntervalMs = SPEED_STAGE1_MS;
+          startGameLoop(); // restart loop at new slower speed
+          statusEl.innerHTML = "Snake slowed slightly – you're carrying a lot of apples.";
+        }
+        if (applesEaten >= 50 && !explosionTriggered){
+          explosionTriggered = true;
+          explodeSnakeQuarter();
+          startHazardMode();
+          statusEl.innerHTML =
+            "Snake shed part of its tail and unstable tiles are appearing. Avoid hazard blocks!";
+        }
+
+        updateHud();
+        placeFood();
+      }
+
+      if (!ate){
+        snake.pop();
+      }
+
+      drawBoard();
+    }
+
+    function startGameLoop(){
+      if (gameLoop) clearInterval(gameLoop);
+      gameLoop = setInterval(tick, tickIntervalMs);
+    }
+
+    function stopGameLoop(){
+      if (gameLoop){
+        clearInterval(gameLoop);
+        gameLoop = null;
+      }
+    }
+
+    function clearCongestionCheckTimer(){
+      if (congestionCheckTimer){
+        clearTimeout(congestionCheckTimer);
+        congestionCheckTimer = null;
+      }
+    }
+
+    function scheduleCongestionCheck(){
+      clearCongestionCheckTimer();
+      if (!congested || !gameAlive) return;
+      congestionCheckTimer = setTimeout(() => {
+        pauseForCongestionCheck();
+      }, CHECK_INTERVAL_MS);
+    }
+
+    function pauseForCongestionCheck(){
+      if (!congested || !gameAlive) return;
+      gameAlive = false;
+      overlayCheck.classList.remove("hidden");
+      statusEl.innerHTML =
+        "Paused to check congestion. Confirm if you're still blocked.";
+    }
+
+    function handleStillCongested(){
+      overlayCheck.classList.add("hidden");
+      if (!congested) return;
+      runCountdownAndResume("Congestion <span class='live'>ACTIVE</span>. Snake resumed.");
+    }
+
+    function handleNotCongested(){
+      overlayCheck.classList.add("hidden");
+      if (!congested) return;
+      pauseAndSaveForLater();
+    }
+
+    function pauseAndSaveForLater(){
+      // Snapshot current run so it can be resumed on a later break
+      savedGame = {
+        snake: cloneSnakeBody(snake),
+        dirX,
+        dirY,
+        food: { x: food.x, y: food.y },
+        applesEaten,
+        totalScore
+      };
+
+      congested = false;
+      gameAlive = false;
+      stopGameLoop();
+      clearCongestionCheckTimer();
+      clearHazardTimer();
+
+      btnStart.disabled = false;
+      btnEnd.disabled   = false;
+
+      statusEl.innerHTML =
+        "Snake paused & saved. " +
+        "Next time you start Snake you can resume this run or begin a new one.";
+    }
+
+    function runCountdownAndResume(messageAfter){
+      clearCongestionCheckTimer();
+      gameAlive = false;
+      let count = 3;
+      statusEl.innerHTML = "Resuming in " + count + "...";
+
+      const intervalId = setInterval(() => {
+        count--;
+        if (count > 0){
+          statusEl.innerHTML = "Resuming in " + count + "...";
+        } else {
+          clearInterval(intervalId);
+          if (!congested){
+            statusEl.innerHTML = "Congestion ended during countdown.";
+            return;
+          }
+          gameAlive = true;
+          statusEl.innerHTML = messageAfter;
+          scheduleCongestionCheck();
+        }
+      }, 1000);
+    }
+
+    function startNewRunWithRate(rate){
+      currentRateSegment   = rate;
+      currentValuePerApple = 0.001 * currentRateSegment;
+
+      resetSnake();
+      drawBoard();
+      updateHud();
+      startGameLoop();
+      runCountdownAndResume(
+        "Congestion <span class='live'>ACTIVE</span>. Use arrow keys or taps to control the snake."
+      );
+    }
+
+    function resumeSavedRunWithRate(rate){
+      if (!savedGame) return;
+
+      snake       = cloneSnakeBody(savedGame.snake);
+      dirX        = savedGame.dirX;
+      dirY        = savedGame.dirY;
+      food        = { x: savedGame.food.x, y: savedGame.food.y };
+      applesEaten = savedGame.applesEaten;
+      totalScore  = savedGame.totalScore;
+
+      currentRateSegment   = rate;
+      currentValuePerApple = 0.001 * currentRateSegment;
+
+      savedGame = null;
+
+      drawBoard();
+      updateHud();
+      startGameLoop();
+      runCountdownAndResume(
+        "Congestion <span class='live'>ACTIVE</span>. Resumed your last Snake run."
+      );
+    }
+
+    function startCongestionAndGame(){
+      if (congested) return;
+
+      // Use rate from main app (or 250 fallback)
+      const rate = (Number.isFinite(snakeRateUh) && snakeRateUh > 0) ? snakeRateUh : 250;
+
+      congested = true;
+      btnStart.disabled = true;
+      btnEnd.disabled   = false;
+
+      if (savedGame){
+        // Let the resume overlay choose between RESUME / NEW RUN with this rate
+        pendingNewRunRate = rate;
+        overlayResume.classList.remove("hidden");
+      } else {
+        startNewRunWithRate(rate);
+      }
+    }
+
+    function endGame(reason){
+      gameAlive  = false;
+      congested  = false;
+      stopGameLoop();
+      clearCongestionCheckTimer();
+      clearHazardTimer();
+      hazards = [];
+      overlayCheck.classList.add("hidden");
+      overlayResume.classList.add("hidden");
+      btnStart.disabled = false;
+      btnEnd.disabled   = false;
+
+      // Update shift high score if this run beat it
+      maybeUpdateHighScore();
+      updateHud();
+
+      drawBoard();
+
+      statusEl.innerHTML =
+        "Game over: " + reason + ". " +
+        "Final score: <strong>" + totalScore.toFixed(3) + "</strong>. " +
+        "Press <strong>Start Snake</strong> to try again.";
+      savedGame = null;
+    }
+
+        function endCongestionAndGameManual(){
+      // If a run is currently active, pause and save it for later
+      if (gameAlive) {
+        pauseAndSaveForLater();
+        return;
+      }
+
+      // No active run – just make sure controls are sane
+      btnStart.disabled = false;
+      btnEnd.disabled   = false;
+
+      statusEl.innerHTML = "Snake stopped. Press Start Snake to play.";
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (!gameAlive) return;
+
+      switch (e.key){
+        case "ArrowUp":
+        case "w":
+        case "W":
+          if (dirY === 1) break;
+          dirX = 0; dirY = -1;
+          break;
+        case "ArrowDown":
+        case "s":
+        case "S":
+          if (dirY === -1) break;
+          dirX = 0; dirY = 1;
+          break;
+        case "ArrowLeft":
+        case "a":
+        case "A":
+          if (dirX === 1) break;
+          dirX = -1; dirY = 0;
+          break;
+        case "ArrowRight":
+        case "d":
+        case "D":
+          if (dirX === -1) break;
+          dirX = 1; dirY = 0;
+          break;
+      }
+    });
+
+    btnStart.addEventListener("click", () => {
+      startCongestionAndGame();          // just starts the game now
+    });
+
+    btnEnd.addEventListener("click", () => {
+      // manual stop, no delay logging, no redirect back to index.html
+      try {
+        endGame("Stopped manually");
+      } catch (e) {
+        // game might not be running – ignore
+      }
+    });
+
+    // No congestion check prompts any more
+    btnStill.remove?.();
+    btnNotStill.remove?.();
+
+    btnResumeRun.addEventListener("click", () => {
+      const mod = document.getElementById("resumeOverlay");
+      if (mod) mod.classList.add("hidden");
+
+      if (!savedGame){
+        startNewRunWithRate(pendingNewRunRate || 280);
+      } else {
+        resumeSavedRunWithRate(pendingNewRunRate || 280);
+      }
+    });
+
+    btnNewRun.addEventListener("click", () => {
+      const mod = document.getElementById("resumeOverlay");
+      if (mod) mod.classList.add("hidden");
+
+      startNewRunWithRate(pendingNewRunRate || 280);
+      savedGame = null;
+    });
+
+    initSnakeRateFromStorage();
+    loadHighScore();
+    resetSnake();
+    drawBoard();
+    updateHud();
+  </script>
+</body>
+</html>

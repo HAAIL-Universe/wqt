@@ -1,0 +1,714 @@
+:root {
+  --bg:#0b0d10; --card:#141821; --ink:#e8eef7; --muted:#9fb3c8;
+  --accent:#b4363a;            /* maroon focus/active */
+  --line:#5a1e25;              /* darker neutral line */
+  --ok:#1b6e36; --warn:#8a6a15; --bad:#7a2b2b;
+  --rim1:#d84b52; --rim2:#5e1a1e;              /* deep edge */
+}
+* { box-sizing: border-box; }
+html,body { margin:0; padding:0; background:#0b0d10; color:var(--ink); font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 14px; }
+h1 { font-size: 20px; margin:6px 0 10px; }
+
+/* =====================================================================
+   2. TABS / BASIC LAYOUT / CARDS
+   ===================================================================== */
+.tabs { display:flex; gap:8px; margin:6px 0 10px; position: sticky; top:0; background:var(--bg); padding-top:6px; z-index:15; }
+.tabbtn { flex:1; text-align:center; padding:10px; border:1px solid #253348; border-radius:10px; background:#0f131b; color:var(--ink); font-weight:700; cursor:pointer; }
+.tabbtn.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.hidden { display:none; } /* (note: overridden later with !important version) */
+
+.card { background:var(--card); border:1px solid #253348; border-radius:14px; padding:14px; margin: 10px 0; }
+
+/* Make the Live Rate chip clearly clickable */
+#chipRate { cursor: pointer; transition: transform .08s ease; }
+#chipRate:active { transform: scale(0.97); }
+
+/* QC keypad tactile press + pointer */
+.cbPad button { cursor: pointer; transition: transform .08s ease, box-shadow .12s ease, opacity .12s ease; }
+.cbPad button:active { transform: scale(0.97); }
+.cbPad button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Elapsed chip disabled when on break */
+#chipElapsed.disabled{ pointer-events:none; opacity:0.6; filter:saturate(0.7); }
+
+/* =====================================================================
+   3. FORM ELEMENTS / GRID / BUTTONS
+   ===================================================================== */
+label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+input, select, button, textarea { font-size:16px; }
+input[type="number"], input[type="time"], input[type="text"], select, textarea {
+  width:100%; background:#0f131b; color:var(--ink); border:1px solid #29364a; border-radius:10px; padding:10px; outline:none;
+}
+textarea{ min-height:90px; resize:vertical; }
+
+.row { display:flex; gap:10px; flex-wrap: wrap; }
+.col { flex:1; min-width:220px; }
+
+/* Core button styles */
+.btn {
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid #5e1a1e;
+  background:#141821;
+  color:var(--ink);
+  font-weight:700;
+  cursor:pointer;
+}
+.btn.ghost {
+  background:#141821;
+  border-color:#5e1a1e;
+  color:#e8eef7;
+  opacity:.85;
+}
+.btn.ok {
+  border-color:#b4363a;
+  background:#1b0f10;
+  color:#f1d9db;
+}
+.btn.warn { border-color:#8a6a15; background:#30250f; }
+.btn.bad { border-color:#7a2b2b; background:#331b1b; }
+
+.btn.chip { padding:8px 10px; border-radius:999px; }
+.btn.slim { padding:6px 10px; border-radius:999px; font-size:14px; }
+.btn[disabled] { opacity:0.5; cursor:not-allowed; }
+
+/* =====================================================================
+   4. PILLS / RATE BANNER / TIMELINE / TABLES / BOTTOM ACTIONS
+   ===================================================================== */
+.pill { border-radius:12px; padding:10px 12px; background:#0f131b; border:1px solid #29364a; text-align:center; }
+.pill h3 { margin:0; font-size:13px; color:#9fb3c8; }
+.pill p { margin:6px 0 0; font-size:22px; font-weight:800; }
+
+.rateBanner { position: sticky; top:48px; z-index:10; display:flex; gap:10px; margin:8px 0; }
+.rateChip { flex:1; text-align:center; padding:10px; border-radius:10px; border:1px solid #29364a; background:#0f131b; }
+
+.timeline { margin-top:8px; border-left:0; padding-left:0; }
+.tick { margin:6px 0; color:#cfe2ff; font-size:13px; display:flex; align-items:center; gap:8px; justify-content:space-between; }
+.tick .meta { color:#9fb3c8; font-size:12px; }
+
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th, td { border-bottom:1px dashed #253348; padding:8px 6px; text-align:left; }
+th { color:#9fb3c8; }
+tr.clickable { cursor:pointer; }
+td.small { font-size:12px; color:#9fb3c8; }
+
+.bottom-actions { margin: 20px 0 10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.bottom-actions .left { flex:1 1 auto; min-width:220px; }
+.bottom-actions .right { flex:0 0 auto; white-space:nowrap; display:flex; gap:8px; }
+
+/* =====================================================================
+   5. SAFETYBAR / HINT / TAGS / ACCORDION HEADERS
+   ===================================================================== */
+.safetybar { margin: 8px 0 40px; }
+.safetybar .btn{
+  width:100%;
+  border:1px dashed var(--rim2) !important;  /* darker maroon (#5e1a1e) */
+  background:#141821 !important;             /* flat ghost fill */
+  color:#d0d3d9;                             
+  box-shadow:none !important;                 /* kill the shiny rim */
+  background-image:none !important;
+  opacity:.85;
+}
+.safetybar .btn:hover{
+  opacity:1;
+  background:#1a1f27;                         /* subtle hover, still ghost */
+  border-color:var(--accent);                 /* slightly brighter maroon */
+}
+.hint { color:#9fb3c8; font-size:12px; }
+
+.tagbox { display:flex; flex-wrap:wrap; gap:8px; }
+.tag { display:inline-flex; gap:8px; align-items:center; padding:6px 10px; border-radius:999px; border:1px solid #29364a; background:#0f131b; font-weight:700; }
+.tag button { border:0; background:transparent; color:#9fb3c8; cursor:pointer; font-size:14px; }
+
+.accordion .accHead { width:100%; text-align:left; padding:10px; border:1px solid #29364a; background:#0f131b; border-radius:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+
+/* =====================================================================
+   6. GLOBAL SHINY TINTS (OK / WARN / BAD) – CARDS, RATE CHIPS, PILL RIMS
+   ===================================================================== */
+/* History day headers / semantic colouring */
+
+/* === OK / GOOD (green) === */
+.card.ok, .card.good,
+.rateChip.ok, .rateChip.good, .rateChip.green,
+.accordion .accHead.ok, .accordion .accHead.good,
+#weekCard .pill.ok, #weekCard .pill.good {
+
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(#14271c, #14271c) padding-box,                 /* green fill */
+    linear-gradient(180deg, #2e7d4a, #1f4830) border-box !important; /* green rim */
+  box-shadow:
+    inset 0 0 0 1px rgba(33,122,68,.06),
+    0 0 12px rgba(33,122,68,.10);
+}
+
+/* === WARN / AMBER === */
+.card.warn, .card.amber,
+.rateChip.warn, .rateChip.amber,
+.accordion .accHead.warn, .accordion .accHead.amber,
+#weekCard .pill.warn, #weekCard .pill.amber {
+
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(#2a230f, #2a230f) padding-box,                 /* amber fill */
+    linear-gradient(180deg, #8a6a15, #584a1a) border-box !important; /* amber rim */
+  box-shadow:
+    inset 0 0 0 1px rgba(138,106,21,.06),
+    0 0 12px rgba(138,106,21,.10);
+}
+
+/* === BAD / RED === */
+.card.bad, .card.red,
+.rateChip.bad, .rateChip.red,
+.accordion .accHead.bad, .accordion .accHead.red,
+#weekCard .pill.bad, #weekCard .pill.red {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(#2a1313, #2a1313) padding-box,                 /* red fill */
+    linear-gradient(180deg, #7a2b2b, #4f1f1f) border-box !important; /* red rim */
+  box-shadow:
+    inset 0 0 0 1px rgba(122,43,43,.06),
+    0 0 12px rgba(122,43,43,.10);
+}
+
+.accordion .accBody { display:none; padding:10px 0 0 0; }
+
+/* =====================================================================
+   7. TOAST / LOG WRAP / LOG ROWS
+   ===================================================================== */
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#0f131b; border:1px solid #29364a; padding:10px 12px; border-radius:10px; display:none; z-index:30; }
+.toast.show { display:block; }
+
+.logwrap { padding:8px 10px; background:#0f131b; border:1px solid #29364a; border-radius:10px; margin:8px 0; }
+.logrow { display:none; }
+.logrow td { border-bottom:none; padding-top:0; }
+.logrow { display:none; }           /* duplicated, but harmless */
+.logrow td { border-bottom:none; padding-top:0; }
+
+/* =====================================================================
+   8. GATED CONTROLS / UTILITY HIDDEN
+   ===================================================================== */
+/* Gated controls */
+.gate-pro { display:none; }      /* Pro tools (export, etc.)      */
+.gate-snake { display:none; }    /* Snake congestion game button  */
+/* Keep history page clean: never show gate-pro buttons there */
+#tabHistory .gate-pro { display: none !important; }
+
+/* Utility: hide/show (stronger hidden) */
+.hidden { display: none !important; }
+
+/* =====================================================================
+   9. MODALS (GENERIC + SNAKE) 
+   ===================================================================== */
+.modal { position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none; align-items:center; justify-content:center; z-index:20; }
+.modal .box {
+  width:min(560px,92vw);
+  background:#0f131b;
+  border:1px solid #5e1a1e;
+  border-radius:12px;
+  padding:14px;
+}
+/* Snake modal: wider + taller so you don't have to scroll */
+#snakeHostModal .box{
+  width:min(720px,96vw);
+  max-height:90vh;
+}
+#snakeHostModal .fld{
+  margin:8px 0;
+  max-height:none;
+}
+#snakeHostModal #snakeFrame{
+  width:100%;
+  height:480px;  /* was 560px – brings the game up a bit so the break bar doesn't sit on it */
+}
+
+
+.modal .hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+.modal .hdr h3 { margin:0; font-size:16px; color:#cfe2ff; }
+.modal .fld { margin:8px 0; }
+.modal .actions { display:flex; justify-content:flex-end; gap:8px; margin-top:8px; }
+
+.count { font-variant-numeric: tabular-nums; font-weight:800; font-size:28px; }
+
+/* =====================================================================
+   10. CUSTOM DROPDOWN (DEPOT / CUSTOMER SELECT)
+   ===================================================================== */
+.dd { position:relative; }
+.dd-toggle { width:100%; text-align:left; padding:10px; border:1px solid #29364a; border-radius:10px; background:#0f131b; color:var(--ink); cursor:pointer; }
+.dd.open .dd-menu { display:block; }
+.dd-menu { position:absolute; z-index:12; left:0; right:0; top:110%; background:#0f131b; border:1px solid #29364a; border-radius:10px; padding:6px; display:none; max-height:280px; overflow:auto; }
+.dd-group { border:1px solid #29364a; border-radius:8px; margin:6px 0; overflow:hidden; }
+.dd-group h4 { margin:0; padding:8px 10px; background:#0b0d10; color:#cfe2ff; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
+.dd-items { display:none; padding:4px 6px; }
+.dd-items button { width:100%; text-align:left; padding:8px 10px; background:transparent; border:0; color:var(--ink); cursor:pointer; border-radius:6px; }
+.dd-items button:hover { background:#11151d; }
+.dd-other { margin:6px 0 0; display:flex; gap:6px; }
+.dd-other button { flex:1; }
+.dd-other input { flex:1; }
+
+/* =====================================================================
+   11. COUNTBACK CALC (QuickCalc keypad + display)
+   ===================================================================== */
+.cbCard {
+  margin-top:8px; padding:10px; border-radius:12px;
+  border:1px solid #5e1a1e;         /* maroon rim */
+  background:#0f131b;
+}
+.cbRow { display:flex; gap:8px; align-items:center; }
+.cbDisplay { flex:1; display:flex; gap:8px; }
+.cbBox {
+  flex:1; border:1px solid #5e1a1e; border-radius:10px; padding:8px;
+}
+.cbBox h4 { margin:0 0 6px; font-size:12px; color:#9fb3c8; }
+.cbVal { font-weight:800; font-size:22px; min-height:28px; }
+.cbPad { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%; }
+.cbPad button { padding:28px 0; border-radius:10px; border:1px solid #32507a; background:#1a2a40; color:var(--ink); font-weight:500; font-size:22px; }
+.cbChips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.cbSummary { margin-left:auto; text-align:right; font-weight:800; }
+
+/* =====================================================================
+   11.5 SHARED PICK BAR (BOTTOM FULL-WIDTH)
+   ===================================================================== */
+#sharedPad{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  z-index:40;
+  display:none;
+  background:#05070b;
+  border-top:1px solid #5e1a1e;
+  box-shadow:0 -6px 20px rgba(0,0,0,.8);
+}
+
+.shared-pad-inner{
+  max-width:900px;
+  margin:0 auto;
+  padding:8px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+
+.shared-pad-text{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+
+.shared-pad-title{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  color:#f1d9db;
+}
+
+.shared-pad-meta{
+  font-size:10px;
+  color:#9fb3c8;
+}
+
+.shared-pad-controls{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.shared-pad-input{
+  width:90px;
+  padding:6px 10px;
+  text-align:center;
+  font-size:14px;
+  font-weight:600;
+  border-radius:10px;
+  border:1px solid #5e1a1e;
+  background:#0f131b;
+  color:#f1d9db;
+  height:34px;
+}
+
+/* Hide number spinners so it looks like a normal WQT field */
+#sharedPad input[type=number]::-webkit-outer-spin-button,
+#sharedPad input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance:none;
+  margin:0;
+}
+#sharedPad input[type=number]{
+  -moz-appearance:textfield;
+}
+
+.shared-pad-add{
+  padding:6px 18px;       /* slightly wider */
+  font-size:13px;
+  height:34px;            /* EXACT match to Units input height */
+  line-height:20px;
+  border-radius:10px;     /* same rounding as input */
+}
+
+.shared-pad-add {
+  /* size & shape */
+  padding: 6px 22px;
+  min-width: 80px;
+  height: 34px;
+  border-radius: 10px;
+
+  /* centering */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* colours / text */
+  border: 1px solid #5e1a1e;
+  background: #1a1f27;
+  color: #f5f7ff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.shared-pad-add:hover {
+  border-color: #3d6df2;
+}
+/* Flash state when units have just been added */
+.shared-pad-add.shared-pad-added {
+  background: #1f3d2c;
+  border-color: #39ff88;
+  box-shadow:
+    0 0 0 1px rgba(57,255,136,.4),
+    0 0 18px rgba(57,255,136,.25);
+}
+
+/* Visual confirmation when units are added */
+#sharedPad .shared-pad-add.shared-pad-added{
+  background:
+    linear-gradient(#122819,#122819) padding-box,
+    linear-gradient(180deg,var(--rim1),var(--rim2)) border-box;
+  border-color:#1f5a32;
+  box-shadow:
+    0 0 0 1px #1f5a32,
+    0 0 14px rgba(16,151,60,.75);
+}
+
+/* =====================================================================
+   12. BREAK BAR (STICKY BOTTOM) + PROGRESS HEADER / BAR / PACE COLOURS
+   ===================================================================== */
+/* === Break Bar === */
+.breakbar{
+  position:fixed;              /* always pinned to viewport, not page flow */
+  left:50%;
+  transform:translateX(-50%);
+  bottom:12px;                 /* sit a little above the absolute bottom */
+  z-index:30;                  /* above modal (modal is z-index:20) */
+  background:#0f131b;
+  border:1px solid #29364a;
+  border-radius:12px;
+  padding:10px;
+  display:none;
+  align-items:center;
+  gap:10px;
+  margin-top:0;                /* no layout margin now we’re fixed */
+}
+.breakbar .grow{ flex:1; }
+
+.breakbar .title{ font-weight:800; }
+.breakbar .meta{ color:#9fb3c8; font-size:12px; }
+
+/* Progress header (replaces form once order starts) */
+.progHead { display:none; gap:10px; align-items:center; }
+.progMeta { flex: 1 1 auto; }
+.progTitle { font-weight:800; font-size:16px; }
+.progSub { color: var(--muted); font-size:12px; margin-top:2px; }
+.progBar {
+  position: relative; height: 12px; background:#0f131b; border:1px solid #29364a;
+  border-radius:999px; overflow:hidden; margin-top:8px;
+}
+
+/* Progress bar fill — with smooth dark gradient base */
+.progFill {
+  position:absolute; left:0; top:0; bottom:0; width:0%;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.15) 100%),
+    var(--line);
+  transition: background-color .25s ease, width .35s ease;
+  border-radius: 3px;
+}
+
+/* Completely hide the 'Left: XX' text + label but preserve for JS logic */
+#progLeft,
+#progLeftLabel,
+#orderHeaderProgress span:has(#progLeft) {
+  display: none !important;
+  visibility: hidden;
+}
+
+/* Pace tints overlayed on the gradient */
+.progFill.pace-ok {
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.15) 100%),
+    var(--ok);
+}
+.progFill.pace-warn {
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.15) 100%),
+    var(--warn);
+}
+.progFill.pace-bad {
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.15) 100%),
+    var(--bad);
+}
+
+.progPct { margin-left:10px; font-weight:700; min-width:56px; text-align:right; }
+.progHead{ align-items:flex-end; }
+.progPct{ margin: 0 0 2px 10px; } /* nudge down slightly */
+
+.progFill.green { background: linear-gradient(90deg,#1f4830,#2e6b3a); }
+.progFill.amber { background: linear-gradient(90deg,#584a1a,#8a6a15); }
+.progFill.bad   { background: linear-gradient(90deg,#4f1f1f,#7a2b2b); }
+
+.progTitle .progBullet { opacity:.55; margin:0 6px; }
+
+/* --- Tracker header tweaks --- */
+#orderHeaderProgress {
+  position: relative; /* anchor for absolute children */
+}
+
+/* =====================================================================
+   13. LIVE MODAL LAYOUT (FOOTER GRID + INLINE PCT BADGE)
+   ===================================================================== */
+/* --- Live modal layout --- */
+#liveModal .footer-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr; /* left | button | right */
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.readonly-time {
+  background: #1a1e27;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--ink);
+  font-family: monospace;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  text-align: left;
+  user-select: none;
+}
+
+#liveModal .live-key {
+  grid-column: 1 / 4;        /* span full width */
+  text-align: center;
+  opacity: .85;
+}
+
+#liveModal .footer-grid .btn {
+  grid-column: 2;            /* keep centered */
+  justify-self: center;
+}
+#liveModal #live_formula {
+  grid-column: 1;            /* bottom-left under the button */
+  justify-self: start;
+  opacity: .85;
+  font-size: 0.95rem;
+}
+
+/* Percentage badge inline with the progress bar */
+#orderHeaderProgress .pct-badge {
+  position: relative;
+  display: inline-block;
+  transform: translateY(6px); /* drop ~6px so it lines up with the bar */
+}
+
+/* =====================================================================
+   14. WEEK CARD (WEEKLY PILLS) + COLLAPSE BEHAVIOUR
+   ===================================================================== */
+/* Compact, Full-Width Weekly Pills (SCOPED) */
+#weekCard { padding: 10px 12px; border-radius: 12px; }
+#weekCard .week-row { display:flex; gap:8px; flex-wrap:nowrap; justify-content:space-between; width:100%; }
+#weekCard .pill { flex:1 1 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3); min-width: 0; }
+#weekCard .pill h3 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 0 0 3px; white-space: nowrap; }
+#weekCard .pill p  { font-size: 16px; font-weight: 600; color: var(--ink); margin: 0; }
+
+/* Collapsible week card (single source of truth) */
+#weekHeader { display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; padding-right:6px; }
+#weekHeader:focus { outline: none; }
+#weekHeader:focus-visible { outline: none; }
+#weekCard .chev { font-weight:700; transition: transform .18s ease-in-out, opacity .18s ease-in-out; opacity:.8; }
+#weekCard.collapsed .chev { transform: rotate(-90deg); opacity:.6; }
+#weekCard.collapsed #weekContent { display:none; }
+
+/* === Progress Bar Tint (Red–Amber–Green Plan) === */
+#orderHeaderProgress .bar .fill {
+  background: var(--line); /* neutral base before rate applied */
+  transition: background-color .25s ease, width .35s ease;
+}
+
+/* =====================================================================
+   15. SHARED ORDER KEYPAD (TRACKER) – BUTTON STYLES
+   ===================================================================== */
+#sharedPad .btn.ok{
+  background:#141821;
+  border:1px solid #5e1a1e;
+  color:#f1d9db;
+  border-radius:8px;
+  padding:12px 0;                /* matches every key height */
+  font-size:20px;
+}
+#sharedPad .btn.ok:hover{ background:#142c18; }
+
+#sharedPad .btn.ghost{
+  background:#141821;
+  border:1px solid #5e1a1e;
+  color:#e8eef7;
+  border-radius:8px;
+  padding:12px 0;
+}
+#sharedPad .btn.ghost:hover{ background:#242a35; }
+
+/* Progress Bar Tint (scoped correctly) */
+#orderHeaderProgress .progBar .progFill { background: var(--line); transition: background-color .25s ease, width .35s ease; }
+#orderHeaderProgress .progBar .progFill.pace-ok   { background: var(--ok); }
+#orderHeaderProgress .progBar .progFill.pace-warn { background: var(--warn); }
+#orderHeaderProgress .progBar .progFill.pace-bad  { background: var(--bad); }
+
+/* place Complete in the top-right of the header */
+.progHead .progActions{
+  position:absolute;
+  top:4px;
+  right:10px;
+}
+/* nudge the % label down so it lines up with the bar */
+.progHead #progPct{
+  position:relative;
+  top:6px;              /* adjust 4–10px to taste */
+}
+
+/* Smooth fade for order header swap */
+.fade { opacity: 0; transition: opacity 0.25s ease-in-out; }
+.fade.show { opacity: 1; }
+
+/* =====================================================================
+   16. RED THEME RIM OVERRIDES (GLOBAL RIM EFFECT)
+   ===================================================================== */
+.rim { /* utility if you ever want to apply by class */ }
+.glow-weak { text-shadow: 0 0 6px var(--rim1); }
+
+/* Apply red rim/glow to core surfaces */
+.tabbtn,
+.btn,
+.btn.ghost,
+.pill,
+.rateChip,
+#chipRate,
+.cbPad button,
+input[type="number"], input[type="time"], input[type="text"], select, textarea,
+.dd-toggle, .dd-menu, .dd-group,
+.card,
+.toast, .logwrap, .breakbar,
+.modal .box,
+.progBar {            /* progress bar outer rim */
+  border:1px solid transparent;
+  background:
+    linear-gradient(#0f131b,#0f131b) padding-box,     /* keep dark fill */
+    linear-gradient(180deg,var(--rim1),var(--rim2)) border-box; /* red rim */
+  box-shadow:
+    inset 0 0 0 1px rgba(212,64,72,0.06),             /* inner crispness */
+    0 0 12px rgba(212,64,72,0.10);                    /* faint glow */
+}
+
+/* =====================================================================
+   17. DELAY MODAL + WRAP MODAL BUTTON LAYOUT TWEAKS
+   ===================================================================== */
+/* Log/Delay: actions aligned left so Cancel sits on the left */
+#delayModal .actions { justify-content: flex-start; }
+#delayModal .actions { justify-content: space-between; }  /* push sides apart */
+#delayModal .actions-left { display: flex; gap: 8px; }
+
+/* Split layout for Log Wrap modal buttons */
+#wrapModal .actions.split {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#wrapModal .actions.split .btn {
+  min-width: 110px;
+}
+
+/* =====================================================================
+   18. SHARED ORDER KEYPAD – MAROON RIM OVERRIDES
+   ===================================================================== */
+/* Shared Order keypad: remove the green rim and use maroon */
+#sharedPad .btn.ok,
+#sharedPad .btn.ghost,
+#sharedPad #padUnits {
+  border:1px solid transparent !important;
+  background:
+    linear-gradient(#1a1f27,#1a1f27) padding-box,
+    linear-gradient(180deg,var(--rim1),var(--rim2)) border-box !important;
+  color:#f1d9db; /* soft light */
+}
+
+/* Calculator pad keys (QuickCalc) – same red rim treatment */
+.cbPad button {
+  border:1px solid transparent !important;
+  background:
+    linear-gradient(#1a1f27,#1a1f27) padding-box,
+    linear-gradient(180deg,var(--rim1),var(--rim2)) border-box !important;
+}
+
+/* =====================================================================
+   19. SHIFT LOG HEADER / BUTTON FOCUS / GREEN FILL OVERRIDES
+   ===================================================================== */
+#shiftLogHeader {
+  margin-bottom: 15px;
+}
+
+/* Subtle focus ring now uses maroon accent */
+.cbPad button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+.btn { background:#141821; } /* darker base fill; keeps the rim pop */
+
+/* Green fill for Start-Shift + Contracted-Start buttons (keep red rim) */
+#shiftCard .btn.ok,
+#contractModal .btn.ok,
+#wrapModal .btn.ok,
+#btnEndShift {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(#14271c,#14271c) padding-box,            /* green fill */
+    linear-gradient(180deg, var(--rim1), var(--rim2)) border-box !important;
+  color: var(--ink) !important;                               /* pure UI white */
+  -webkit-text-fill-color: var(--ink) !important;             /* webkit ensure */
+  text-shadow: none !important;
+  box-shadow: inset 0 0 0 1px rgba(212,64,72,.04), 0 0 0 rgba(0,0,0,0) !important;
+}
+
+#btnStart,
+#btnSharedStart,
+#btnDelay,
+#btnB,
+#btnL,
+#opBtnB,
+#opBtnL,
+#btnCloseEarly,
+#btnUndo,
+#btnWrapTop,
+#btnSnakeBreak,
+#btnBreakStopLog,
+#opNoteSave, #opToggleBtn, #opBreakBtn, #opLunchBtn,
+#delayModal .btn[onclick="submitNote()"]  {
+  border-width: 2px; /* subtle emphasis over the default 1px rim */
+  box-shadow:
+    0 0 0 1px rgba(176,25,38,.55),       /* crisp outer edge */
+    0 8px 20px rgba(176,25,38,.18),      /* gentle lift */
+    inset 0 0 0 1px rgba(255,255,255,.06); /* inner crispness */
+  color: var(--ink);
+  background-color: var(--color-bg-surface, var(--bg1)); /* note: bg1 var not defined yet */
+}

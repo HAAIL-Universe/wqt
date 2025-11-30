@@ -1,0 +1,236 @@
+<!-- onboarding.html — Loaded & injected by index.html preload -->
+<style>
+  /* ===== Hint Bubble ===== */
+  #onboardHintBubble {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 92vw;
+    padding: 10px 16px;
+    background: #1a2433;
+    border: 1px solid #2e3a4d;
+    border-radius: 12px;
+    color: #c8d4e4;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    z-index: 9997;
+    box-shadow: 0 8px 22px rgba(0,0,0,.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+  }
+
+  #onboardHintBubble.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #onboardHintBubble .dismiss {
+    margin-left: 12px;
+    color: #9fb3c8;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.8rem;
+  }
+
+  /* ===== Overlay ===== */
+  .onboard-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.72);
+    z-index: 9998;
+  }
+</style>
+
+
+<!-- ===== Hint Bubble UI ===== -->
+<div id="onboardHintBubble"></div>
+
+
+<!-- ===== Main Walkthrough Overlay ===== -->
+<div id="onboardOverlay"
+     class="onboard-backdrop"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="onboardTitle"
+     style="display:none; align-items:center; justify-content:center;">
+
+  <div class="box onboard-panel"
+       style="max-width:640px; width:min(640px,94vw); max-height:88vh; display:flex; flex-direction:column; border-radius:18px; border:1px solid #243244; box-shadow:0 18px 40px rgba(0,0,0,.7); background:#141821; padding:12px;">
+
+    <!-- Header -->
+    <div class="hdr" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding-bottom:8px; border-bottom:1px solid #243244;">
+      <h3 id="onboardTitle" style="margin:0; font-size:1.1rem;">Welcome to QuickCalc &amp; Tracker</h3>
+      <button id="onboardSkip"
+              class="btn slim ghost"
+              type="button">Skip for now</button>
+    </div>
+
+    <!-- Content -->
+    <div class="onboard-body"
+         style="padding:12px 4px 4px; overflow-y:auto; flex:1;">
+
+      <p class="hint" style="margin:0 0 10px; color:#9fb3c8;">
+        This walkthrough will keep showing until you tap <b>&ldquo;I Remember&rdquo;</b>.
+        After that, it won&apos;t appear again on this device.
+      </p>
+
+      <div class="onboard-section" style="margin-bottom:14px;">
+        <h4 style="margin:0 0 4px; font-size:0.95rem;">1. Live header &amp; rate chips</h4>
+        <p style="margin:0; font-size:0.9rem; line-height:1.4;">
+          The top bar shows your <b>Live Rate</b>, total units, and elapsed time.
+          Tap the time chip for a breakdown.
+        </p>
+      </div>
+
+      <div class="onboard-section" style="margin-bottom:14px;">
+        <h4 style="margin:0 0 4px; font-size:0.95rem;">2. Starting an order</h4>
+        <p style="margin:0; font-size:0.9rem; line-height:1.4;">
+          Select a customer, enter total units, and the
+          <b>Start Order</b> button will activate automatically.
+        </p>
+      </div>
+
+      <div class="onboard-section" style="margin-bottom:14px;">
+        <h4 style="margin:0 0 4px; font-size:0.95rem;">3. Wraps, Breaks &amp; Delays</h4>
+        <p style="margin:0; font-size:0.9rem; line-height:1.4;">
+          <b>Log Wrap</b> records how many units are left on the order.<br>
+          Breaks and delays track time away from the truck.<br>
+          Everything feeds into your <b>Order Log</b>.
+        </p>
+      </div>
+
+      <div class="onboard-section" style="margin-bottom:14px;">
+        <h4 style="margin:0 0 4px; font-size:0.95rem;">4. History</h4>
+        <p style="margin:0; font-size:0.9rem; line-height:1.4;">
+          Ending your shift archives the day with averages, overtime, and full logs.
+        </p>
+      </div>
+
+      <div class="onboard-section" style="margin-bottom:4px;">
+        <h4 style="margin:0 0 4px; font-size:0.95rem;">Tips</h4>
+        <ul style="margin:0 0 2px 18px; padding:0; font-size:0.9rem; line-height:1.4;">
+          <li>Keep the tab open all shift – it restores if reloaded.</li>
+          <li>Use notes to record equipment or layout issues.</li>
+          <li>History can delete old test days to keep tidy.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="row" style="padding-top:8px; border-top:1px solid #243244; display:flex; justify-content:space-between; gap:10px;">
+      <button id="onboardSkipBottom"
+              class="btn slim ghost"
+              type="button">Skip for now</button>
+      <button id="onboardDone"
+              class="btn ok"
+              type="button">I Remember</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ============================================================
+   ONBOARD MODULE (loaded by index.html)
+   Behaviour:
+   - Shows every refresh UNTIL user clicks "I Remember"
+   - After that, never shows again on this device
+   ============================================================ */
+window.Onboard = (function(){
+  const HINT_KEY_PREFIX = "wqt_hint_";
+  const DONE_KEY        = "wqt_onboard_done"; // permanent flag
+
+  let hintBubble;
+  let overlay;
+
+  /* ---------- Internal Helpers ---------- */
+  function lsGet(key){
+    try { return localStorage.getItem(key); } catch(e){ return null; }
+  }
+  function lsSet(key, val){
+    try { localStorage.setItem(key, val); } catch(e){}
+  }
+
+  function todayKey(){
+    const d = new Date();
+    return d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate();
+  }
+
+  /* ---------- Hint Bubble ---------- */
+  function showHint(key, message){
+    // Prevent repeating hints within same day
+    const stored = lsGet(HINT_KEY_PREFIX + todayKey() + "_" + key);
+    if (stored) return;
+
+    lsSet(HINT_KEY_PREFIX + todayKey() + "_" + key, "1");
+
+    if (!hintBubble) return;
+
+    hintBubble.innerHTML = `
+      ${message}
+      <span class="dismiss" onclick="Onboard.hideHint()">Dismiss</span>
+    `;
+    hintBubble.classList.add("show");
+
+    // Auto fade after 8 seconds
+    setTimeout(()=> hintBubble.classList.remove("show"), 8000);
+  }
+
+  function hideHint(){
+    if (hintBubble) hintBubble.classList.remove("show");
+  }
+
+  /* ---------- Overlay Walkthrough ---------- */
+  function showOverlay(){
+    if (!overlay) return;
+    overlay.style.display = "flex";
+  }
+
+  function hideOverlay(){
+    if (!overlay) return;
+    overlay.style.display = "none";
+  }
+
+  // Permanent "I Remember" action
+  function rememberForever(){
+    lsSet(DONE_KEY, "1");
+    hideOverlay();
+  }
+
+  /* ---------- Public API ---------- */
+  function init(){
+    hintBubble = document.getElementById("onboardHintBubble");
+    overlay    = document.getElementById("onboardOverlay");
+
+    if (!overlay) return; // fail soft if HTML not present
+
+    const skipBtn   = document.getElementById("onboardSkip");
+    const skipBtn2  = document.getElementById("onboardSkipBottom");
+    const doneBtn   = document.getElementById("onboardDone");
+
+    if (skipBtn)  skipBtn.onclick  = hideOverlay;
+    if (skipBtn2) skipBtn2.onclick = hideOverlay;
+    if (doneBtn)  doneBtn.onclick  = rememberForever;
+
+    // Only show if user hasn't acknowledged permanently
+    if (lsGet(DONE_KEY) !== "1") {
+      showOverlay();
+    }
+  }
+
+  // Keep this around for future settings menu:
+  // allows you to re-enable onboarding later if you want.
+  function resetOnboarding(){
+    try { localStorage.removeItem(DONE_KEY); } catch(e){}
+  }
+
+  return {
+    init,
+    showHint,
+    hideHint,
+    resetOnboarding
+  };
+})();
+</script>

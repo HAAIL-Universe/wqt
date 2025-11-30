@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Warehouse QuickCalc & Tracker v4.4</title>
+<link rel="stylesheet" href="styles/index.css">
+</head>
+<body>
+<!-- =====================================================================
+     SECTION A – MAIN WRAPPER, TABS, LIVE BANNER
+     ===================================================================== -->
+<div class="wrap">
+  <!-- Top tab bar: switches between QuickCalc / Tracker / History -->
+  <div class="tabs">
+    <button id="tabCalcBtn" class="tabbtn" type="button" onclick="showTab('calc')">QuickCalc</button>
+    <button id="tabTrackBtn" class="tabbtn active" type="button" onclick="showTab('tracker')">Tracker</button>
+    <button id="tabHistBtn" class="tabbtn" type="button" onclick="showTab('history')">History</button>
+  </div>
+
+  <!-- Live banner (mirrors current shift/order stats, used across tabs) -->
+  <div id="liveBanner" class="rateBanner hidden">
+    <div id="chipRate" class="rateChip"><b>Live Rate</b><div id="chipRateVal">—</div></div>
+    <div id="chipTotal" class="rateChip"><b>Total Units</b><div id="chipTotalVal">0</div></div>
+  </div>
+
+  <!-- ===================================================================
+       SECTION B – QUICKCALC TAB
+       - Countback calculator
+       - QuickCalc basic units + rate calc
+       =================================================================== -->
+  <section id="tabCalc" class="hidden">
+    <!-- B1: Countback calculator (moved ABOVE QuickCalc) -->
+    <div class="cbCard">
+      <div class="cbRow" style="flex-wrap:wrap; align-items:flex-start;">
+        <div class="cbDisplay">
+          <div class="cbBox">
+            <h4>Layers</h4>
+            <div id="cbLayers" class="cbVal">0</div>
+          </div>
+          <div class="cbBox">
+            <h4>U/Layer</h4>
+            <div id="cbUL" class="cbVal">0</div>
+            <div id="cbChips" class="cbChips"></div>
+          </div>
+          <div class="cbBox">
+            <h4>Extras</h4>
+            <div id="cbExtras" class="cbVal">0</div>
+          </div>
+          <div class="cbSummary">
+            <div class="hint">Total</div>
+            <div id="cbTotal" class="count">0</div>
+            <div id="cbHint" class="hint" style="margin-top:4px;text-align:right;">Typing Layers…</div>
+          </div>
+        </div>
+        <div style="flex:1; min-width:240px; display:flex; gap:8px;">
+          <div style="flex:1;">
+            <div class="cbPad" style="flex:1;">
+              <button onclick="cbTap('7')">7</button>
+              <button onclick="cbTap('8')">8</button>
+              <button onclick="cbTap('9')">9</button>
+              <button onclick="cbTap('4')">4</button>
+              <button onclick="cbTap('5')">5</button>
+              <button onclick="cbTap('6')">6</button>
+              <button onclick="cbTap('1')">1</button>
+              <button onclick="cbTap('2')">2</button>
+              <button onclick="cbTap('3')">3</button>
+              <button onclick="cbTap('0')">0</button>
+              <button onclick="cbBack()">⌫</button>
+              <button onclick="cbReset()">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B2: QuickCalc inputs + live result -->
+    <div class="card">
+      <div class="row">
+        <div class="col">
+          <label>Units</label>
+          <input id="qcUnits" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 820">
+        </div>
+        <div class="col">
+          <label>Override Rate (u/h)</label>
+          <input id="qcRate" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="optional">
+        </div>
+      </div>
+      <!-- Live result -->
+      <div class="row" style="margin-top:10px;">
+        <div class="col">
+          <div class="pill">
+            <h3>Rate Used</h3>
+            <p id="qcRateUsed">300 u/h</p>
+          </div>
+        </div>
+        <div class="col">
+          <div class="pill">
+            <h3>Time Needed</h3>
+            <p id="qcTime">—</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       SECTION C – PRO & OPERATIVE TOOLS (MODALS, BUT LOGICALLY GLOBAL)
+       =================================================================== -->
+
+  <!-- Pro Settings Modal (export / import / manage customers) -->
+  <div id="proSettingsModal" class="modal" style="display:none;">
+    <div class="box">
+      <div class="hdr">
+        <h3>Pro Tools</h3>
+        <button class="btn ghost slim" type="button" onclick="closeProSettingsModal()">✖</button>
+      </div>
+
+      <div class="fld">
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <button class="btn" type="button" onclick="exportCSV()">Export CSV (today)</button>
+          <button class="btn" type="button" onclick="exportJSON()">Export JSON (all)</button>
+          <label id="impLabel2" class="btn" for="impFile">Import JSON</label>
+          <!-- reuse existing hidden file input -->
+        </div>
+        <div class="sub" style="margin-top:6px;">Exports include today / all-time. Import merges JSON into your history.</div>
+      </div>
+
+      <div class="fld" style="margin-top:10px;">
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <button class="btn" type="button" onclick="toggleManageCustomers(); closeProSettingsModal();">
+            Manage Customers
+          </button>
+        </div>
+        <div class="sub" style="margin-top:6px;">Open the customer manager card to add/remove custom codes.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operative Tools Modal (non-picking work logging) -->
+  <!-- NOTE: ties into #opChipBar and operative state in Tracker -->
+  <div id="operativeModal" class="modal" style="display:none;">
+    <div class="box">
+      <div class="hdr" style="display:flex;align-items:center;justify-content:space-between;">
+        <h3>Operative Tools</h3>
+        <button class="btn ghost slim" type="button" onclick="closeOperativeModal()">✖</button>
+      </div>
+      <div class="fld">
+        <label for="opNote" class="sub" style="margin-bottom:6px;">Note (optional)</label>
+        <textarea id="opNote" rows="3" placeholder="e.g. Marshaling, loading, stock moves…"></textarea>
+      </div>
+      <div class="fld" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div><span class="glow-weak">Elapsed:</span> <span id="opElapsed">—</span></div>
+        <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+          <button id="opNoteSave" class="btn" type="button" onclick="saveOperativeNote()">Save note</button>
+          <button id="opToggleBtn" class="btn" type="button" onclick="toggleOperative()">Start Operative Work</button>
+          <button id="opBtnB" class="btn" type="button" onclick="opOpenBreak('B')">B</button>
+          <button id="opBtnL" class="btn" type="button" onclick="opOpenBreak('L')">L</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================
+       SECTION D – TRACKER TAB (SHIFT / ORDERS / BREAKS / DELAYS)
+       =================================================================== -->
+  <section id="tabTracker">
+    <!-- D1: Shift start / length picker -->
+    <div class="card" id="shiftCard">
+      <div class="row" style="align-items:flex-end;">
+        <div class="col">
+          <h3 class="card-h" style="text-align:center; margin:0 0 8px;">
+            Select Shift Length
+          </h3>
+          <div class="row" style="gap:8px; justify-content:center;">
+            <button
+              class="btn ok"
+              type="button"
+              style="min-width:180px;"
+              onclick="openDynamicStartPicker(9)">
+              Start 9h Shift
+            </button>
+            <button
+              class="btn ok"
+              type="button"
+              style="min-width:180px;"
+              onclick="openDynamicStartPicker(10)">
+              Start 10h Shift
+            </button>
+          </div>
+          <div id="snapHint" class="hint"></div>
+        </div>
+
+        <!-- keep tLen as a hidden field so the rest of the code works unchanged -->
+        <input id="tLen" type="number" value="9" style="display:none;">
+      </div>
+    </div>
+
+    <!-- D2: Active Order Card (header form + progress + order log) -->
+    <div class="card" id="activeOrderCard" style="display:none;">
+      <!-- ✨ Header form (shown before Start) -->
+      <div id="orderHeaderForm" class="fade show">
+        <div class="card-h" style="text-align:center; font-size:15px; font-weight:600; margin-bottom:8px;">
+          Select customer + add total units from scanner
+        </div>
+        <div class="row" style="align-items:flex-end;">
+          <div class="col">
+            <label>Customer</label>
+            <div class="row" style="gap:6px;">
+              <div class="col">
+                <select id="oCust" class="hidden"></select>
+                <div id="oDD" class="dd">
+                  <button class="dd-toggle" type="button">Select customer…</button>
+                  <div class="dd-menu"></div>
+                </div>
+              </div>
+              <div class="col">
+                <input id="oOther" type="text" class="hidden" maxlength="6" placeholder="ABCDEF" pattern="[A-Za-z]{6}">
+              </div>
+            </div>
+          </div>
+          <div class="col">
+            <label>Total units</label>
+            <input id="oTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 1024">
+          </div>
+          <div class="col" style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+            <button id="btnEndPicking"
+                    class="btn ghost"
+                    type="button"
+                    style="display:none; margin-right:auto;"
+                    onclick="markPickingComplete()">
+              Picking finished
+            </button>
+
+            <button class="btn" type="button" id="btnSharedStart" onclick="openSharedStart()" disabled>Shared Pick</button>
+            <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled>Start</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Header shown AFTER an order starts -->
+      <div id="orderHeaderProgress" class="progHead" style="display:none; position:relative;">
+        <!-- Top-right actions -->
+        <div class="progActions">
+          <button id="btnWrapTop" class="btn slim" type="button" onclick="openWrapModal()" disabled>Log Wrap</button>
+        </div>
+        <div class="progMeta">
+          <div class="progTitle">
+            <span id="progCust">—</span>
+            <span class="progBullet">•</span>
+            <span><strong>Qty:</strong> <span id="progQty">0</span></span>
+          </div>
+
+          <div class="progSub">
+            <span><strong>Pallets:</strong> <span id="progPallets">0</span></span>
+            <span><strong>Left:</strong> <span id="progLeft">0</span></span>
+            <span class="progBullet">•</span>
+            <span><strong>Rate:</strong> <span id="progRate">—</span></span>
+            <span class="progBullet">•</span>
+            <span><strong>ETA:</strong> <span id="progETA">—</span></span>
+          </div>
+          <div class="progBar"><div id="progFill" class="progFill"></div></div>
+        </div>
+        <div id="progPct" class="progPct">0%</div>
+      </div>
+
+      <!-- Active Order Area -->
+      <div id="orderArea" style="display:none; margin-top:10px;">
+        <!-- Compact: keep only a hidden oLeft for internal use -->
+        <input id="oLeft" type="number" min="0" step="1" inputmode="numeric" style="display:none;">
+
+        <!-- Controls row (unchanged right-side controls container) -->
+        <div class="row" style="align-items:flex-end;">
+          <div class="col" id="orderControls"
+              style="flex:0 0 auto; display:flex; align-items:flex-end; justify-content:flex-end; gap:8px; flex-wrap:wrap;">
+          </div>
+        </div>
+
+        <!-- Order log (active order only) -->
+        <div id="orderLogCard" class="logwrap" style="margin-top:8px;">
+          <div class="row" style="align-items:center; justify-content:space-between; padding:6px 8px 0;">
+            <div class="muted" style="font-weight:600;">Order Log</div>
+          </div>
+          <div id="orderTimeline" class="timeline" style="padding-top:3px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- D3: Completed orders table -->
+    <div class="card" id="completedCard" style="display:none;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+        <h3 style="margin:0; font-size:14px; color:#9fb3c8;">Completed Orders</h3>
+        <span id="completedMeta" class="sub"></span>
+      </div>
+      <div class="tablewrap" style="margin-top:8px;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Customer</th>
+              <th>Units</th>
+              <th>Pallets</th>
+              <th>Start</th>
+              <th>Closed</th>
+              <th>Order Rate</th>
+            </tr>
+          </thead>
+          <tbody id="doneBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- D4: Shift-wide (no-order) log panel — sits between the order box and the buttons -->
+    <div class="card" id="shiftLogCard" style="display:none;">
+      <div id="shiftLogHeader" class="row" style="align-items:center; justify-content:space-between; padding:6px 8px 0;">
+        <div id="shiftLogTitle" class="muted" style="font-weight:600;">Shift Log</div>
+        <div id="shiftLogCount" class="meta"></div>
+      </div>
+      <div id="shiftLogList"></div>
+    </div>
+
+    <!-- D5: Shared Pick / bottom actions row -->
+    <div class="bottom-actions">
+      <div class="left">
+        <button class="btn" type="button" id="btnDelay" onclick="openDelayModal()" style="display:none;">Log / Delay</button>
+        <button id="btnUndo" class="btn" type="button" onclick="undoLast()" style="display:none;">Undo</button>
+      </div>
+      <div class="right">
+        <button id="btnB" class="btn" type="button" title="Start 20 min break" onclick="openBreakModal('B')" style="display:none;">B</button>
+        <button id="btnL" class="btn" type="button" title="Start 30 min lunch" onclick="openBreakModal('L')" style="display:none;">L</button>
+        <button class="btn" type="button" id="btnCloseEarly" onclick="openCloseEarlyModal()" style="display:none;">Close Early…</button>
+        <button class="btn ok" type="button" id="btnEndShift" onclick="endShift()" style="min-width:220px;">End Shift &amp; Archive →</button>
+      </div>
+    </div>
+
+    <!-- D6: Safety bar for nuking today only -->
+    <div class="safetybar">
+      <button class="btn ghost" type="button" onclick="clearToday()">Clear today's data</button>
+    </div>
+
+    <!-- Operative status chip (Tracker) -->
+    <div id="opChipBar" style="display:none; margin:10px 0 6px; align-items:center; gap:10px;">
+      <span id="opChip" class="chip"
+            onclick="openOperativeModal()"
+            style="padding:6px 10px; border-radius:999px; border:1px solid var(--rim1); cursor:pointer;">
+        🟠 Operative — <span id="opChipElapsed">0m</span>
+      </span>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+        SECTION E – SHARED ORDER BAR (FULL-WIDTH)
+        =================================================================== -->
+  <div id="sharedPad">
+    <div class="shared-pad-inner">
+      <div class="shared-pad-text">
+        <span class="shared-pad-title">Shared pick</span>
+        <span class="shared-pad-meta">Units for this block</span>
+      </div>
+
+      <div class="shared-pad-controls">
+        <input
+          id="padUnits"
+          type="number"
+          inputmode="numeric"
+          min="0"
+          step="1"
+          placeholder="Units"
+          class="shared-pad-input"
+        >
+        <button
+          class="btn ok shared-pad-add"
+          id="padSubmit"
+          type="button"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+
+    <!-- Hidden field still used by sharedSubmitUnits() -->
+    <input id="sharedUnitsDock" type="hidden">
+  </div>
+
+  <!-- ===================================================================
+       SECTION F – BREAK BAR (GLOBAL BOTTOM STICKY)
+       =================================================================== -->
+  <!-- Bottom Break Bar -->
+  <div id="breakBar" class="breakbar">
+    <div class="grow">
+      <div class="title" id="breakBarTitle">Break</div>
+      <div class="meta">
+        Started <span id="breakBarStart">--:--</span>
+      </div>
+    </div>
+    <div class="count" id="breakBarCountdown">20 min</div>
+      <div style="display:flex; gap:8px;">
+        <!-- Snake: only during break/lunch, gated by unlock and timer -->
+        <button
+          id="btnSnakeBreak"
+          class="btn gate-snake"
+          type="button"
+          onclick="openSnakeFromBreak()"
+          disabled>
+          🐍 Snake
+        </button>
+      <button
+        id="btnBreakStopLog"
+        class="btn"
+        type="button"
+        onclick="submitBreak()">
+        Stop &amp; Log
+      </button>
+      <button
+        id="btnBreakCancel"
+        class="btn ghost"
+        type="button"
+        onclick="cancelBreak()">
+        Cancel
+      </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================
+       SECTION G – HISTORY TAB (WEEK SUMMARY + DAILY ARCHIVES)
+       =================================================================== -->
+  <!-- History -->
+  <section id="tabHistory" class="hidden">
+    <!-- G1: Weekly summary card -->
+    <div class="card" id="weekCard">
+      <div id="weekHeader" class="row-between" role="button" tabindex="0" aria-expanded="false" aria-controls="weekContent">
+        <div class="card-h">This Week (Sun–Sat)</div>
+        <div id="weekChevron" class="chev">▼</div>
+      </div>
+      <div id="weekContent">
+        <div class="sub" id="weekRangeHint">Week: …</div>
+
+        <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+          <div class="week-row">
+            <div class="pill"><h3>Weighted Avg</h3><p id="weekWeighted">— u/h</p></div>
+            <div class="pill"><h3>Total Units</h3><p id="weekUnits">0</p></div>
+            <div class="pill"><h3>Days Counted</h3><p id="weekDays">0</p></div>
+          </div>
+          <div class="week-row">
+            <div class="pill"><h3>Total Hours</h3><p id="weekHours">0.0</p></div>
+            <div class="pill"><h3>Overtime (15m blocks)</h3><p id="weekOvertime">0.0 h</p></div>
+          </div>
+        </div>
+
+        <div class="footnote">Weighted Avg = total units ÷ total hours.</div>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:6px;">
+      Weighted Avg = total units ÷ total hours.
+    </div>
+
+    <!-- G2: Daily history list + Pro export/import controls -->
+    <div class="card">
+      <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+        <h3 style="margin:0; font-size:14px; color:#9fb3c8;">History (daily archives)</h3>
+        <div>
+          <button class="btn gate-pro" type="button" onclick="exportCSV()">Export CSV (today)</button>
+          <button class="btn gate-pro" type="button" onclick="exportJSON()">Export JSON (all)</button>
+          <label id="impLabel" class="btn gate-pro" for="impFile">Import JSON</label><input id="impFile" type="file" accept="application/json" style="display:none;">
+          <button class="btn" type="button" style="background:#331b1b;border-color:#7a2b2b;" onclick="clearHistory()">Clear History</button>
+          <button class="btn gate-pro" type="button" onclick="toggleManageCustomers()">Manage Customers</button>
+          <!-- Re-run onboarding (always available) -->
+          <button class="btn ghost" type="button" onclick="restartOnboarding()">Re-run onboarding</button>
+        </div>
+      </div>
+      <div id="histList" style="margin-top:8px;"></div>
+    </div>
+
+    <!-- G3: Manage customers card (toggles from History) -->
+    <div id="manageCustomersCard" class="card hidden">
+      <h3 style="margin:0 0 8px; font-size:14px; color:#9fb3c8;">Manage Customers</h3>
+      <div class="hint">Manually-added customers are shown below. Tap ✖ to remove.</div>
+      <div id="custTags" class="tagbox" style="margin-top:8px;"></div>
+      <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
+        <button class="btn ghost" type="button" onclick="reloadDropdowns()">Reload dropdowns</button>
+        <button class="btn bad" type="button" onclick="clearAllCustom()">Clear ALL custom customers</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- =====================================================================
+     SECTION H – MODALS (DELAY) – GLOBAL, USED BY TRACKER
+     ===================================================================== -->
+<!-- Delay Modal -->
+<div id="delayModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="delayTitle">
+  <div class="box">
+    <div class="hdr">
+      <h3 id="delayTitle">Log / Delay</h3>
+    </div>
+
+    <div class="fld">
+      <label>Start (auto)</label>
+      <div id="delayStart" class="readonly-time">--:--</div>
+    </div>
+
+    <div class="fld">
+      <label>Note / Cause</label>
+      <textarea
+        id="delayCause"
+        placeholder="e.g., Waiting on forklift / aisle blocked / label misprint"></textarea>
+    </div>
+
+    <div class="actions">
+      <div class="actions-left">
+        <button class="btn ghost" type="button" onclick="cancelDelay()">Cancel</button>
+        <button class="btn" type="button" onclick="submitNote()">Note</button>
+      </div>
+      <button class="btn ok" type="button" onclick="submitDelay()">Submit &amp; Stop</button>
+    </div>
+  </div>
+</div>
+<!-- =====================================================================
+     SECTION I – MODALS (SNAKE / LIVE RATE / CLOSE / WRAP / CONTRACT)
+     ===================================================================== -->
+
+<!-- I1: Snake Host Modal (embeds snake.html sandbox) -->
+<div id="snakeHostModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="snakeHostTitle">
+  <div class="box" style="max-width:720px;">
+    <div class="hdr">
+      <h3 id="snakeHostTitle">Break Snake</h3>
+      <button class="btn slim ghost" type="button" onclick="closeSnakeHost()">✖</button>
+    </div>
+
+    <div class="fld">
+      <iframe
+        id="snakeFrame"
+        src="snake.html"
+        style="width:100%; height:560px; border:none; border-radius:14px; background:#000;">
+      </iframe>
+    </div>
+
+    <div class="hint">
+      Play this only on break or lunch. Snake is a Pro tool and stays hidden unless unlocked.
+    </div>
+  </div>
+</div>
+
+<!-- I2: Live Rate Modal (current order snapshot) -->
+<div id="liveModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="liveTitle">
+  <div class="box" style="max-width:640px;">
+    <div class="hdr">
+      <h3 id="liveTitle">Live Rate – Now</h3>
+      <button class="btn slim ghost" type="button" onclick="closeLiveModal()">✖</button>
+    </div>
+    <div class="fld">
+      <div class="row">
+        <div class="col">
+          <div class="pill"><h3>Total Units</h3><p id="live_totUnits">—</p></div>
+        </div>
+        <div class="col">
+          <div class="pill"><h3>Elapsed</h3><p id="live_elapsed">—</p></div>
+        </div>
+        <div class="col">
+          <div class="pill"><h3>Live Rate</h3><p id="live_rate">— u/h</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fld">
+      <div class="logwrap">
+        <!-- 1) Colour key centered -->
+        <div class="hint" style="text-align:center; margin-bottom:10px;">
+          Colour key:
+          <b style="color:#9fd6a5;">Green ≥ 300</b> •
+          <b style="color:#e6cf8a;">Amber 249–299</b> •
+          <b style="color:#e49b9b;">Red &lt; 249</b>
+        </div>
+
+        <!-- 2) Button centered -->
+        <div class="actions" style="justify-content:center; flex-direction:column; align-items:center; text-align:center;">
+          <button class="btn" type="button" onclick="openLiveUpdateModal()">Update with Units Remaining</button>
+          <span id="live_hint" class="hint" style="margin-top:6px;"></span>
+        </div>
+
+        <!-- 3) Formula bottom-left under the button -->
+        <div class="hint" style="margin-top:10px;">Formula</div>
+        <div id="live_formula" class="tick" style="text-align:left;">Live = Total Units ÷ Hours</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- I3: Live Update (override Left) Modal -->
+<div id="liveUpdateModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="liveUpdateTitle">
+  <div class="box" style="max-width:420px;">
+    <div class="hdr">
+      <h3 id="liveUpdateTitle">Units Remaining</h3>
+      <button class="btn slim ghost" type="button" onclick="closeLiveUpdateModal()">✖</button>
+    </div>
+    <div class="fld">
+      <label for="liveLeftInput">How many units remain on this order?</label>
+      <input id="liveLeftInput" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 413">
+      <div class="hint" id="liveUpdateHint"></div>
+    </div>
+    <div class="actions" style="justify-content:center; gap:8px;">
+      <button class="btn ghost" type="button" onclick="closeLiveUpdateModal()">Cancel</button>
+      <button class="btn ok" type="button" onclick="submitLiveUpdateLeft()">Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- I4: Close Early Modal -->
+<div id="closeEarlyModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="closeEarlyTitle">
+  <div class="box">
+    <div class="hdr">
+      <h3 id="closeEarlyTitle">Close Order Early</h3>
+      <button class="btn slim ghost" type="button" onclick="closeCloseEarlyModal()">✖</button>
+    </div>
+    <div class="fld">
+      <label>Remaining units</label>
+      <input id="ceRemaining" type="number" min="0" step="1" inputmode="numeric" placeholder="0">
+    </div>
+    <div class="fld">
+      <label>Reason (required)</label>
+      <textarea id="ceReason" placeholder="Explain why closing early…"></textarea>
+    </div>
+    <div class="fld" style="display:flex;align-items:center;gap:8px;">
+      <input id="ceWrapped" type="checkbox">
+      <label for="ceWrapped" style="margin:0;">Wrapped last pallet</label>
+    </div>
+    <div class="actions split">
+      <button class="btn slim" type="button" onclick="closeCloseEarlyModal()">Cancel</button>
+      <button class="btn ok" type="button" onclick="submitCloseEarly()">Close Early</button>
+    </div>
+  </div>
+</div>
+
+<!-- I5: Wrap Modal (log units left when wrapping) -->
+<div id="wrapModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="wrapTitle">
+  <div class="box" style="max-width:420px;">
+    <div class="hdr">
+      <h3 id="wrapTitle">Log Wrap</h3>
+    </div>
+    <div class="fld">
+      <label for="wrapLeftInput">Units left on this order</label>
+      <input id="wrapLeftInput" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 413">
+      <div class="hint" id="wrapHint">Type 0 to enable Complete.</div>
+    </div>
+    <div class="actions" style="justify-content:center; gap:8px;">
+      <button class="btn ghost" type="button" onclick="closeWrapModal()">Cancel</button>
+      <button class="btn ok" type="button" onclick="submitWrapLeft()">Save Wrap</button>
+    </div>
+  </div>
+</div>
+
+<!-- Global toast (small bottom popup, reused across actions) -->
+<div id="toast" class="toast">Saved</div>
+
+<!-- Contracted Start Picker -->
+<div id="contractModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:9999;">
+  <div style="background:#141821; border:1px solid #243244; border-radius:14px; padding:16px; width:min(520px,92%);">
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+      <h3 style="margin:0;">What time are you contracted to start?</h3>
+      <button class="btn" type="button" onclick="closeContractModal()">✕</button>
+    </div>
+    <div id="contractHourList" class="row" style="flex-wrap:wrap; gap:8px; margin-top:12px;"></div>
+    <div class="hint" style="margin-top:10px;">
+      We’ll log this as your contracted time, and also log the actual start (now). Live Rate uses the actual start.
+    </div>
+  </div>
+</div>
+<script src="scripts/bootstrap.js"></script>
+</body>
+</html>
+
+
