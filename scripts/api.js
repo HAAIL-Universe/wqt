@@ -4,11 +4,45 @@
 
 import { Storage, StorageKeys } from './storage.js';
 
-const API_BASE = 'https://wqt-backend.onrender.com';
+// ------------------------------------------------------------------
+// Backend URL resolution
+// ------------------------------------------------------------------
+
+// Default remote backend (Render)
+const DEFAULT_BACKEND_URL = 'https://wqt-backend.onrender.com';
+
+function resolveApiBase() {
+  try {
+    // Optional global override if you ever want to point at staging, etc.
+    if (typeof window !== 'undefined' && typeof window.WQT_BACKEND_URL === 'string') {
+      const trimmed = window.WQT_BACKEND_URL.trim();
+      if (trimmed) {
+        return trimmed.replace(/\/+$/, ''); // strip trailing slash(es)
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+
+      // Local dev: open index.html via localhost
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return 'http://127.0.0.1:8000';
+      }
+    }
+  } catch (e) {
+    console.warn('[WQT API] Failed to resolve API base from window, using default:', e);
+  }
+
+  // Fallback: Render backend
+  return DEFAULT_BACKEND_URL.replace(/\/+$/, '');
+}
+
+const API_BASE = resolveApiBase();
 
 // Tiny helper: fetch JSON from backend with basic error handling.
 async function fetchJSON(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
     credentials: 'omit',
     ...options,
   });
@@ -16,7 +50,7 @@ async function fetchJSON(path, options = {}) {
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(
-      `[WQT API] ${options.method || 'GET'} ${path} failed: ${res.status} ${res.statusText} ${text}`,
+      `[WQT API] ${options.method || 'GET'} ${url} failed: ${res.status} ${res.statusText} ${text}`,
     );
   }
 
