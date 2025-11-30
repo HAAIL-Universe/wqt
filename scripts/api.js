@@ -1,9 +1,44 @@
 // /scripts/api.js
 // Frontend API adapter for WQT.
 // v0: purely local, backed by Storage + existing bootstrap.js logic.
-// v1: swap internals to call FastAPI endpoints.
+// v1: hybrid: local first, with cloud sync to FastAPI backend.
 
 import { Storage, StorageKeys } from './storage.js';
+
+const API_BASE = 'https://wqt-backend.onrender.com';
+
+// --- Internal helpers ------------------------------------------------
+
+async function fetchMainFromCloud() {
+  try {
+    const res = await fetch(`${API_BASE}/api/state`, {
+      method: 'GET',
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      console.warn('[WqtAPI] Cloud GET /api/state failed:', res.status);
+      return null;
+    }
+    const data = await res.json();
+    if (!data || typeof data !== 'object') return null;
+    return data;
+  } catch (err) {
+    console.warn('[WqtAPI] Cloud GET /api/state error:', err);
+    return null;
+  }
+}
+
+async function postMainToCloud(main) {
+  try {
+    await fetch(`${API_BASE}/api/state`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(main || {})
+    });
+  } catch (err) {
+    console.warn('[WqtAPI] Cloud POST /api/state error:', err);
+  }
+}
 
 export const WqtAPI = {
   // ------------------------------------------------------------------
@@ -11,8 +46,20 @@ export const WqtAPI = {
   // ------------------------------------------------------------------
 
   async loadInitialState() {
-    // Used on page load; returns the state payload we want in memory.
-    const main        = Storage.loadMain();
+    // Hybrid strategy:
+    // 1) Try cloud main state from FastAPI.
+    // 2) Fall back to local Storage if cloud unavailable.
+    let main = null;
+
+    const cloudMain = await fetchMainFromCloud();
+    if (cloudMain) {
+      main = cloudMain;
+      // Optionally cache cloud state locally so offline still works.
+      Storage.saveMain(main);
+    } else {
+      main = Storage.loadMain();
+    }
+
     const learnedUL   = Storage.loadLearnedUL();
     const customCodes = Storage.loadCustomCodes();
 
@@ -25,9 +72,13 @@ export const WqtAPI = {
     const learnedUL   = state.learnedUL || {};
     const customCodes = state.customCodes || [];
 
+    // Always keep local copy for offline / performance.
     Storage.saveMain(main);
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
+
+    // Fire-and-forget cloud sync of main state.
+    postMainToCloud(main);
   },
 
   // ------------------------------------------------------------------
@@ -192,7 +243,7 @@ export const WqtAPI = {
 
   async importJsonAll(payload) {
     // Later: POST /api/import/json
-    // For now: merge + save local.
+    // For now: merge + save local + cloud.
     const { main, learnedUL, customCodes } = await this.loadInitialState();
     const merged = {
       ...main,
