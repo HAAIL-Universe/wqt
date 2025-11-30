@@ -11,7 +11,7 @@ const STORAGE_KEY_CODES = 'wqt_codes';        // == KEY_CODES
 
 // Side-channel keys used directly in bootstrap.js
 // (delays, notes, shared pick, snake, etc.)
-export const StorageKeys = {
+const StorageKeys = {
   SHIFT_ACTIVE:        'shiftActive',        // "1"/"0" flag
   CURRENT_ORDER:       'currentOrder',       // JSON blob for active order
   SHIFT_DELAYS:        'shiftDelays',        // JSON array [{type:'D',...}]
@@ -38,7 +38,7 @@ function safeParse(json, fallback) {
   }
 }
 
-export const Storage = {
+const Storage = {
   // ---- Core state blob (picks, history, current, etc.) ----
   // This mirrors loadAll/saveAll in bootstrap.js.
   loadMain() {
@@ -181,3 +181,9 @@ export const Storage = {
     }
   }
 };
+
+// Expose to window for non-module scripts
+if (typeof window !== 'undefined') {
+  window.StorageKeys = window.StorageKeys || StorageKeys;
+  window.Storage = window.Storage || Storage;
+}

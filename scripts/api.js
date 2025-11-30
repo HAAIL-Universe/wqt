@@ -2,7 +2,7 @@
 // Frontend API adapter for WQT.
 // v1: prefer FastAPI backend for core state, with local fallback.
 
-import { Storage, StorageKeys } from './storage.js';
+// NOTE: Storage / StorageKeys come from storage.js as globals.
 
 // ------------------------------------------------------------------
 // Backend URL resolution
@@ -57,7 +57,7 @@ async function fetchJSON(path, options = {}) {
   return res.json();
 }
 
-export const WqtAPI = {
+const WqtAPI = {
   // ------------------------------------------------------------------
   // Core state – mirrors loadAll/saveAll in bootstrap.js
   // Now prefers backend, with local fallback.
@@ -218,15 +218,24 @@ export const WqtAPI = {
   },
 
   async getSnakeLiveRate() {
-    // Stored as a string; normalise to number or null.
-    const raw = Storage.getJSON(StorageKeys.SNAKE_LIVE_RATE, null);
-    const n = Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    // Stored as a plain string; normalise to number or null.
+    try {
+      const raw = window.localStorage.getItem(StorageKeys.SNAKE_LIVE_RATE);
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    } catch {
+      return null;
+    }
   },
 
   async setSnakeLiveRate(rateUh) {
     if (!rateUh || !Number.isFinite(rateUh)) return;
-    window.localStorage.setItem(StorageKeys.SNAKE_LIVE_RATE, String(rateUh));
+    try {
+      window.localStorage.setItem(StorageKeys.SNAKE_LIVE_RATE, String(rateUh));
+    } catch (e) {
+      console.error('WqtAPI.setSnakeLiveRate failed', e);
+    }
   },
 
   // History UI: collapsed week card flag
@@ -276,3 +285,8 @@ export const WqtAPI = {
     return merged;
   }
 };
+
+// Expose to window for non-module scripts
+if (typeof window !== 'undefined') {
+  window.WqtAPI = window.WqtAPI || WqtAPI;
+}
