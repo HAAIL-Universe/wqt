@@ -1,212 +1,241 @@
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
-  try {
-    // ── 1) Restore persisted state FIRST ────────────────────────────
-    loadCustomCodes();
-    loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
-
-    // If we just came back from Snake, auto-log that congestion delay
-    if (typeof applySnakeDelayIfAny === 'function') applySnakeDelayIfAny();
-
-    const hadShift = !!startTime;
-    const hadOpen  = !!(current && Number.isFinite(current.total));
-
-    // ── 2) Build customer dropdowns (safe post-restore) ─────────────
-    buildDropdown('oDD','oCust','oOther','o');
-    reloadDropdowns();
-
-    // ── 3) Wire modals & inputs ─────────────────────────────────────
-    document.getElementById('chipElapsed')
-      ?.addEventListener('click', openElapsedModal);
-
-    document.getElementById('elapsedModal')
-      ?.addEventListener('click', (e)=>{
-        if (e.target?.id === 'elapsedModal') closeElapsedModal();
-      });
-
-    // Wire Pro Unlock (Override Rate box)
-    document.getElementById('qcRate')
-      ?.addEventListener('input',  updCalcGate);
-    document.getElementById('qcRate')
-      ?.addEventListener('change', updCalcGate);
-
-    document.getElementById('oOther')
-      ?.addEventListener('input', ()=>onOtherInput('o'));
-
-    // Live wrap-button label (single wiring – duplicate was removed above)
-    document.getElementById('oLeft')
-      ?.addEventListener('input', refreshWrapButton);
-
-    document.getElementById('liveUpdateModal')
-      ?.addEventListener('click', (e)=>{
-        if (e.target?.id === 'liveUpdateModal') closeLiveUpdateModal();
-      });
-
-    document.getElementById('chipRate')
-      ?.addEventListener('click', openLiveModal);
-
-    document.getElementById('liveModal')
-      ?.addEventListener('click', (e)=>{
-        if (e.target?.id === 'liveModal') closeLiveModal();
-      });
-
-    // ── 4) Pro gate & static renders that don't mutate core state ───
-    applyProGate();
-
-    // ── 5) Shift/Order shell visibility based on restored flags ─────
-    const shift  = document.getElementById('shiftCard');
-    const active = document.getElementById('activeOrderCard');
-    const done   = document.getElementById('completedCard');
-
-    if (hadShift && window.archived !== true) {
-      if (shift)  shift.style.display  = 'none';
-      if (active) active.style.display = 'block';
-      if (done)   done.style.display   = (picks.length ? 'block' : 'none');
-    } else {
-      // No shift yet → hide order-only controls by default
-      ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      });
-    }
-
-    renderShiftPanel?.();
-
-    // ── 6) Decide header: progress vs new-order form ────────────────
-    if (hadOpen && window.archived !== true) {
-      // We have an active order: ensure progress header/UI is shown
-      restoreActiveOrderUI();
-
-      // Seed labels (defensive)
-      const ddToggle = document.querySelector('#oDD .dd-toggle');
-      if (ddToggle && current?.name) ddToggle.textContent = current.name;
-      const oTot = document.getElementById('oTotal');
-      if (oTot && Number.isFinite(current.total)) oTot.value = String(current.total);
-
-      // Elapsed chip ON
-      const chip = document.getElementById('chipElapsed');
-      if (chip?.style) chip.style.display = '';
-      updateElapsedChip?.();
-      setElapsedChipClickable?.(true);
-      showTab('tracker'); // keep user on Tracker with live header visible
-      showToast('Shift restored – continue where you left off');
-    } else {
-      // No open order yet → show the new-order header/form and hide area
-      const hdrForm = document.getElementById('orderHeaderForm');
-      const hdrProg = document.getElementById('orderHeaderProgress');
-      const area    = document.getElementById('orderArea');
-      if (hdrForm) hdrForm.style.display = 'block';
-      if (hdrProg) hdrProg.style.display = 'none';
-      if (area)    area.style.display    = 'none';
-      const chip = document.getElementById('chipElapsed');
-      if (chip?.style) chip.style.display = 'none';
-      const v = document.getElementById('chipElapsedVal');
-      if (v) v.textContent = '—';
-      setElapsedChipClickable?.(false);
-    }
-
-    // ── 7) Heavy renders AFTER state/UI decision (prevents flips) ───
-    renderHistory();
-    renderWeeklySummary();
-    initWeekCardToggle();
-    renderDone();
-    renderULayerChips();
-    renderShiftPanel?.();
-
-    // ── 8) Start button validation (order of entry agnostic) ────────
-    ['oTotal','oOther'].forEach(id=>{
-      const el = document.getElementById(id);
-      if (!el) return;
-      ['input','change','keyup','blur'].forEach(ev =>
-        el.addEventListener(ev, refreshStartButton)
-      );
-    });
-    document.getElementById('oCust')
-      ?.addEventListener('change', refreshStartButton);
-    document.querySelector('#oDD .dd-menu')
-      ?.addEventListener('click', ()=> setTimeout(refreshStartButton,0));
-    document.querySelector('#oDD .dd-toggle')
-      ?.addEventListener('click', ()=> setTimeout(refreshStartButton,0));
-    refreshStartButton();
-
-    // ── 9) Elapsed-only ticker (no rate refresh) ────────────────────
+  (async () => {
     try {
-      if (current) {
-        updateElapsedChip?.();       // ticks minutes on the chip
-        setElapsedChipClickable?.(true);
+      // ── 0) Try to hydrate from backend first (then localStorage) ───
+      if (window.WqtAPI && typeof WqtAPI.loadInitialState === 'function') {
+        try {
+          // This will:
+          //  - GET /api/state
+          //  - On success: write into localStorage via Storage.saveMain()
+          //  - On failure: fall back to Storage.loadMain()
+          await WqtAPI.loadInitialState();
+        } catch (e) {
+          console.warn('[Boot] Backend load failed, continuing local-only', e);
+        }
+      }
+
+      // ── 1) Restore persisted state from localStorage ──────────────
+      loadCustomCodes();
+      loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
+
+      // If we just came back from Snake, auto-log that congestion delay
+      if (typeof applySnakeDelayIfAny === 'function') applySnakeDelayIfAny();
+
+      const hadShift = !!startTime;
+      const hadOpen  = !!(current && Number.isFinite(current.total));
+
+      // ── 2) Build customer dropdowns (safe post-restore) ───────────
+      buildDropdown('oDD','oCust','oOther','o');
+      reloadDropdowns();
+
+      // ── 3) Wire modals & inputs ───────────────────────────────────
+      document.getElementById('chipElapsed')
+        ?.addEventListener('click', openElapsedModal);
+
+      document.getElementById('elapsedModal')
+        ?.addEventListener('click', (e)=>{
+          if (e.target?.id === 'elapsedModal') closeElapsedModal();
+        });
+
+      // Wire Pro Unlock (Override Rate box)
+      document.getElementById('qcRate')
+        ?.addEventListener('input',  updCalcGate);
+      document.getElementById('qcRate')
+        ?.addEventListener('change', updCalcGate);
+
+      document.getElementById('oOther')
+        ?.addEventListener('input', ()=>onOtherInput('o'));
+
+      // Live wrap-button label (single wiring – duplicate was removed above)
+      document.getElementById('oLeft')
+        ?.addEventListener('input', refreshWrapButton);
+
+      document.getElementById('liveUpdateModal')
+        ?.addEventListener('click', (e)=>{
+          if (e.target?.id === 'liveUpdateModal') closeLiveUpdateModal();
+        });
+
+      document.getElementById('chipRate')
+        ?.addEventListener('click', openLiveModal);
+
+      document.getElementById('liveModal')
+        ?.addEventListener('click', (e)=>{
+          if (e.target?.id === 'liveModal') closeLiveModal();
+        });
+
+      // ── 4) Pro gate & static renders that don't mutate core state ─
+      applyProGate();
+
+      // ── 5) Shift/Order shell visibility based on restored flags ───
+      const shift  = document.getElementById('shiftCard');
+      const active = document.getElementById('activeOrderCard');
+      const done   = document.getElementById('completedCard');
+
+      if (hadShift && window.archived !== true) {
+        if (shift)  shift.style.display  = 'none';
+        if (active) active.style.display = 'block';
+        if (done)   done.style.display   = (picks.length ? 'block' : 'none');
       } else {
-        setElapsedChipClickable?.(false);
+        // No shift yet → hide order-only controls by default
+        ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
       }
-      // DO NOT call updateSummary() here; that would refresh rate.
-    } catch(e){}
 
-    // Keep the chip ticking, but don't touch Live Rate or summary.
-    setInterval(function () {
-      if (breakDraft) {
-        setElapsedChipClickable?.(false);
-        return;
-      }
-      if (current) {
-        updateElapsedChip?.();       // ONLY updates the elapsed minutes display
+      renderShiftPanel?.();
+
+      // ── 6) Decide header: progress vs new-order form ──────────────
+      if (hadOpen && window.archived !== true) {
+        // We have an active order: ensure progress header/UI is shown
+        restoreActiveOrderUI();
+
+        // Seed labels (defensive)
+        const ddToggle = document.querySelector('#oDD .dd-toggle');
+        if (ddToggle && current?.name) ddToggle.textContent = current.name;
+        const oTot = document.getElementById('oTotal');
+        if (oTot && Number.isFinite(current.total)) oTot.value = String(current.total);
+
+        // Elapsed chip ON
+        const chip = document.getElementById('chipElapsed');
+        if (chip?.style) chip.style.display = '';
+        updateElapsedChip?.();
         setElapsedChipClickable?.(true);
+        showTab('tracker'); // keep user on Tracker with live header visible
+        showToast('Shift restored – continue where you left off');
       } else {
+        // No open order yet → show the new-order header/form and hide area
+        const hdrForm = document.getElementById('orderHeaderForm');
+        const hdrProg = document.getElementById('orderHeaderProgress');
+        const area    = document.getElementById('orderArea');
+        if (hdrForm) hdrForm.style.display = 'block';
+        if (hdrProg) hdrProg.style.display = 'none';
+        if (area)    area.style.display    = 'none';
+        const chip = document.getElementById('chipElapsed');
+        if (chip?.style) chip.style.display = 'none';
+        const v = document.getElementById('chipElapsedVal');
+        if (v) v.textContent = '—';
         setElapsedChipClickable?.(false);
       }
-    }, 10000);
 
-    // ── 10) QuickCalc wiring ────────────────────────────────────────
-    const qcRateEl  = document.getElementById('qcRate');
-    const qcUnitsEl = document.getElementById('qcUnits');
-    if (qcRateEl){
-      qcRateEl.addEventListener('input',  ()=>{ updCalcGate(); recalcQuick(); });
-      qcRateEl.addEventListener('change', ()=>{ updCalcGate(); recalcQuick(); });
-    }
-    if (qcUnitsEl){
-      qcUnitsEl.addEventListener('input',  recalcQuick);
-      qcUnitsEl.addEventListener('change', recalcQuick);
-    }
+      // ── 7) Heavy renders AFTER state/UI decision (prevents flips) ─
+      renderHistory();
+      renderWeeklySummary();
+      initWeekCardToggle();
+      renderDone();
+      renderULayerChips();
+      renderShiftPanel?.();
 
-    // Countback & keyboard input
-    cbSetFocus('layers');
-    updateCbDisplays();
-    computeCbTotal();
+      // ── 8) Start button validation (order of entry agnostic) ──────
+      ['oTotal','oOther'].forEach(id=>{
+        const el = document.getElementById(id);
+        if (!el) return;
+        ['input','change','keyup','blur'].forEach(ev =>
+          el.addEventListener(ev, refreshStartButton)
+        );
+      });
+      document.getElementById('oCust')
+        ?.addEventListener('change', refreshStartButton);
+      document.querySelector('#oDD .dd-menu')
+        ?.addEventListener('click', ()=> setTimeout(refreshStartButton,0));
+      document.querySelector('#oDD .dd-toggle')
+        ?.addEventListener('click', ()=> setTimeout(refreshStartButton,0));
+      refreshStartButton();
 
-    document.addEventListener('keydown', (e)=>{
-      const tag = (e.target?.tagName || '').toUpperCase();
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
-      if (/^[0-9]$/.test(e.key)) {
-        cbTap(e.key);
-        e.preventDefault();
-      } else if (e.key === 'Backspace') {
-        cbBack();
-        e.preventDefault();
-      } else if (e.key === ' ' || e.key === 'Enter') {
-        cbNextField();
-        e.preventDefault();
+      // ── 9) Elapsed-only ticker (no rate refresh) ──────────────────
+      try {
+        if (current) {
+          updateElapsedChip?.();       // ticks minutes on the chip
+          setElapsedChipClickable?.(true);
+        } else {
+          setElapsedChipClickable?.(false);
+        }
+        // DO NOT call updateSummary() here; that would refresh rate.
+      } catch(e){}
+
+      // Keep the chip ticking, but don't touch Live Rate or summary.
+      setInterval(function () {
+        if (breakDraft) {
+          setElapsedChipClickable?.(false);
+          return;
+        }
+        if (current) {
+          updateElapsedChip?.();       // ONLY updates the elapsed minutes display
+          setElapsedChipClickable?.(true);
+        } else {
+          setElapsedChipClickable?.(false);
+        }
+      }, 10000);
+
+      // ── 10) QuickCalc wiring ──────────────────────────────────────
+      const qcRateEl  = document.getElementById('qcRate');
+      const qcUnitsEl = document.getElementById('qcUnits');
+      if (qcRateEl){
+        qcRateEl.addEventListener('input',  ()=>{ updCalcGate(); recalcQuick(); });
+        qcRateEl.addEventListener('change', ()=>{ updCalcGate(); recalcQuick(); });
       }
-    });
+      if (qcUnitsEl){
+        qcUnitsEl.addEventListener('input',  recalcQuick);
+        qcUnitsEl.addEventListener('change', recalcQuick);
+      }
 
-    // Initial compute for QuickCalc
-    recalcQuick();
+      // Countback & keyboard input
+      cbSetFocus('layers');
+      updateCbDisplays();
+      computeCbTotal();
 
-    // Final pass refresh (stable snapshot)
-    updateSummary();
-    updateDelayBtn();
-    updateEndShiftVisibility();
-    updateEndPickingVisibility();
-    updateCloseEarlyVisibility();
-    updateElapsedChip();
+      document.addEventListener('keydown', (e)=>{
+        const tag = (e.target?.tagName || '').toUpperCase();
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') return;
+        if (/^[0-9]$/.test(e.key)) {
+          cbTap(e.key);
+          e.preventDefault();
+        } else if (e.key === 'Backspace') {
+          cbBack();
+          e.preventDefault();
+        } else if (e.key === ' ' || e.key === 'Enter') {
+          cbNextField();
+          e.preventDefault();
+        }
+      });
 
-    // Wire Shared Pick bottom bar (padUnits / padSubmit) once DOM is ready
-    initSharedPad?.();
+      // Initial compute for QuickCalc
+      recalcQuick();
 
-    saveAll?.();
-  } catch (err) {
-    console.error(err);
-    showToast('Error on load: ' + (err.message || err));
-  }
+      // Final pass refresh (stable snapshot)
+      updateSummary();
+      updateDelayBtn();
+      updateEndShiftVisibility();
+      updateEndPickingVisibility();
+      updateCloseEarlyVisibility();
+      updateElapsedChip();
+
+      // Wire Shared Pick bottom bar (padUnits / padSubmit) once DOM is ready
+      initSharedPad?.();
+
+      // Persist to localStorage via legacy path
+      saveAll?.();
+
+      // ── 11) Push snapshot to backend (seed DB on first run) ───────
+      if (window.WqtAPI && typeof WqtAPI.saveState === 'function' && window.Storage) {
+        try {
+          const payload = {
+            main:        Storage.loadMain(),
+            learnedUL:   Storage.loadLearnedUL(),
+            customCodes: Storage.loadCustomCodes()
+          };
+          await WqtAPI.saveState(payload);
+        } catch (e) {
+          console.warn('[Boot] Backend save failed, staying local-only', e);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error on load: ' + (err.message || err));
+    }
+  })();
 });
-
 
 // Shared pad: wire up bar input + Add button → sharedSubmitUnits + visual confirm
 function initSharedPad(){
