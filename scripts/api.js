@@ -1,6 +1,5 @@
 // /scripts/api.js
 // Frontend API adapter for WQT.
-// v0: purely local, backed by Storage + existing bootstrap.js logic.
 // v1: prefer FastAPI backend for core state, with local fallback.
 
 import { Storage, StorageKeys } from './storage.js';
@@ -219,7 +218,6 @@ export const WqtAPI = {
   // ------------------------------------------------------------------
 
   async fetchShiftSummary() {
-    // Later: GET /api/shift/summary from backend
     const { main } = await this.loadInitialState();
     return {
       startTime: main.startTime || '',
@@ -230,14 +228,11 @@ export const WqtAPI = {
   },
 
   async exportJsonAll() {
-    // Later: GET /api/export/json from backend
     const { main } = await this.loadInitialState();
     return main;
   },
 
   async importJsonAll(payload) {
-    // Later: POST /api/import/json to backend
-    // For now: merge + save via saveState (which syncs to backend + local).
     const { main, learnedUL, customCodes } = await this.loadInitialState();
     const merged = {
       ...main,
