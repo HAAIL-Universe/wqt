@@ -1503,27 +1503,42 @@ function loadAll(){
 // Main save: in-memory state → localStorage
 function saveAll(){
   try {
-    localStorage.setItem(
-      KEY,
-      JSON.stringify({
-        version: '3.3.55',               // keep existing schema tag
-        savedAt: new Date().toISOString(),
-        picks,
-        history: historyDays,
-        current,
-        tempWraps,
-        startTime,
-        lastClose,
-        pickingCutoff,
-        undoStack,
-        proUnlocked,
-        snakeUnlocked,
-        shiftBreaks,
-        operativeLog,
-        operativeActive
-      })
-    );
+    // Build the main state payload (same schema as before)
+    const mainPayload = {
+      version: '3.3.55',               // keep existing schema tag
+      savedAt: new Date().toISOString(),
+      picks,
+      history: historyDays,
+      current,
+      tempWraps,
+      startTime,
+      lastClose,
+      pickingCutoff,
+      undoStack,
+      proUnlocked,
+      snakeUnlocked,
+      shiftBreaks,
+      operativeLog,
+      operativeActive
+    };
+
+    // 1) Persist locally (legacy behaviour)
+    localStorage.setItem(KEY, JSON.stringify(mainPayload));
     localStorage.setItem(KEY_LEARN, JSON.stringify(learnedUL || {}));
+
+    // 2) Sync to backend if available
+    if (window.WqtAPI && typeof WqtAPI.saveState === 'function') {
+      try {
+        const stateForBackend = {
+          main:        mainPayload,
+          learnedUL:   learnedUL || {},
+          customCodes: customCodes || []
+        };
+        WqtAPI.saveState(stateForBackend);
+      } catch (err) {
+        console.warn('[saveAll] Backend sync failed, local-only', err);
+      }
+    }
   } catch (e) {
     console.error(e);
   }
