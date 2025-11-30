@@ -1,69 +1,54 @@
 // /scripts/api.js
 // Frontend API adapter for WQT.
 // v0: purely local, backed by Storage + existing bootstrap.js logic.
-// v1: hybrid: local first, with cloud sync to FastAPI backend.
+// v1: prefer FastAPI backend for core state, with local fallback.
 
 import { Storage, StorageKeys } from './storage.js';
 
 const API_BASE = 'https://wqt-backend.onrender.com';
 
-// --- Internal helpers ------------------------------------------------
+// Tiny helper: fetch JSON from backend with basic error handling.
+async function fetchJSON(path, options = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    credentials: 'omit',
+    ...options,
+  });
 
-async function fetchMainFromCloud() {
-  try {
-    const res = await fetch(`${API_BASE}/api/state`, {
-      method: 'GET',
-      cache: 'no-store'
-    });
-    if (!res.ok) {
-      console.warn('[WqtAPI] Cloud GET /api/state failed:', res.status);
-      return null;
-    }
-    const data = await res.json();
-    if (!data || typeof data !== 'object') return null;
-    return data;
-  } catch (err) {
-    console.warn('[WqtAPI] Cloud GET /api/state error:', err);
-    return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(
+      `[WQT API] ${options.method || 'GET'} ${path} failed: ${res.status} ${res.statusText} ${text}`,
+    );
   }
-}
 
-async function postMainToCloud(main) {
-  try {
-    await fetch(`${API_BASE}/api/state`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(main || {})
-    });
-  } catch (err) {
-    console.warn('[WqtAPI] Cloud POST /api/state error:', err);
-  }
+  return res.json();
 }
 
 export const WqtAPI = {
   // ------------------------------------------------------------------
   // Core state – mirrors loadAll/saveAll in bootstrap.js
+  // Now prefers backend, with local fallback.
   // ------------------------------------------------------------------
 
   async loadInitialState() {
-    // Hybrid strategy:
-    // 1) Try cloud main state from FastAPI.
-    // 2) Fall back to local Storage if cloud unavailable.
-    let main = null;
+    let main;
 
-    const cloudMain = await fetchMainFromCloud();
-    if (cloudMain) {
-      main = cloudMain;
-      // Optionally cache cloud state locally so offline still works.
+    // 1) Try backend
+    try {
+      main = await fetchJSON('/api/state');
+      // mirror into localStorage for offline cache
       Storage.saveMain(main);
-    } else {
+      console.log('[WQT API] Loaded main state from backend');
+    } catch (err) {
+      console.warn('[WQT API] Backend load failed, falling back to localStorage:', err);
       main = Storage.loadMain();
     }
 
+    // 2) These are still local-only for now
     const learnedUL   = Storage.loadLearnedUL();
     const customCodes = Storage.loadCustomCodes();
 
-    return { main, learnedUL, customCodes };
+    return { main: main || {}, learnedUL, customCodes };
   },
 
   async saveState(state) {
@@ -72,18 +57,27 @@ export const WqtAPI = {
     const learnedUL   = state.learnedUL || {};
     const customCodes = state.customCodes || [];
 
-    // Always keep local copy for offline / performance.
+    // 1) Always write to localStorage (offline-first)
     Storage.saveMain(main);
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
 
-    // Fire-and-forget cloud sync of main state.
-    postMainToCloud(main);
+    // 2) Try to persist main blob to backend
+    try {
+      await fetchJSON('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(main),
+      });
+      console.log('[WQT API] Saved main state to backend');
+    } catch (err) {
+      console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
+    }
   },
 
   // ------------------------------------------------------------------
   // Shift/session-side data (outside main blob)
-  // These wrap the ad-hoc keys currently used in bootstrap.js.
+  // These stay in localStorage for now (no schema yet).
   // ------------------------------------------------------------------
 
   async getShiftActive() {
@@ -225,7 +219,7 @@ export const WqtAPI = {
   // ------------------------------------------------------------------
 
   async fetchShiftSummary() {
-    // Later: GET /api/shift/summary
+    // Later: GET /api/shift/summary from backend
     const { main } = await this.loadInitialState();
     return {
       startTime: main.startTime || '',
@@ -236,14 +230,14 @@ export const WqtAPI = {
   },
 
   async exportJsonAll() {
-    // Later: GET /api/export/json
+    // Later: GET /api/export/json from backend
     const { main } = await this.loadInitialState();
     return main;
   },
 
   async importJsonAll(payload) {
-    // Later: POST /api/import/json
-    // For now: merge + save local + cloud.
+    // Later: POST /api/import/json to backend
+    // For now: merge + save via saveState (which syncs to backend + local).
     const { main, learnedUL, customCodes } = await this.loadInitialState();
     const merged = {
       ...main,
