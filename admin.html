@@ -89,6 +89,73 @@
     }
     .detail-row:last-child { border-bottom: none; }
     .detail-val { color: var(--text-main); font-weight: 500; }
+
+    /* --- TIMELINE STYLES (New) --- */
+    .timeline-container {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-top: 1rem;
+        padding-right: 8px;
+        border-top: 1px solid var(--border);
+        padding-top: 1rem;
+    }
+
+    .t-item {
+        display: flex;
+        gap: 12px;
+        margin-bottom: 12px;
+        position: relative;
+    }
+
+    /* Vertical line connecting items */
+    .t-item::before {
+        content: '';
+        position: absolute;
+        left: 4px;
+        top: 24px;
+        bottom: -16px;
+        width: 2px;
+        background: #334155;
+        z-index: 0;
+    }
+    .t-item:last-child::before { display: none; }
+
+    .t-time {
+        font-family: monospace;
+        font-size: 0.85rem;
+        color: var(--text-soft);
+        min-width: 45px;
+        padding-top: 2px;
+        z-index: 1;
+        background: var(--card-bg); /* Mask line behind time */
+    }
+
+    .t-content {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 8px 12px;
+        flex: 1;
+        font-size: 0.9rem;
+    }
+
+    .t-tag {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: bold;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+    }
+
+    /* Tag Colors */
+    .tag-ord { background: rgba(56, 189, 248, 0.15); color: #38bdf8; } /* Blue - Order */
+    .tag-wrp { background: rgba(168, 85, 247, 0.15); color: #a855f7; } /* Purple - Wrap */
+    .tag-brk { background: rgba(234, 179, 8, 0.15); color: #eab308; }  /* Yellow - Break */
+    .tag-dly { background: rgba(239, 68, 68, 0.15); color: #ef4444; }  /* Red - Delay */
+    .tag-nte { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; } /* Grey - Note */
+    .tag-opr { background: rgba(34, 197, 94, 0.15); color: #22c55e; }  /* Green - Operative */
   </style>
 </head>
 <body>
@@ -182,8 +249,6 @@
         const current = d.current || {};
         
         // --- NAME LOGIC ---
-        // Prioritize Operator ID. If missing, show Device ID.
-        // explicitly NOT using current.name here to avoid showing Customer ID (e.g. SAIEME) as the User Name.
         const opName = current.operator_id || `Dev: ${devId.substring(0,6)}`;
 
         const minsAgo = Math.floor((now - savedAt) / 60000);
@@ -217,31 +282,105 @@
     }
 
     // ---------------------------------------------------------
-    // 2. MODAL LOGIC (DETAILED VIEW)
+    // 2. MODAL LOGIC (DETAILED VIEW + TIMELINE)
     // ---------------------------------------------------------
     function openDeviceModal(index) {
         const d = allDevicesData[index];
         if (!d) return;
 
         const current = d.current || {};
-        const picks = d.picks || [];
-        const totalPicks = picks.reduce((sum, p) => sum + (p.units || 0), 0);
-        
-        // Use liveRate calculated by backend, or 0
-        const rate = current.liveRate || 0;
-        
-        // Customer Name (SAIEME etc) goes here in the modal, not on the card title
-        const customer = current.name || "None"; 
         const opId = current.operator_id || "Unknown User";
-        const startTime = d.startTime || "Not Started";
-        const savedAt = d.savedAt ? new Date(d.savedAt).toLocaleTimeString() : "Never";
+        
+        // --- 1. BUILD THE TIMELINE DATA ---
+        let timeline = [];
 
+        // A. Completed Picks (Orders)
+        (d.picks || []).forEach(p => {
+            timeline.push({ type: 'ORDER_DONE', time: p.close, data: p });
+            // Add internal logs for this completed order
+            if(p.log && p.log.wraps) p.log.wraps.forEach(w => timeline.push({ type: 'WRAP', time: w.t, data: w, ctx: p.name }));
+            if(p.log && p.log.breaks) p.log.breaks.forEach(b => timeline.push({ type: b.type === 'D' ? 'DELAY' : 'BREAK', time: b.start, data: b, ctx: p.name }));
+        });
+
+        // B. Current Active Order Logs
+        if (current.total) { // If an order is active
+            timeline.push({ type: 'ORDER_START', time: current.start, data: current });
+            // Wraps
+            (d.tempWraps || []).forEach(w => timeline.push({ type: 'WRAP', time: w.t, data: w, ctx: current.name }));
+            // Breaks/Notes/Delays
+            (current.breaks || []).forEach(b => {
+                 let t = b.type === 'D' ? 'DELAY' : (b.type === 'N' ? 'NOTE' : 'BREAK');
+                 timeline.push({ type: t, time: b.t || b.start, data: b, ctx: current.name });
+            });
+        }
+
+        // C. Shift Events (Operative / Shift-level Breaks)
+        (d.shiftBreaks || []).forEach(b => timeline.push({ type: 'BREAK', time: b.start, data: b, ctx: 'Shift' }));
+        (d.operativeLog || []).forEach(op => {
+            timeline.push({ type: 'OPERATIVE', time: op.start, data: op });
+            if(op.end) timeline.push({ type: 'OPERATIVE_END', time: op.end, data: op });
+        });
+
+        // --- 2. SORT CHRONOLOGICALLY ---
+        timeline.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
+        // --- 3. GENERATE HTML ---
+        let logHtml = timeline.map(item => {
+            let tagClass = 'tag-nte';
+            let label = 'NOTE';
+            let desc = '';
+
+            if (item.type === 'WRAP') {
+                tagClass = 'tag-wrp'; label = 'WRAP';
+                desc = `Pallet wrapped. <b>${item.data.done}</b> done, <b>${item.data.left}</b> left.`;
+            } else if (item.type === 'ORDER_DONE') {
+                tagClass = 'tag-ord'; label = 'COMPLETE';
+                desc = `Finished <b>${item.data.name}</b>. Total: ${item.data.units} units.`;
+            } else if (item.type === 'ORDER_START') {
+                tagClass = 'tag-ord'; label = 'START';
+                desc = `Started <b>${item.data.name}</b> (Target: ${item.data.total})`;
+            } else if (item.type === 'BREAK') {
+                tagClass = 'tag-brk'; label = item.data.type === 'L' ? 'LUNCH' : 'BREAK';
+                desc = `${item.data.minutes ? item.data.minutes + 'm' : 'Started'} (${item.ctx || 'Shift'})`;
+            } else if (item.type === 'DELAY') {
+                tagClass = 'tag-dly'; label = 'DELAY';
+                desc = `${item.data.cause || 'Unknown'} (${item.data.minutes || '?'}m)`;
+            } else if (item.type === 'NOTE') {
+                label = 'NOTE';
+                desc = item.data.note || 'No content';
+            } else if (item.type === 'OPERATIVE') {
+                tagClass = 'tag-opr'; label = 'OPERATIVE';
+                desc = item.data.note || 'Manual work started';
+            } else if (item.type === 'OPERATIVE_END') {
+                tagClass = 'tag-opr'; label = 'OP END';
+                desc = `Ended manual work (${item.data.minutes || '?'}m)`;
+            }
+
+            return `
+                <div class="t-item">
+                    <div class="t-time">${item.time}</div>
+                    <div class="t-content">
+                        <span class="t-tag ${tagClass}">${label}</span>
+                        <div style="color:#cbd5e1;">${desc}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (timeline.length === 0) logHtml = '<div style="padding:10px; color:#64748b;">No activity recorded for this session.</div>';
+
+        // --- 4. RENDER MODAL ---
         document.getElementById('modalTitle').textContent = opId;
         
-        document.getElementById('modalContent').innerHTML = `
+        // Top Stats
+        const rate = current.liveRate || 0;
+        // Calc totals including shared
+        const totalPicks = (d.picks || []).reduce((sum, p) => sum + (p.units || 0), 0) + (current.shared ? (window.sharedMySum || 0) : 0);
+
+        const statsHtml = `
             <div class="stat-grid">
                 <div class="stat-box">
-                    <div class="stat-label">Total Units</div>
+                    <div class="stat-label">Total Units (Session)</div>
                     <div class="stat-val">${totalPicks}</div>
                 </div>
                 <div class="stat-box">
@@ -251,28 +390,17 @@
                     </div>
                 </div>
             </div>
-            
-            <div style="margin-top:10px;">
-                <div class="detail-row">
-                    <span>Current Customer</span>
-                    <span class="detail-val">${customer}</span>
-                </div>
-                <div class="detail-row">
-                    <span>Shift Start</span>
-                    <span class="detail-val">${startTime}</span>
-                </div>
-                <div class="detail-row">
-                    <span>Last Sync</span>
-                    <span class="detail-val">${savedAt}</span>
-                </div>
-                <div class="detail-row">
-                    <span>Device ID</span>
-                    <span class="detail-val" style="font-family:monospace;">${d.device_id || 'N/A'}</span>
-                </div>
-                 <div class="detail-row">
-                    <span>App Version</span>
-                    <span class="detail-val">${d.version || 'Unknown'}</span>
-                </div>
+            <div class="detail-row"><span>Device ID</span><span class="detail-val" style="font-family:monospace;">${d.device_id ? d.device_id.substring(0,8) + '...' : 'N/A'}</span></div>
+            <div class="detail-row"><span>App Version</span><span class="detail-val">${d.version || 'v?'}</span></div>
+            <div class="detail-row"><span>Shift Start</span><span class="detail-val">${d.startTime || '--:--'}</span></div>
+            <div class="detail-row"><span>Last Sync</span><span class="detail-val">${d.savedAt ? new Date(d.savedAt).toLocaleTimeString() : '--:--'}</span></div>
+        `;
+
+        document.getElementById('modalContent').innerHTML = `
+            ${statsHtml}
+            <h3 style="margin: 20px 0 10px; font-size: 0.9rem; color: #94a3b8; text-transform:uppercase;">Session Timeline</h3>
+            <div class="timeline-container">
+                ${logHtml}
             </div>
         `;
 
