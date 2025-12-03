@@ -124,10 +124,25 @@ const WqtAPI = {
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
 
-    // 2) Try to persist main blob to backend (scoped by device-id)
+    // 2) Try to persist main blob to backend
     try {
       const deviceId = getDeviceId();
-      const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+      
+      // [FIX] Retrieve the Operator ID we saved in the modal
+      const opId = window.localStorage.getItem('wqt_operator_id');
+
+      // [FIX] Inject it into the "Current" object so Admin sees it immediately
+      if (opId && main.current) {
+          main.current.operator_id = opId;
+      }
+
+      // Build Query String
+      let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+      if (opId) {
+          // Also tell the backend explicitly in the URL
+          qs += (qs ? '&' : '?') + `operator-id=${encodeURIComponent(opId)}`;
+      }
+
       await fetchJSON(`/api/state${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -138,7 +153,7 @@ const WqtAPI = {
       console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
     }
   },
-
+  
   // ------------------------------------------------------------------
   // Shift/session-side data (outside main blob)
   // These stay in localStorage for now (no schema yet).
