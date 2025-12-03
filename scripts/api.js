@@ -130,20 +130,34 @@ const WqtAPI = {
     try {
       const deviceId = getDeviceId();
       
-      // [FIX] Retrieve the Operator ID we saved in the modal
+      // --- NEW LOGIC STARTS HERE ---
+      // Retrieve Operator ID & Active Break from local storage
       const opId = window.localStorage.getItem('wqt_operator_id');
+      const breakDraftRaw = window.localStorage.getItem('breakDraft');
 
-      // [FIX] Inject it into the "Current" object so Admin sees it immediately
-      // CHANGE HERE: Check opId first. If main.current is missing (Idle), create a stub.
+      // Ensure 'current' object exists in the payload so we can inject properties
+      if (!main.current) { main.current = {}; }
+
+      // [FIX 1] Inject Operator ID so dashboard shows name even when idle
       if (opId) {
-          if (!main.current) { main.current = {}; } // <--- Force object creation
           main.current.operator_id = opId;
       }
+
+      // [FIX 2] Inject Active Break Status (Crucial for the Purple Card)
+      if (breakDraftRaw) {
+          try {
+              const bd = JSON.parse(breakDraftRaw);
+              if (bd) {
+                  // Inject "active_break" object: { type: 'B'|'L', startHHMM: '...' }
+                  main.current.active_break = bd;
+              }
+          } catch(e) {}
+      }
+      // --- NEW LOGIC ENDS HERE ---
 
       // Build Query String
       let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
       if (opId) {
-          // Also tell the backend explicitly in the URL
           qs += (qs ? '&' : '?') + `operator-id=${encodeURIComponent(opId)}`;
       }
 
@@ -157,7 +171,7 @@ const WqtAPI = {
       console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
     }
   },
-  
+
   // ------------------------------------------------------------------
   // Shift/session-side data (outside main blob)
   // These stay in localStorage for now (no schema yet).
