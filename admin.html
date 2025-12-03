@@ -1,86 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>WQT — Admin Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root {
-      --bg: #020617;
-      --card-bg: #0f172a;
-      --border: #1e293b;
-      --text-main: #f1f5f9;
-      --text-soft: #94a3b8;
-      --accent: #38bdf8;
-      --success: #22c55e;
-      --danger: #ef4444;
-      --warning: #f59e0b;
-    }
-    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text-main); padding: 2rem; min-height: 100vh; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
-    .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
-    
-    .user-card { background: #1e293b; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; position: relative; overflow: hidden; transition: transform 0.2s; }
-    .user-card:hover { transform: translateY(-2px); border-color: var(--accent); }
-    
-    .user-card.active { border-left: 4px solid var(--success); }
-    .user-card.idle { border-left: 4px solid var(--warning); }
-    .user-card.offline { border-left: 4px solid var(--danger); opacity: 0.75; }
+<div id="deviceModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
+  <div class="card" style="width:min(500px, 90%); position:relative;">
+    <button onclick="closeModal()" style="position:absolute; top:15px; right:15px; background:transparent; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
+    <h2 id="modalTitle" style="margin-top:0;">User Details</h2>
+    <div id="modalContent" style="margin-top:20px;"></div>
+  </div>
+</div>
 
-    .user-head { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
-    .user-name { font-weight: bold; font-size: 1.1rem; color: #fff; }
-    
-    .pill { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
-    .pill-green { background: rgba(34, 197, 94, 0.2); color: var(--success); }
-    .pill-yellow { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
-    .pill-red { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
-
-    .metric-row { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px solid #334155; }
-    .metric { text-align: center; }
-    .metric-label { font-size: 0.7rem; color: var(--text-soft); display: block; }
-    .metric-val { font-size: 1.1rem; font-weight: 700; color: var(--text-main); }
-
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    td, th { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text-soft); }
-    th { color: var(--accent); font-weight: 600; }
-    
-    .refresh-btn { background: var(--accent); color: #000; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; }
-    .refresh-btn:hover { opacity: 0.9; }
-    
-    .error-banner { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger); color: #fca5a5; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: none; }
-  </style>
-</head>
-<body>
-
-  <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-    <h1>WQT Admin Dashboard</h1>
-    <button class="refresh-btn" onclick="refreshAll()">Refresh Data</button>
-  </header>
-
-  <div id="error-box" class="error-banner"></div>
-
-  <section class="card" style="margin-bottom: 2rem;">
-    <div class="card-header">
-      <div style="font-weight:600; color:var(--text-soft);">LIVE FLOOR ACTIVITY (JSON STATE)</div>
-      <div id="active-count">0 Devices</div>
-    </div>
-    <div id="live-floor" class="live-grid">
-        <div style="padding:1rem">Loading live states...</div>
-    </div>
-  </section>
-
-  <section class="card">
-    <div class="card-header"><div style="font-weight:600; color:var(--text-soft);">RECENT LOG EVENTS</div></div>
-    <table id="events-table">
-      <thead><tr><th>Time</th><th>Category</th><th>Details</th></tr></thead>
-      <tbody><tr><td colspan="3">Loading logs...</td></tr></tbody>
-    </table>
-  </section>
-
-  <script>
+<script>
     const API_BASE = "https://wqt-backend.onrender.com";
+    let allDevicesData = []; // Store data globally for the modal
 
     async function fetchJSON(endpoint) {
       const errBox = document.getElementById("error-box");
@@ -101,10 +29,11 @@
     }
 
     // ---------------------------------------------------------
-    // 1. LIVE FLOOR LOGIC (The "Suitcase" Data)
+    // 1. LIVE FLOOR LOGIC
     // ---------------------------------------------------------
     async function loadLiveFloor() {
       const devices = await fetchJSON("/api/admin/devices");
+      allDevicesData = devices; // Save for modal usage
       const container = document.getElementById("live-floor");
       
       if (!devices || devices.length === 0) {
@@ -116,123 +45,114 @@
       container.innerHTML = "";
       document.getElementById("active-count").textContent = `${devices.length} Devices Found`;
 
-      // Sort by last saved time (newest first)
-      devices.sort((a, b) => {
-          const tA = new Date(a.savedAt || 0).getTime();
-          const tB = new Date(b.savedAt || 0).getTime();
-          return tB - tA;
-      });
-
+      devices.sort((a, b) => new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime());
       const now = Date.now();
 
-      devices.forEach(d => {
-        // --- Extract Data from the "Suitcase" ---
+      devices.forEach((d, index) => {
         const devId = d.device_id || "Unknown ID";
         const savedAt = d.savedAt ? new Date(d.savedAt).getTime() : 0;
-        
-        // "Current" object (Live Status)
         const current = d.current || {};
         
-        // [FIX 1] Prioritize Operator ID over Customer Name
-        // We look for operator_id first. If empty, we fall back to name, then device ID.
-        const opName = current.operator_id || current.name || devId.substring(0,8);
+        // --- PRIORITY FIX: Always look for operator_id first ---
+        const opName = current.operator_id || "Unassigned";
 
-        // [FIX 2] Use Live Rate instead of Order Rate
-        // Note: This requires your phone JS to be sending "liveRate" in the JSON.
-        // If it shows 0, we may need to calculate it here manually.
-        const rate = current.liveRate || 0;
-
-        // "Picks" array (History within the payload)
-        const picks = d.picks || [];
-        const totalPicks = picks.reduce((sum, p) => sum + (p.units || 0), 0);
-
-        // --- Determine Status ---
         const minsAgo = Math.floor((now - savedAt) / 60000);
         let status = "Active";
         let colorClass = "active";
         let badgeClass = "pill-green";
 
         if (minsAgo > 30) { 
-            status = "Offline"; 
-            colorClass = "offline"; 
-            badgeClass = "pill-red";
+            status = "Offline"; colorClass = "offline"; badgeClass = "pill-red";
         } else if (!current.name) {
-            // If no customer name is set, they are likely idle
-            status = "Idle";
-            colorClass = "idle";
-            badgeClass = "pill-yellow";
+            status = "Idle"; colorClass = "idle"; badgeClass = "pill-yellow";
         }
 
-        // --- Build HTML ---
-        // [FIX 3] Removed the "Current Order" block completely
+        // --- SIMPLIFIED CARD HTML ---
+        // Click triggers openDeviceModal with the index of the data
         const html = `
-          <div class="user-card ${colorClass}">
+          <div class="user-card ${colorClass}" onclick="openDeviceModal(${index})" style="cursor:pointer;">
             <div class="user-head">
-              <div class="user-name" title="${devId}">${opName}</div>
+              <div class="user-name">${opName}</div>
               <span class="pill ${badgeClass}">${status}</span>
             </div>
-            
-            <div style="font-size:0.8rem; color:#94a3b8; margin-bottom:8px;">
-               Device: ${devId.substring(0,8)}... <br>
-               Last Sync: ${minsAgo}m ago
-            </div>
-
-            <div class="metric-row">
-                <div class="metric">
-                    <span class="metric-label">Total Units</span>
-                    <span class="metric-val">${totalPicks}</span>
-                </div>
-                 <div class="metric">
-                    <span class="metric-label">Live Rate</span>
-                    <span class="metric-val">${rate}</span>
-                </div>
+            <div style="font-size:0.8rem; color:#94a3b8;">
+               ID: ${devId.substring(0,6)}... • ${minsAgo}m ago
             </div>
           </div>
         `;
         container.innerHTML += html;
       });
     }
+
     // ---------------------------------------------------------
-    // 2. LOG TABLE LOGIC (The "Luggage Tag" Data)
+    // 2. MODAL LOGIC (The detailed view)
+    // ---------------------------------------------------------
+    function openDeviceModal(index) {
+        const d = allDevicesData[index];
+        if (!d) return;
+
+        const current = d.current || {};
+        const picks = d.picks || [];
+        const totalPicks = picks.reduce((sum, p) => sum + (p.units || 0), 0);
+        const rate = current.liveRate || 0;
+        const customer = current.name || "None";
+        const startTime = d.startTime || "Not Started";
+        const opId = current.operator_id || "Unknown User";
+
+        document.getElementById('modalTitle').textContent = opId;
+        
+        document.getElementById('modalContent').innerHTML = `
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div style="background:#1e293b; padding:10px; border-radius:8px; text-align:center;">
+                    <div style="font-size:0.8rem; color:#94a3b8;">Total Units</div>
+                    <div style="font-size:1.5rem; font-weight:bold;">${totalPicks}</div>
+                </div>
+                <div style="background:#1e293b; padding:10px; border-radius:8px; text-align:center;">
+                    <div style="font-size:0.8rem; color:#94a3b8;">Live Rate</div>
+                    <div style="font-size:1.5rem; font-weight:bold; color:${rate >= 300 ? '#22c55e' : '#f59e0b'}">${rate}</div>
+                </div>
+            </div>
+            
+            <table style="width:100%; color:#cbd5e1;">
+                <tr><td style="padding:8px; border-bottom:1px solid #334155;">Shift Start</td><td style="text-align:right;">${startTime}</td></tr>
+                <tr><td style="padding:8px; border-bottom:1px solid #334155;">Current Customer</td><td style="text-align:right;">${customer}</td></tr>
+                <tr><td style="padding:8px; border-bottom:1px solid #334155;">Device ID</td><td style="text-align:right;">${d.device_id || 'N/A'}</td></tr>
+                <tr><td style="padding:8px;">Software Version</td><td style="text-align:right;">${d.version || 'v1.0'}</td></tr>
+            </table>
+        `;
+
+        document.getElementById('deviceModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('deviceModal').style.display = 'none';
+    }
+
+    // Close modal on outside click
+    document.getElementById('deviceModal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // ---------------------------------------------------------
+    // 3. LOGS LOGIC (Unchanged)
     // ---------------------------------------------------------
     async function loadRecentLogs() {
         const events = await fetchJSON("/api/usage/recent?limit=20");
         const tbody = document.querySelector("#events-table tbody");
         tbody.innerHTML = "";
-
-        if (events.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3">No events recorded.</td></tr>';
-            return;
-        }
-
+        if (events.length === 0) { tbody.innerHTML = '<tr><td colspan="3">No events recorded.</td></tr>'; return; }
         events.forEach(ev => {
             const time = new Date(ev.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-            
-            // Try to find a human readable name in the detail
             let detailStr = "";
             if (ev.detail) {
-                // If we have current_name (from my Python fix), use it!
                 if (ev.detail.current_name) detailStr += `User: <b>${ev.detail.current_name}</b> `;
                 else if (ev.detail.operator_id) detailStr += `ID: ${ev.detail.operator_id} `;
-                
                 if (ev.detail.shift_id) detailStr += `(Shift #${ev.detail.shift_id})`;
             }
-
-            tbody.innerHTML += `
-                <tr>
-                    <td style="white-space:nowrap;">${time}</td>
-                    <td><span class="pill pill-blue">${ev.category}</span></td>
-                    <td>${detailStr}</td>
-                </tr>
-            `;
+            tbody.innerHTML += `<tr><td>${time}</td><td><span class="pill pill-blue">${ev.category}</span></td><td>${detailStr}</td></tr>`;
         });
     }
 
-    // Initial Load
     refreshAll();
-    
-    // Auto-refresh every 10 seconds
     setInterval(refreshAll, 10000);
-  </script>
-</body>
-</html>
+</script>
