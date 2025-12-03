@@ -1,4 +1,4 @@
-# app/storage.py
+# wqt-backend/app/storage.py
 import json
 from pathlib import Path
 from typing import Optional
@@ -14,48 +14,49 @@ STATE_FILE = DATA_DIR / "main_state.json"
 
 def _load_from_file() -> Optional[dict]:
     """
-    Load the legacy JSON file if it exists.
+    Load the last saved MainState payload from the local JSON file.
+    Returns None if the file does not exist or is invalid.
     """
     if not STATE_FILE.exists():
         return None
+
     try:
         with STATE_FILE.open("r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
+        # Treat any corrupted / partial file as "no data"
         return None
 
 
 def _save_to_file(payload: dict) -> None:
     """
-    Persist the legacy JSON file. Used both for local dev and as a backup
-    even when Postgres is enabled.
+    Persist a JSON-serialisable payload to the local JSON file.
     """
-    with STATE_FILE.open("w", encoding="utf-8") as f:
-        json.dump(payload or {}, f, ensure_ascii=False)
+    try:
+        with STATE_FILE.open("w", encoding="utf-8") as f:
+            json.dump(payload or {}, f)
+    except Exception:
+        # Local file is only a safety net; if it fails we don't want 500s.
+        pass
 
 
 def load_main() -> MainState:
     """
-    Load the main state, preferring Postgres if available, falling back to JSON.
-
-    Always returns a MainState pydantic model, so existing callers don't change.
+    Load the MainState from, in order of preference:
+      1. Postgres (if configured)
+      2. Local JSON file
+      3. A fresh default MainState
     """
-    # 1) Try DB-backed global state
     payload = load_global_state()
-
-    # 2) Fallback to legacy file if DB has nothing or DB is unavailable
     if not payload:
         payload = _load_from_file()
 
-    # 3) Last resort: default MainState (uses model defaults)
     if not payload:
-        # If nothing is stored anywhere, fall back to a minimal default state.
-        # Version is required by the model; other fields have sensible defaults.
+        # Fresh install / first run – minimal sane defaults.
         return MainState(version="3.3.55")
 
-    # Ensure it maps into MainState safely
+    # Ensure it maps into MainState safely – Pydantic will enforce shape.
     return MainState(**payload)
-
 
 
 def save_main(state: MainState) -> None:

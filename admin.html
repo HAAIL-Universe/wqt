@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WQT — Usage Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #020617;
+      --border: #1f2937;
+      --text-main: #e5e7eb;
+      --text-soft: #9ca3af;
+      --accent: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #0f172a 0, #020617 55%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    h1 {
+      font-size: 1.6rem;
+      letter-spacing: 0.05em;
+      color: var(--text-soft);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+      gap: 1.5rem;
+    }
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+    .card {
+      background: radial-gradient(circle at top left, #0b1120, #020617);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1rem 1.25rem;
+      box-shadow: 0 10px 30px rgba(15,23,42,0.85);
+    }
+    .card h2 {
+      font-size: 1rem;
+      margin-bottom: 0.75rem;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .summary-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.5rem;
+      height: 160px;
+      margin-top: 0.5rem;
+    }
+    .bar {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.7rem;
+      color: var(--text-soft);
+    }
+    .bar-inner {
+      width: 100%;
+      border-radius: 999px;
+      background: linear-gradient(to top, rgba(56,189,248,0.1), rgba(56,189,248,0.9));
+      box-shadow: 0 0 15px rgba(56,189,248,0.6);
+      transition: height 0.25s ease-out;
+    }
+    .bar span.count {
+      font-variant-numeric: tabular-nums;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    thead {
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.7rem;
+      color: var(--text-soft);
+    }
+    th, td {
+      padding: 0.3rem 0.5rem;
+      border-bottom: 1px solid rgba(31,41,55,0.7);
+      vertical-align: top;
+    }
+    tbody tr:hover {
+      background: rgba(15,23,42,0.85);
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,0.4);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+    .pill.state-save {
+      border-color: rgba(56,189,248,0.8);
+      color: rgba(56,189,248,0.9);
+    }
+    .pill.shift-start {
+      border-color: rgba(22,163,74,0.8);
+      color: rgba(22,163,74,0.9);
+    }
+    .pill.shift-end {
+      border-color: rgba(249,115,22,0.8);
+      color: rgba(249,115,22,0.9);
+    }
+    .detail-json {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.7rem;
+      color: var(--text-soft);
+      white-space: pre-wrap;
+    }
+    .small {
+      font-size: 0.7rem;
+      color: var(--text-soft);
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Warehouse QuickCalc / Tracker — Usage Dashboard</h1>
+    <p class="small">
+      Summary is based on <strong>STATE_SAVE</strong> events from the backend.
+    </p>
+  </header>
+
+  <section class="grid">
+    <article class="card">
+      <h2>Daily Usage — Last 7 Days</h2>
+      <div id="summary-chart" class="summary-chart"></div>
+    </article>
+
+    <article class="card">
+      <h2>Recent Events</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 10%;">ID</th>
+            <th style="width: 20%;">Time</th>
+            <th style="width: 15%;">Type</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody id="recent-body"></tbody>
+      </table>
+      <p class="small">Showing up to 100 most recent usage events.</p>
+    </article>
+  </section>
+
+  <script>
+    // Backend URL
+    const API_BASE =
+      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+        ? "http://127.0.0.1:8000"
+        : "https://wqt-backend.onrender.com"; // change if your Render URL is different
+
+    async function fetchJSON(path) {
+      const res = await fetch(API_BASE + path);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error("Request failed: " + res.status + " " + text);
+      }
+      return res.json();
+    }
+
+    function formatTime(iso) {
+      if (!iso) return "-";
+      const d = new Date(iso);
+      return d.toLocaleString();
+    }
+
+    function pillClass(category) {
+      if (category === "STATE_SAVE") return "pill state-save";
+      if (category === "SHIFT_START") return "pill shift-start";
+      if (category === "SHIFT_END") return "pill shift-end";
+      return "pill";
+    }
+
+    function pillLabel(category) {
+      return category.replace("_", " ");
+    }
+
+    async function loadSummary() {
+      try {
+        const data = await fetchJSON("/api/usage/summary?days=7");
+        const series = data.series || [];
+        const container = document.getElementById("summary-chart");
+        container.innerHTML = "";
+
+        if (!series.length) {
+          container.textContent = "No data yet.";
+          return;
+        }
+
+        const maxCount = series.reduce((m, d) => Math.max(m, d.count || 0), 0) || 1;
+
+        series.forEach(point => {
+          const dateLabel = point.date.slice(5); // MM-DD
+          const count = point.count || 0;
+
+          const bar = document.createElement("div");
+          bar.className = "bar";
+
+          const barInner = document.createElement("div");
+          barInner.className = "bar-inner";
+          const pct = Math.max(8, (count / maxCount) * 100);
+          barInner.style.height = pct + "%";
+
+          const countSpan = document.createElement("span");
+          countSpan.className = "count";
+          countSpan.textContent = count.toString();
+
+          const dateSpan = document.createElement("span");
+          dateSpan.textContent = dateLabel;
+
+          bar.appendChild(barInner);
+          bar.appendChild(countSpan);
+          bar.appendChild(dateSpan);
+
+          container.appendChild(bar);
+        });
+      } catch (err) {
+        console.error(err);
+        const container = document.getElementById("summary-chart");
+        container.textContent = "Failed to load summary.";
+      }
+    }
+
+    async function loadRecent() {
+      try {
+        const events = await fetchJSON("/api/usage/recent?limit=100");
+        const tbody = document.getElementById("recent-body");
+        tbody.innerHTML = "";
+
+        if (!events.length) {
+          const tr = document.createElement("tr");
+          const td = document.createElement("td");
+          td.colSpan = 4;
+          td.textContent = "No events yet.";
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        events.forEach(evt => {
+          const tr = document.createElement("tr");
+
+          const tdId = document.createElement("td");
+          tdId.textContent = evt.id;
+
+          const tdTime = document.createElement("td");
+          tdTime.textContent = formatTime(evt.created_at);
+
+          const tdCat = document.createElement("td");
+          const pill = document.createElement("span");
+          pill.className = pillClass(evt.category);
+          pill.textContent = pillLabel(evt.category);
+          tdCat.appendChild(pill);
+
+          const tdDetail = document.createElement("td");
+          const pre = document.createElement("div");
+          pre.className = "detail-json";
+          const detail = evt.detail || {};
+          pre.textContent = JSON.stringify(detail, null, 2);
+          tdDetail.appendChild(pre);
+
+          tr.appendChild(tdId);
+          tr.appendChild(tdTime);
+          tr.appendChild(tdCat);
+          tr.appendChild(tdDetail);
+
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error(err);
+        const tbody = document.getElementById("recent-body");
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = 4;
+        td.textContent = "Failed to load events.";
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+
+    window.addEventListener("load", () => {
+      loadSummary();
+      loadRecent();
+    });
+  </script>
+</body>
+</html>

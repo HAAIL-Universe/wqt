@@ -927,7 +927,7 @@ const KEY_CODES = 'wqt_codes';
 const KEY_LEARN = 'wqt_learn_ul';
 const PRO_UNLOCK_CODE = '0000';
 const OPER_UNLOCK_CODE = '2222';
-const SNAKE_UNLOCK_CODE = '1234';   // <- Snake secret code
+const ADMIN_UNLOCK_CODE = '1234';
 
 let proUnlocked  = false;  // Gate: Export/Import/Manage Customers
 let snakeUnlocked = false; // Gate: Snake congestion game
@@ -1773,6 +1773,13 @@ function updCalcGate() {
   const raw    = String(inp.value || '');
   const digits = raw.replace(/\D+/g, '');
 
+  // ---- Admin dashboard unlock --------------------------------
+  if (digits.endsWith(ADMIN_UNLOCK_CODE) && digits.length >= ADMIN_UNLOCK_CODE.length) {
+    inp.value = '';
+    window.location.href = 'admin.html';
+    return;
+  }
+
   // ---- Pro tools unlock ------------------------------------
   if (digits.endsWith(PRO_UNLOCK_CODE) && digits.length >= PRO_UNLOCK_CODE.length) {
     inp.value = '';
@@ -1780,16 +1787,6 @@ function updCalcGate() {
     window.proUnlocked = true;
     showToast('Pro tools unlocked');
     openProSettingsModal?.();
-    return;
-  }
-
-  // ---- Snake unlock ----------------------------------------
-  if (digits.endsWith(SNAKE_UNLOCK_CODE) && digits.length >= SNAKE_UNLOCK_CODE.length) {
-    inp.value = '';
-    snakeUnlocked = true;
-    applySnakeGate();
-    saveAll();
-    showToast('Snake available');
     return;
   }
 
