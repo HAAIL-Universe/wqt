@@ -1402,6 +1402,12 @@ function submitBreak(){
 
   updateSummary();
   showToast('Break logged (' + minutes + 'm)');
+
+  // --- CRITICAL FIX: Force remove the active_break tag from memory ---
+  if (current && current.active_break) {
+      delete current.active_break;
+  }
+
   saveAll();
   renderShiftPanel?.();
 

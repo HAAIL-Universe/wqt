@@ -116,53 +116,49 @@ const WqtAPI = {
 // ... inside WqtAPI object ...
 
   async saveState(state) {
-    // 1) Always write to localStorage (offline-first)
+    // `state` shape should mirror what loadInitialState returns.
     const main        = state.main || {};
     const learnedUL   = state.learnedUL || {};
     const customCodes = state.customCodes || [];
 
+    // --- SYNCHRONIZE BREAK STATE ---
+    // This is the fix. We force the main state to match the breakDraft reality.
+    try {
+        const breakDraftRaw = window.localStorage.getItem('breakDraft');
+        
+        // Ensure current exists
+        if (!main.current) { main.current = {}; }
+
+        // Inject Operator ID
+        const opId = window.localStorage.getItem('wqt_operator_id');
+        if (opId) {
+            main.current.operator_id = opId;
+        }
+
+        if (breakDraftRaw) {
+            // We ARE on break: Force the tag onto the object
+            const bd = JSON.parse(breakDraftRaw);
+            main.current.active_break = bd;
+        } else {
+            // We are NOT on break: Force remove the tag from the object
+            // This cleans it from Memory, LocalStorage, AND the Backend payload.
+            if (main.current.active_break) {
+                delete main.current.active_break;
+            }
+        }
+    } catch (e) {
+        console.warn("Error syncing break state", e);
+    }
+
+    // 1) Write the (now corrected) state to localStorage
     Storage.saveMain(main);
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
 
-    // 2) Try to persist main blob to backend
+    // 2) Send the (now corrected) state to backend
     try {
       const deviceId = getDeviceId();
-      
-      // Retrieve Operator ID & Active Break
       const opId = window.localStorage.getItem('wqt_operator_id');
-      const breakDraftRaw = window.localStorage.getItem('breakDraft');
-
-      // --- SELF-HEAL FIX ---
-      // If we are NOT on a break locally, but the memory still thinks we are,
-      // forcibly remove the tag from the source to fix the "Stuck" issue.
-      if (!breakDraftRaw && window.current && window.current.active_break) {
-          delete window.current.active_break;
-      }
-
-      // Create a clean payload copy
-      const payload = { ...main }; 
-      const safeCurrent = payload.current ? { ...payload.current } : {};
-
-      // Inject Operator ID
-      if (opId) {
-          safeCurrent.operator_id = opId;
-      }
-
-      // Inject Break Status into Payload (if valid)
-      if (breakDraftRaw) {
-          try {
-              const bd = JSON.parse(breakDraftRaw);
-              if (bd) {
-                  safeCurrent.active_break = bd;
-              }
-          } catch(e) {}
-      } else {
-          // Double-check: ensure payload is clean
-          delete safeCurrent.active_break;
-      }
-
-      payload.current = safeCurrent;
 
       // Build Query String
       let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
@@ -173,7 +169,7 @@ const WqtAPI = {
       await fetchJSON(`/api/state${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(main),
       });
       console.log('[WQT API] Saved main state to backend');
     } catch (err) {
