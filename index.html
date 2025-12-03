@@ -616,7 +616,29 @@
     </div>
   </div>
 </div>
-
+<div id="breakChoiceModal" class="modal" role="dialog" aria-modal="true">
+  <div class="box" style="max-width:320px; text-align:center;">
+    <div class="hdr" style="justify-content:center; border-bottom:none; padding-bottom:0;">
+      <h3>Start a Break</h3>
+    </div>
+    <div class="fld" style="margin-bottom:20px; color:#94a3b8;">
+      Select break type to sync status to dashboard.
+    </div>
+    <div class="fld" style="display:grid; gap:12px;">
+      <button class="btn" style="padding:16px; font-size:1.1rem; background:rgba(234, 179, 8, 0.15); color:#facc15; border:1px solid rgba(234, 179, 8, 0.3);" 
+              onclick="confirmStartBreak('B')">
+        ☕ Short Break (20m)
+      </button>
+      <button class="btn" style="padding:16px; font-size:1.1rem; background:rgba(168, 85, 247, 0.15); color:#c084fc; border:1px solid rgba(168, 85, 247, 0.3);" 
+              onclick="confirmStartBreak('L')">
+        🍔 Lunch (30m)
+      </button>
+    </div>
+    <div class="actions" style="justify-content:center; margin-top:10px;">
+      <button class="btn ghost" type="button" onclick="closeBreakChoiceModal()">Cancel</button>
+    </div>
+  </div>
+</div>
 <div id="operatorIdModal" class="modal" role="dialog" aria-modal="true" style="display:none; z-index:10000; backdrop-filter:blur(5px);">
   <div class="box" style="max-width:400px; text-align:center;">
     <div class="hdr" style="justify-content:center;">

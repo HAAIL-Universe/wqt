@@ -223,7 +223,21 @@ function refreshStartButton(){
   const sharedBtn = document.getElementById('btnSharedStart');
   if (sharedBtn) sharedBtn.disabled = !ok;
 }
+// --- NEW: Unified Break Logic ---
+function openBreakChoiceModal() {
+  document.getElementById('breakChoiceModal').style.display = 'flex';
+}
 
+function closeBreakChoiceModal() {
+  document.getElementById('breakChoiceModal').style.display = 'none';
+}
+
+function confirmStartBreak(kind) {
+  closeBreakChoiceModal();
+  startBreak(kind);
+  // FORCE SYNC: Sends "Active Break" status to Admin Dashboard immediately
+  if (typeof saveAll === 'function') saveAll();
+}
 // Restores correct UI when page loads or state changes
 function restoreActiveOrderUI() {
   const shiftOn  = !!startTime && window.archived !== true;
@@ -276,8 +290,7 @@ function restoreActiveOrderUI() {
     // Gated controls (order-only)
     show('btnStart',       false);
     show('btnUndo',        true);
-    show('btnB',           true);
-    show('btnL',           true);
+    show('btnBreakMenu',   true);
     show('btnDelay',       true);
     show('btnCloseEarly',  true);
 
@@ -348,8 +361,7 @@ function restoreActiveOrderUI() {
     // Buttons hidden when idle; Delay/Close-Early only when shift is on
     show('btnStart',        true);
     show('btnUndo',         false);
-    show('btnB',            false);
-    show('btnL',            false);
+    show('btnBreakMenu',    shiftOn);
     show('btnDelay',        shiftOn);
     show('btnCloseEarly',   shiftOn);
 
