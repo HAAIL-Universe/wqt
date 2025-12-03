@@ -113,6 +113,8 @@ const WqtAPI = {
     return { main: main || {}, learnedUL, customCodes };
   },
 
+// ... inside WqtAPI object ...
+
   async saveState(state) {
     // `state` shape should mirror what loadInitialState returns.
     const main        = state.main || {};
@@ -132,7 +134,9 @@ const WqtAPI = {
       const opId = window.localStorage.getItem('wqt_operator_id');
 
       // [FIX] Inject it into the "Current" object so Admin sees it immediately
-      if (opId && main.current) {
+      // CHANGE HERE: Check opId first. If main.current is missing (Idle), create a stub.
+      if (opId) {
+          if (!main.current) { main.current = {}; } // <--- Force object creation
           main.current.operator_id = opId;
       }
 
