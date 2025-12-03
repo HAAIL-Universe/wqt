@@ -130,30 +130,34 @@ const WqtAPI = {
     try {
       const deviceId = getDeviceId();
       
-      // --- NEW LOGIC STARTS HERE ---
       // Retrieve Operator ID & Active Break from local storage
       const opId = window.localStorage.getItem('wqt_operator_id');
       const breakDraftRaw = window.localStorage.getItem('breakDraft');
 
-      // Ensure 'current' object exists in the payload so we can inject properties
+      // Ensure 'current' object exists in the payload
       if (!main.current) { main.current = {}; }
 
-      // [FIX 1] Inject Operator ID so dashboard shows name even when idle
+      // [FIX 1] Inject Operator ID
       if (opId) {
           main.current.operator_id = opId;
       }
 
-      // [FIX 2] Inject Active Break Status (Crucial for the Purple Card)
+      // [FIX 2] Inject Active Break Status (AND CLEANUP)
       if (breakDraftRaw) {
           try {
               const bd = JSON.parse(breakDraftRaw);
               if (bd) {
-                  // Inject "active_break" object: { type: 'B'|'L', startHHMM: '...' }
                   main.current.active_break = bd;
               }
           } catch(e) {}
+      } else {
+          // *** CRITICAL FIX: Explicitly remove stale break data ***
+          // Since main.current persists in memory, we must delete this key 
+          // when the break is over, or it will send "On Break" forever.
+          if (main.current.active_break) {
+              delete main.current.active_break;
+          }
       }
-      // --- NEW LOGIC ENDS HERE ---
 
       // Build Query String
       let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
