@@ -24,16 +24,12 @@
       padding: 2rem;
       min-height: 100vh;
     }
-    h1, h2 { letter-spacing: -0.025em; }
-    header { margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
-    
     .grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
       gap: 1.5rem;
       margin-bottom: 2rem;
     }
-    
     .card {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -56,7 +52,6 @@
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
-
     /* Live Floor Table */
     .live-grid {
       display: grid;
@@ -73,29 +68,21 @@
     }
     .user-card.active { border-left: 4px solid var(--success); }
     .user-card.idle { border-left: 4px solid var(--text-soft); }
-    
     .user-head { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
     .user-name { font-weight: 700; font-size: 1.1rem; }
     .user-status { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; background: #334155; }
     .user-card.active .user-status { background: rgba(34, 197, 94, 0.2); color: var(--success); }
-    
     .user-meta { font-size: 0.85rem; color: var(--text-soft); display: flex; flex-direction: column; gap: 4px; }
     .stat-row { display: flex; justify-content: space-between; }
-    
     /* Tables */
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
     th { text-align: left; color: var(--text-soft); padding: 8px; border-bottom: 1px solid var(--border); font-weight: 600; }
     td { padding: 8px; border-bottom: 1px solid var(--border); color: var(--text-main); }
-    tr:last-child td { border-bottom: none; }
-    
-    .time-ago { color: var(--text-soft); font-size: 0.75rem; }
-    
-    /* Status Pills */
     .pill { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
     .pill-green { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.3); }
     .pill-blue { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
     .pill-gray { background: #334155; color: var(--text-soft); }
-
+    
     .refresh-btn {
       background: var(--accent);
       color: #000;
@@ -104,21 +91,29 @@
       border-radius: 6px;
       font-weight: 600;
       cursor: pointer;
-      transition: opacity 0.2s;
     }
-    .refresh-btn:hover { opacity: 0.9; }
-
+    .error-banner {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid var(--danger);
+      color: #fca5a5;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+      display: none;
+    }
   </style>
 </head>
 <body>
 
-  <header style="display:flex; justify-content:space-between; align-items:center;">
+  <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
     <div>
-      <h1>WQT Admin Dashboard</h1>
+      <h1 style="font-size:1.5rem;">WQT Admin Dashboard</h1>
       <p style="color:var(--text-soft); font-size:0.9rem;">Live view of warehouse floor activity</p>
     </div>
     <button class="refresh-btn" onclick="loadData()">Refresh Data</button>
   </header>
+
+  <div id="error-box" class="error-banner"></div>
 
   <section class="card" style="margin-bottom: 2rem;">
     <div class="card-header">
@@ -131,14 +126,6 @@
   </section>
 
   <div class="grid">
-    <section class="card">
-      <div class="card-header">
-        <div class="card-title">Units Picked (Last 7 Days)</div>
-      </div>
-      <div id="stats-chart" style="height: 200px; display:flex; align-items:flex-end; gap:8px;">
-        </div>
-    </section>
-
     <section class="card">
       <div class="card-header">
         <div class="card-title">Recent System Events</div>
@@ -162,19 +149,21 @@
 
   <script>
     // --- CONFIG ---
-    // If running locally, this ensures we talk to Render.
-    // If running on Render, it talks to self.
-    const API_BASE = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-        ? "https://wqt-backend.onrender.com"
-        : "";
+    // Forces connection to live Render DB for both Local (file://) and Mobile usage.
+    const API_BASE = "https://wqt-backend.onrender.com";
 
     async function fetchJSON(endpoint) {
+      const errBox = document.getElementById("error-box");
       try {
         const res = await fetch(`${API_BASE}${endpoint}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+        errBox.style.display = 'none'; // Hide error if success
         return await res.json();
       } catch (e) {
         console.error("Fetch failed:", e);
+        // SHOW ERROR ON SCREEN
+        errBox.textContent = `Connection Failed: ${e.message}. Is the backend URL correct?`;
+        errBox.style.display = 'block';
         return [];
       }
     }
@@ -182,40 +171,36 @@
     // --- LOGIC ---
 
     async function loadData() {
-      // 1. Load Recent Events (raw log)
+      // 1. Load Recent Events
       const events = await fetchJSON("/api/usage/recent?limit=50");
+      
+      // If empty and no error displayed, show empty state
+      if (events.length === 0 && document.getElementById("error-box").style.display === 'none') {
+         document.getElementById("live-floor").innerHTML = '<div style="padding:1rem">No recent data found in database.</div>';
+         document.querySelector("#events-table tbody").innerHTML = '<tr><td colspan="3" style="padding:1rem">No events returned.</td></tr>';
+         return;
+      }
+      
       renderEventsTable(events);
-
-      // 2. Process "Live Floor" state from the events
       const deviceState = processLiveState(events);
       renderLiveFloor(deviceState);
-
-      // 3. Calculate daily stats from the events (approximate)
-      renderDailyStats(events);
     }
 
-    // Turn raw event log into a map of "Last Known State" per device
     function processLiveState(events) {
-      const devices = {}; // { deviceId: { lastSeen, currentOrder, shiftStart, ... } }
-
-      // Process oldest to newest to build state
-      // (The API returns newest first, so we reverse for state rebuilding)
+      const devices = {};
       const chronology = [...events].reverse();
 
       chronology.forEach(ev => {
         if (!ev.detail) return;
-        const d = ev.detail; // The full state blob
-        const devId = ev.device_id || "unknown";
-
-        // If this is a state save, update the device's snapshot
+        // Fallback for missing device_id
+        const devId = ev.device_id || (ev.detail && ev.detail.current && ev.detail.current.name ? "User-" + ev.detail.current.name : "Unknown-Device");
+        
         if (ev.category === "STATE_SAVE") {
           devices[devId] = {
             id: devId,
-            lastSeen: new Date(ev.created_at),
-            current: d.current,          // Active order object
-            startTime: d.startTime,      // Shift start HH:MM
-            picks: d.picks || [],        // Completed orders today
-            pickerName: (d.current && d.current.name) ? "Picking " + d.current.name : "Idle"
+            lastSeen: new Date(ev.created_at), 
+            current: ev.detail.current,
+            picks: ev.detail.picks || []
           };
         }
       });
@@ -227,45 +212,41 @@
       const countEl = document.getElementById("active-count");
       container.innerHTML = "";
 
-      // Filter out devices not seen in 24h
+      // 24 Hour Filter
       const now = new Date();
       const activeDevices = devices.filter(d => (now - d.lastSeen) < 86400000);
 
       countEl.textContent = `${activeDevices.length} Active (24h)`;
 
       if (activeDevices.length === 0) {
-        container.innerHTML = `<div style="color:var(--text-soft)">No active devices found.</div>`;
+        container.innerHTML = `<div style="color:var(--text-soft)">No active devices found in the last 24h.</div>`;
         return;
       }
 
       activeDevices.forEach(d => {
         const isIdle = !d.current;
         const minsAgo = Math.floor((now - d.lastSeen) / 60000);
-        const statusColor = minsAgo > 15 ? "offline" : (isIdle ? "idle" : "active");
-        
-        // Calculate units done today
-        const totalUnits = (d.picks || []).reduce((sum, p) => sum + (p.units || 0), 0);
-        
-        const card = document.createElement("div");
-        card.className = `user-card ${statusColor === 'active' ? 'active' : 'idle'}`;
+        const statusColor = minsAgo > 60 ? "offline" : (isIdle ? "idle" : "active");
         
         let statusText = isIdle ? "Idle" : "Picking";
         if (minsAgo > 60) statusText = "Offline";
 
-        // Current order details
+        const totalUnits = (d.picks || []).reduce((sum, p) => sum + (p.units || 0), 0);
+
         let orderInfo = `<span style="color:var(--text-soft)">No active order</span>`;
         if (d.current) {
             orderInfo = `
                 <div class="stat-row">
                     <span>${d.current.name}</span>
                     <span style="color:var(--accent)">${d.current.orderRateUh || 0} u/h</span>
-                </div>
-            `;
+                </div>`;
         }
 
+        const card = document.createElement("div");
+        card.className = `user-card ${statusColor === 'active' ? 'active' : 'idle'}`;
         card.innerHTML = `
           <div class="user-head">
-            <span class="user-name">${d.id.substring(0, 6)}...</span>
+            <span class="user-name">${d.id.substring(0, 12)}</span>
             <span class="user-status">${statusText}</span>
           </div>
           <div class="user-meta">
@@ -289,7 +270,6 @@
         const tr = document.createElement("tr");
         const time = new Date(ev.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         
-        // Humanize the action
         let action = `<span class="pill pill-gray">System Check</span>`;
         let details = "";
 
@@ -299,7 +279,7 @@
                 action = `<span class="pill pill-green">Picking</span>`;
                 details = `${d.current.name} (${d.current.total}u)`;
             } else {
-                action = `<span class="pill pill-blue">Idle / Menu</span>`;
+                action = `<span class="pill pill-blue">Idle</span>`;
                 details = "No active order";
             }
         }
@@ -313,22 +293,8 @@
       });
     }
 
-    // Mock chart renderer (replace with Chart.js later if you want fancy graphs)
-    function renderDailyStats(events) {
-       const chart = document.getElementById("stats-chart");
-       chart.innerHTML = "";
-       // This is a placeholder. Real stats require a backend aggregation endpoint 
-       // like /api/stats/daily which we can build next.
-       chart.innerHTML = `<div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-soft); border:1px dashed var(--border); border-radius:8px;">
-          Daily Stats Aggregation Coming Soon
-       </div>`;
-    }
-
-    // Auto-load
     loadData();
-    // Auto-refresh every 30s
     setInterval(loadData, 30000);
-
   </script>
 </body>
 </html>
