@@ -171,7 +171,7 @@ const WqtAPI = {
       console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
     }
   },
-
+  
   // ------------------------------------------------------------------
   // Shift/session-side data (outside main blob)
   // These stay in localStorage for now (no schema yet).
