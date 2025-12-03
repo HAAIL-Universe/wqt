@@ -534,14 +534,21 @@
             }
 
             return `
-                <div class="t-item">
-                    <div class="t-time">${item.time}</div>
-                    <div class="t-content">
-                        <span class="t-tag ${tagClass}">${label}</span>
-                        <div style="color:#cbd5e1;">${desc}</div>
-                    </div>
+            <div class="t-item">
+                <div class="t-content" style="position:relative;">
+                    <span class="t-tag ${tagClass}">${label}</span>
+                    <div style="color:#cbd5e1;">${desc}</div>
+                    <div style="
+                        position:absolute;
+                        top:8px;
+                        right:12px;
+                        font-family:monospace;
+                        font-size:0.8rem;
+                        color:#94a3b8;
+                    ">${item.time}</div>
                 </div>
-            `;
+            </div>
+        `;
         }).join('');
 
 
