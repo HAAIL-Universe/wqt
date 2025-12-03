@@ -65,20 +65,25 @@
       padding: 1rem;
       position: relative;
       overflow: hidden;
+      transition: all 0.2s;
     }
+    .user-card:hover { transform: translateY(-2px); border-color: var(--accent); }
     .user-card.active { border-left: 4px solid var(--success); }
     .user-card.idle { border-left: 4px solid var(--text-soft); }
-    .user-head { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
-    .user-name { font-weight: 700; font-size: 1.1rem; }
-    .user-status { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; background: #334155; }
+    
+    .user-head { display: flex; justify-content: space-between; align-items:center; margin-bottom: 0.75rem; }
+    .user-name { font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; }
+    .user-status { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; background: #334155; white-space: nowrap; }
     .user-card.active .user-status { background: rgba(34, 197, 94, 0.2); color: var(--success); }
-    .user-meta { font-size: 0.85rem; color: var(--text-soft); display: flex; flex-direction: column; gap: 4px; }
-    .stat-row { display: flex; justify-content: space-between; }
+    
+    .user-meta { font-size: 0.85rem; color: var(--text-soft); display: flex; flex-direction: column; gap: 6px; }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; }
+    
     /* Tables */
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th { text-align: left; color: var(--text-soft); padding: 8px; border-bottom: 1px solid var(--border); font-weight: 600; }
-    td { padding: 8px; border-bottom: 1px solid var(--border); color: var(--text-main); }
-    .pill { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    th { text-align: left; color: var(--text-soft); padding: 10px 8px; border-bottom: 1px solid var(--border); font-weight: 600; }
+    td { padding: 10px 8px; border-bottom: 1px solid var(--border); color: var(--text-main); vertical-align: middle; }
+    .pill { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; display: inline-block; }
     .pill-green { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.3); }
     .pill-blue { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
     .pill-gray { background: #334155; color: var(--text-soft); }
@@ -135,7 +140,7 @@
           <thead>
             <tr>
               <th>Time</th>
-              <th>Device</th>
+              <th>Identity</th>
               <th>Action</th>
             </tr>
           </thead>
@@ -149,7 +154,7 @@
 
   <script>
     // --- CONFIG ---
-    // Forces connection to live Render DB for both Local (file://) and Mobile usage.
+    // Always point to live backend
     const API_BASE = "https://wqt-backend.onrender.com";
 
     async function fetchJSON(endpoint) {
@@ -157,11 +162,10 @@
       try {
         const res = await fetch(`${API_BASE}${endpoint}`);
         if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
-        errBox.style.display = 'none'; // Hide error if success
+        errBox.style.display = 'none';
         return await res.json();
       } catch (e) {
         console.error("Fetch failed:", e);
-        // SHOW ERROR ON SCREEN
         errBox.textContent = `Connection Failed: ${e.message}. Is the backend URL correct?`;
         errBox.style.display = 'block';
         return [];
@@ -174,10 +178,8 @@
       // 1. Load Recent Events
       const events = await fetchJSON("/api/usage/recent?limit=50");
       
-      // If empty and no error displayed, show empty state
       if (events.length === 0 && document.getElementById("error-box").style.display === 'none') {
-         document.getElementById("live-floor").innerHTML = '<div style="padding:1rem">No recent data found in database.</div>';
-         document.querySelector("#events-table tbody").innerHTML = '<tr><td colspan="3" style="padding:1rem">No events returned.</td></tr>';
+         document.getElementById("live-floor").innerHTML = '<div style="padding:1rem">No recent data found.</div>';
          return;
       }
       
@@ -186,18 +188,29 @@
       renderLiveFloor(deviceState);
     }
 
+    // Smart processing to find names even if Device ID is missing
     function processLiveState(events) {
       const devices = {};
+      // Process oldest to newest
       const chronology = [...events].reverse();
 
       chronology.forEach(ev => {
         if (!ev.detail) return;
-        // Fallback for missing device_id
-        const devId = ev.device_id || (ev.detail && ev.detail.current && ev.detail.current.name ? "User-" + ev.detail.current.name : "Unknown-Device");
+        
+        // 1. Try to find a real name inside the data
+        let detectedName = "Anonymous";
+        if (ev.detail.current && ev.detail.current.name) {
+          detectedName = ev.detail.current.name; // e.g. "ASDAVO"
+        }
+        
+        // 2. Create a synthetic ID if the backend ID is missing
+        // If we have a backend ID, use it. If not, group by the detected name.
+        const devId = ev.device_id || `User-${detectedName}`;
         
         if (ev.category === "STATE_SAVE") {
           devices[devId] = {
             id: devId,
+            displayName: detectedName,
             lastSeen: new Date(ev.created_at), 
             current: ev.detail.current,
             picks: ev.detail.picks || []
@@ -226,12 +239,21 @@
       activeDevices.forEach(d => {
         const isIdle = !d.current;
         const minsAgo = Math.floor((now - d.lastSeen) / 60000);
-        const statusColor = minsAgo > 60 ? "offline" : (isIdle ? "idle" : "active");
         
-        let statusText = isIdle ? "Idle" : "Picking";
-        if (minsAgo > 60) statusText = "Offline";
+        let statusColor = "active";
+        let statusText = "Picking";
+
+        if (isIdle) {
+            statusColor = "idle";
+            statusText = "Idle";
+        }
+        if (minsAgo > 30) {
+            statusColor = "offline";
+            statusText = "Offline";
+        }
 
         const totalUnits = (d.picks || []).reduce((sum, p) => sum + (p.units || 0), 0);
+        const nameDisplay = d.displayName === "Anonymous" ? d.id.substring(0,8) : d.displayName;
 
         let orderInfo = `<span style="color:var(--text-soft)">No active order</span>`;
         if (d.current) {
@@ -239,23 +261,31 @@
                 <div class="stat-row">
                     <span>${d.current.name}</span>
                     <span style="color:var(--accent)">${d.current.orderRateUh || 0} u/h</span>
+                </div>
+                <div style="width:100%; background:#334155; height:4px; border-radius:2px; margin-top:4px;">
+                   <div style="width:10%; background:var(--accent); height:100%; border-radius:2px;"></div>
                 </div>`;
         }
 
         const card = document.createElement("div");
-        card.className = `user-card ${statusColor === 'active' ? 'active' : 'idle'}`;
+        card.className = `user-card ${statusColor}`;
+        // If offline, dim opacity
+        if (statusColor === 'offline') card.style.opacity = '0.6';
+
         card.innerHTML = `
           <div class="user-head">
-            <span class="user-name">${d.id.substring(0, 12)}</span>
+            <span class="user-name">${nameDisplay}</span>
             <span class="user-status">${statusText}</span>
           </div>
           <div class="user-meta">
             ${orderInfo}
-            <div class="stat-row" style="margin-top:8px; border-top:1px solid #334155; padding-top:4px;">
+            <div class="stat-row" style="margin-top:8px; border-top:1px solid #334155; padding-top:8px;">
                 <span>Total Today:</span>
-                <span style="color:var(--text-main)">${totalUnits} units</span>
+                <span style="color:var(--text-main); font-weight:bold;">${totalUnits}</span>
             </div>
-            <div class="time-ago">Last sync: ${minsAgo}m ago</div>
+            <div class="stat-row" style="font-size:0.75rem; color:var(--text-soft);">
+               <span>Sync: ${minsAgo}m ago</span>
+            </div>
           </div>
         `;
         container.appendChild(card);
@@ -272,6 +302,12 @@
         
         let action = `<span class="pill pill-gray">System Check</span>`;
         let details = "";
+        
+        // Try to identify user even if ID is null
+        let identity = ev.device_id ? ev.device_id.substring(0,8) : "???";
+        if (ev.detail && ev.detail.current && ev.detail.current.name) {
+            identity = ev.detail.current.name; // Use customer code as identity
+        }
 
         if (ev.category === "STATE_SAVE") {
             const d = ev.detail || {};
@@ -286,7 +322,7 @@
 
         tr.innerHTML = `
           <td><span style="color:var(--text-soft)">${time}</span></td>
-          <td>${(ev.device_id || "???").substring(0,8)}</td>
+          <td style="font-weight:600; color:var(--accent);">${identity}</td>
           <td>${action} <span style="margin-left:8px; color:var(--text-soft); font-size:0.8em;">${details}</span></td>
         `;
         tbody.appendChild(tr);
