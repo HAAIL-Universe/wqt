@@ -334,14 +334,36 @@
         });
 
         // B. Current Active Order Logs
-        if (current.total) { 
+        if (current.total) {
             timeline.push({ type: 'ORDER_START', time: current.start, data: current });
-            (d.tempWraps || []).forEach(w => timeline.push({ type: 'WRAP', time: w.t, data: w, ctx: current.name }));
+
+            // Pull wraps from *any* of the possible shapes the backend might use
+            const currentWraps =
+                d.tempWraps ||
+                (current.log && current.log.wraps) ||
+                current.wraps ||
+                [];
+
+            currentWraps.forEach(w => {
+                timeline.push({
+                    type: 'WRAP',
+                    time: w.t || w.time || w.timestamp,   // be tolerant of field name
+                    data: w,
+                    ctx: current.name
+                });
+            });
+
             (current.breaks || []).forEach(b => {
-                 let t = b.type === 'D' ? 'DELAY' : (b.type === 'N' ? 'NOTE' : 'BREAK');
-                 timeline.push({ type: t, time: b.t || b.start, data: b, ctx: current.name });
+                let t = b.type === 'D' ? 'DELAY' : (b.type === 'N' ? 'NOTE' : 'BREAK');
+                timeline.push({
+                    type: t,
+                    time: b.t || b.start,
+                    data: b,
+                    ctx: current.name
+                });
             });
         }
+
 
         // C. Shift Events
         (d.shiftBreaks || []).forEach(b => timeline.push({ type: 'BREAK', time: b.start, data: b, ctx: 'Shift' }));
