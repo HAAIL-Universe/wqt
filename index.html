@@ -290,8 +290,8 @@
         <button id="btnUndo" class="btn" type="button" onclick="undoLast()" style="display:none;">Undo</button>
       </div>
       <div class="right">
-        <button id="btnB" class="btn" type="button" title="Start 20 min break" onclick="openBreakModal('B')" style="display:none;">B</button>
-        <button id="btnL" class="btn" type="button" title="Start 30 min lunch" onclick="openBreakModal('L')" style="display:none;">L</button>
+        <button id="btnBreakMenu" class="btn" type="button" onclick="openBreakChoiceModal()" style="display:none;">☕ Break</button>
+        
         <button class="btn" type="button" id="btnCloseEarly" onclick="openCloseEarlyModal()" style="display:none;">Close Early…</button>
         <button class="btn ok" type="button" id="btnEndShift" onclick="endShift()" style="min-width:220px;">End Shift &amp; Archive →</button>
       </div>
@@ -576,6 +576,30 @@
     <div class="actions" style="justify-content:center; gap:8px;">
       <button class="btn ghost" type="button" onclick="closeWrapModal()">Cancel</button>
       <button class="btn ok" type="button" onclick="submitWrapLeft()">Save Wrap</button>
+    </div>
+  </div>
+</div>
+
+<div id="breakChoiceModal" class="modal" role="dialog" aria-modal="true">
+  <div class="box" style="max-width:320px; text-align:center;">
+    <div class="hdr" style="justify-content:center; border-bottom:none; padding-bottom:0;">
+      <h3>Start a Break</h3>
+    </div>
+    <div class="fld" style="margin-bottom:20px; color:#94a3b8;">
+      Select the type of break to start the timer and notify the dashboard.
+    </div>
+    <div class="fld" style="display:grid; gap:12px;">
+      <button class="btn" style="padding:16px; font-size:1.1rem; background:rgba(234, 179, 8, 0.15); color:#facc15; border:1px solid rgba(234, 179, 8, 0.3);" 
+              onclick="confirmStartBreak('B')">
+        ☕ Short Break (20m)
+      </button>
+      <button class="btn" style="padding:16px; font-size:1.1rem; background:rgba(168, 85, 247, 0.15); color:#c084fc; border:1px solid rgba(168, 85, 247, 0.3);" 
+              onclick="confirmStartBreak('L')">
+        🍔 Lunch (30m)
+      </button>
+    </div>
+    <div class="actions" style="justify-content:center; margin-top:10px;">
+      <button class="btn ghost" type="button" onclick="closeBreakChoiceModal()">Cancel</button>
     </div>
   </div>
 </div>
