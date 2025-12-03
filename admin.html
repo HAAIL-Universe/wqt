@@ -429,23 +429,6 @@
 
         // Sort Chronologically
         timeline.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
-                // --- Optional collapsed summary if we have a completed order ---
-        const hasCompletedOrder = timeline.some(item => item.type === 'ORDER_DONE');
-
-        // Find first ORDER_START and last ORDER_DONE for summary
-        let firstStart = null;
-        let lastComplete = null;
-
-        if (hasCompletedOrder) {
-            firstStart = timeline.find(item => item.type === 'ORDER_START') || null;
-            // search from end for latest completion
-            for (let i = timeline.length - 1; i >= 0; i--) {
-                if (timeline[i].type === 'ORDER_DONE') {
-                    lastComplete = timeline[i];
-                    break;
-                }
-            }
-        }
 
         // Generate Timeline HTML
         let logHtml = timeline.map(item => {
@@ -491,34 +474,6 @@
         }).join('');
 
         if (timeline.length === 0) logHtml = '<div style="padding:10px; color:#64748b;">No activity recorded for this session.</div>';
-                // Build summary HTML if we have a completed order
-        let summaryHtml = "";
-        if (hasCompletedOrder && firstStart && lastComplete) {
-            const orderName =
-                (lastComplete.data && lastComplete.data.name) ||
-                (firstStart.data && firstStart.data.name) ||
-                "Order";
-
-            summaryHtml = `
-                <div class="timeline-summary" onclick="toggleTimelineDetails()">
-                    <div class="summary-main">
-                        <span class="t-tag tag-ord">COMPLETE</span>
-                        <div class="summary-title">${orderName}</div>
-                    </div>
-                    <div class="summary-times">
-                        <div class="summary-time-block">
-                            <div class="label">Start</div>
-                            <div class="time">${firstStart.time || "--:--"}</div>
-                        </div>
-                        <div class="summary-time-block">
-                            <div class="label">End</div>
-                            <div class="time">${lastComplete.time || "--:--"}</div>
-                        </div>
-                    </div>
-                    <div class="summary-toggle" id="timelineToggleLabel">Show details</div>
-                </div>
-            `;
-        }
 
         // --- RENDER MODAL ---
         document.getElementById('modalTitle').textContent = opId;
@@ -586,12 +541,10 @@
             ${statsHtml}
             ${messageHtml}
             <h3 style="margin: 20px 0 10px; font-size: 0.9rem; color: #94a3b8; text-transform:uppercase;">Session Timeline</h3>
-            ${summaryHtml}
-            <div class="timeline-container" id="timelineDetails" style="${hasCompletedOrder ? 'display:none;' : ''}">
+            <div class="timeline-container">
                 ${logHtml}
             </div>
         `;
-
 
         document.getElementById('deviceModal').style.display = 'flex';
     }
@@ -626,14 +579,6 @@
             btn.textContent = "Error";
             btn.style.background = "var(--danger)";
         }
-    }
-        function toggleTimelineDetails() {
-        const box = document.getElementById('timelineDetails');
-        if (!box) return;
-        const label = document.getElementById('timelineToggleLabel');
-        const isHidden = box.style.display === 'none' || box.style.display === '';
-        box.style.display = isHidden ? 'block' : 'none';
-        if (label) label.textContent = isHidden ? 'Hide details' : 'Show details';
     }
 
     function closeModal() {
