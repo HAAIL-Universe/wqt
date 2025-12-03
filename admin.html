@@ -189,6 +189,13 @@
         color: #94a3b8;
     }
 
+    .t-item-summary .t-content {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: flex-end;
+    }
+
     .summary-time-block .label {
         text-transform: uppercase;
         font-size: 0.7rem;
@@ -389,6 +396,11 @@
             const orderName = p.name || 'Order';
             const units = p.units || p.total || p.qty || 0;
 
+            // Pallet count = number of wraps for that order (fallback to p.pallets if backend exposes it)
+            const pallets =
+                (p.log && Array.isArray(p.log.wraps) ? p.log.wraps.length : 0) ||
+                (typeof p.pallets === 'number' ? p.pallets : 0);
+
             // Collect all known timestamps for this order
             const timeCandidates = [];
 
@@ -421,16 +433,16 @@
 
             timeline.push({
                 type: 'ORDER_SUMMARY',
-                time: startTime,   // used for global sort
+                time: startTime, // used for global sort
                 startTime,
                 endTime,
                 data: {
                     name: orderName,
-                    units
+                    units,
+                    pallets
                 }
             });
         });
-
 
         // B. Current Active Order Logs
         if (current.total) {
@@ -476,29 +488,38 @@
 
         // Generate Timeline HTML
         let logHtml = timeline.map(item => {
-            // Completed order summary -> single merged box
+            // Completed order summary -> single merged box, aligned with other timeline items
             if (item.type === 'ORDER_SUMMARY') {
-                const name  = item.data?.name || 'Order';
-                const units = item.data?.units ?? '?';
-                const start = item.startTime || item.time || '';
-                const end   = item.endTime   || '';
+                const name    = item.data?.name || 'Order';
+                const units   = item.data?.units ?? '?';
+                const pallets = item.data?.pallets ?? 0;
+                const start   = item.startTime || item.time || '';
+                const end     = item.endTime   || '';
+
+                const palletPart =
+                    pallets && pallets > 0
+                        ? ` / ${pallets} pallet${pallets === 1 ? '' : 's'}`
+                        : '';
 
                 return `
-                    <div class="timeline-summary">
-                        <div class="summary-main">
-                            <div class="summary-title">
-                                <span class="t-tag tag-ord">COMPLETE</span>
-                                <b>${name}</b> — ${units} units
+                    <div class="t-item t-item-summary">
+                        <div class="t-time">${start}</div>
+                        <div class="t-content">
+                            <div class="summary-main">
+                                <div class="summary-title">
+                                    <span class="t-tag tag-ord">COMPLETE</span>
+                                    <b>${name}</b> — ${units} units${palletPart}
+                                </div>
                             </div>
-                        </div>
-                        <div class="summary-times">
-                            <div class="summary-time-block">
-                                <div class="label">STARTED</div>
-                                <div class="time">${start}</div>
-                            </div>
-                            <div class="summary-time-block">
-                                <div class="label">FINISHED</div>
-                                <div class="time">${end}</div>
+                            <div class="summary-times">
+                                <div class="summary-time-block">
+                                    <div class="label">STARTED</div>
+                                    <div class="time">${start}</div>
+                                </div>
+                                <div class="summary-time-block">
+                                    <div class="label">FINISHED</div>
+                                    <div class="time">${end}</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -543,7 +564,6 @@
                 </div>
             `;
         }).join('');
-
 
         if (timeline.length === 0) logHtml = '<div style="padding:10px; color:#64748b;">No activity recorded for this session.</div>';
 
