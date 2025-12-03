@@ -423,9 +423,33 @@
         // --- RENDER MODAL ---
         document.getElementById('modalTitle').textContent = opId;
         
-        // Stats
+                // Stats
         const rate = current.liveRate || 0;
-        const totalPicks = (d.picks || []).reduce((sum, p) => sum + (p.units || 0), 0) + (current.shared ? (window.sharedMySum || 0) : 0);
+
+        // Units from completed orders
+        const completedUnits = (d.picks || []).reduce(
+        (sum, p) => sum + (p.units || p.total || 0),
+        0
+        );
+
+        // Units from current open order (based on latest wrap)
+        let currentUnitsDone = 0;
+        const tempWraps = d.tempWraps || [];
+
+        if (tempWraps.length > 0) {
+        const lastWrap = tempWraps[tempWraps.length - 1];
+        currentUnitsDone = lastWrap && typeof lastWrap.done === 'number'
+            ? lastWrap.done
+            : 0;
+        } else if (current && typeof current.done === 'number') {
+        // Fallback if backend ever exposes a `done` field on current order
+        currentUnitsDone = current.done;
+        }
+
+        const totalPicks =
+        completedUnits +
+        currentUnitsDone +
+        (current.shared ? (window.sharedMySum || 0) : 0);
 
         const statsHtml = `
             <div class="stat-grid">
