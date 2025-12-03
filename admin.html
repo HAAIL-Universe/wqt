@@ -1,14 +1,135 @@
-<div id="deviceModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; align-items:center; justify-content:center;">
-  <div class="card" style="width:min(500px, 90%); position:relative;">
-    <button onclick="closeModal()" style="position:absolute; top:15px; right:15px; background:transparent; border:none; color:#fff; font-size:1.5rem; cursor:pointer;">&times;</button>
-    <h2 id="modalTitle" style="margin-top:0;">User Details</h2>
-    <div id="modalContent" style="margin-top:20px;"></div>
-  </div>
-</div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WQT — Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #020617;
+      --card-bg: #0f172a;
+      --border: #1e293b;
+      --text-main: #f1f5f9;
+      --text-soft: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+    }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text-main); padding: 2rem; min-height: 100vh; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
+    
+    /* Updated Card Style for Clickability */
+    .user-card { 
+        background: #1e293b; 
+        border: 1px solid var(--border); 
+        border-radius: 8px; 
+        padding: 1rem; 
+        position: relative; 
+        overflow: hidden; 
+        transition: transform 0.2s, border-color 0.2s; 
+        cursor: pointer;
+    }
+    .user-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    
+    .user-card.active { border-left: 4px solid var(--success); }
+    .user-card.idle { border-left: 4px solid var(--warning); }
+    .user-card.offline { border-left: 4px solid var(--danger); opacity: 0.75; }
 
-<script>
+    .user-head { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+    .user-name { font-weight: bold; font-size: 1.1rem; color: #fff; }
+    
+    .pill { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+    .pill-green { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+    .pill-yellow { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .pill-red { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    td, th { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text-soft); }
+    th { color: var(--accent); font-weight: 600; }
+    
+    .refresh-btn { background: var(--accent); color: #000; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .refresh-btn:hover { opacity: 0.9; }
+    
+    .error-banner { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger); color: #fca5a5; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: none; }
+
+    /* Modal Styles */
+    .modal-overlay {
+        display: none; position: fixed; inset: 0; 
+        background: rgba(0,0,0,0.85); z-index: 9999; 
+        align-items: center; justify-content: center;
+        backdrop-filter: blur(4px);
+    }
+    .modal-content {
+        background: var(--card-bg); border: 1px solid var(--border);
+        border-radius: 16px; width: min(500px, 92%);
+        padding: 24px; position: relative;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .close-modal {
+        position: absolute; top: 16px; right: 16px;
+        background: transparent; border: none; color: var(--text-soft);
+        font-size: 1.5rem; cursor: pointer;
+    }
+    .stat-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;
+    }
+    .stat-box {
+        background: #1e293b; padding: 16px; border-radius: 8px; text-align: center;
+        border: 1px solid var(--border);
+    }
+    .stat-label { font-size: 0.8rem; color: var(--text-soft); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-val { font-size: 1.8rem; font-weight: 700; color: var(--text-main); }
+    .detail-row {
+        display: flex; justify-content: space-between; padding: 10px 0;
+        border-bottom: 1px solid var(--border); color: var(--text-soft); font-size: 0.95rem;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-val { color: var(--text-main); font-weight: 500; }
+  </style>
+</head>
+<body>
+
+  <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+    <h1>WQT Admin Dashboard</h1>
+    <button class="refresh-btn" onclick="refreshAll()">Refresh Data</button>
+  </header>
+
+  <div id="error-box" class="error-banner"></div>
+
+  <section class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+      <div style="font-weight:600; color:var(--text-soft);">LIVE FLOOR ACTIVITY</div>
+      <div id="active-count">0 Devices</div>
+    </div>
+    <div id="live-floor" class="live-grid">
+        <div style="padding:1rem">Loading live states...</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><div style="font-weight:600; color:var(--text-soft);">RECENT LOG EVENTS</div></div>
+    <table id="events-table">
+      <thead><tr><th>Time</th><th>Category</th><th>Details</th></tr></thead>
+      <tbody><tr><td colspan="3">Loading logs...</td></tr></tbody>
+    </table>
+  </section>
+
+  <div id="deviceModal" class="modal-overlay">
+      <div class="modal-content">
+          <button class="close-modal" onclick="closeModal()">&times;</button>
+          <h2 id="modalTitle" style="margin-top:0; margin-bottom:20px; font-size:1.4rem;">User Details</h2>
+          
+          <div id="modalContent"></div>
+      </div>
+  </div>
+
+  <script>
     const API_BASE = "https://wqt-backend.onrender.com";
-    let allDevicesData = []; // Store data globally for the modal
+    let allDevicesData = []; // Store fetched data globally for the modal
 
     async function fetchJSON(endpoint) {
       const errBox = document.getElementById("error-box");
@@ -29,11 +150,12 @@
     }
 
     // ---------------------------------------------------------
-    // 1. LIVE FLOOR LOGIC
+    // 1. LIVE FLOOR LOGIC (SIMPLIFIED CARDS)
     // ---------------------------------------------------------
     async function loadLiveFloor() {
       const devices = await fetchJSON("/api/admin/devices");
-      allDevicesData = devices; // Save for modal usage
+      allDevicesData = devices; // Save state for modal usage
+      
       const container = document.getElementById("live-floor");
       
       if (!devices || devices.length === 0) {
@@ -45,7 +167,13 @@
       container.innerHTML = "";
       document.getElementById("active-count").textContent = `${devices.length} Devices Found`;
 
-      devices.sort((a, b) => new Date(b.savedAt || 0).getTime() - new Date(a.savedAt || 0).getTime());
+      // Sort by last saved time (newest first)
+      devices.sort((a, b) => {
+          const tA = new Date(a.savedAt || 0).getTime();
+          const tB = new Date(b.savedAt || 0).getTime();
+          return tB - tA;
+      });
+
       const now = Date.now();
 
       devices.forEach((d, index) => {
@@ -53,8 +181,10 @@
         const savedAt = d.savedAt ? new Date(d.savedAt).getTime() : 0;
         const current = d.current || {};
         
-        // --- PRIORITY FIX: Always look for operator_id first ---
-        const opName = current.operator_id || "Unassigned";
+        // --- NAME LOGIC ---
+        // Prioritize Operator ID. If missing, show Device ID.
+        // explicitly NOT using current.name here to avoid showing Customer ID (e.g. SAIEME) as the User Name.
+        const opName = current.operator_id || `Dev: ${devId.substring(0,6)}`;
 
         const minsAgo = Math.floor((now - savedAt) / 60000);
         let status = "Active";
@@ -67,16 +197,18 @@
             status = "Idle"; colorClass = "idle"; badgeClass = "pill-yellow";
         }
 
-        // --- SIMPLIFIED CARD HTML ---
-        // Click triggers openDeviceModal with the index of the data
+        // --- RENDER CARD (Simplified) ---
+        // Click calls openDeviceModal with the array index
         const html = `
-          <div class="user-card ${colorClass}" onclick="openDeviceModal(${index})" style="cursor:pointer;">
+          <div class="user-card ${colorClass}" onclick="openDeviceModal(${index})">
             <div class="user-head">
-              <div class="user-name">${opName}</div>
+              <div class="user-name" title="Device: ${devId}">${opName}</div>
               <span class="pill ${badgeClass}">${status}</span>
             </div>
-            <div style="font-size:0.8rem; color:#94a3b8;">
-               ID: ${devId.substring(0,6)}... • ${minsAgo}m ago
+            
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:4px;">
+               Sync: ${minsAgo}m ago <br>
+               <span style="opacity:0.6; font-size:0.75rem;">${devId.substring(0,12)}...</span>
             </div>
           </div>
         `;
@@ -85,7 +217,7 @@
     }
 
     // ---------------------------------------------------------
-    // 2. MODAL LOGIC (The detailed view)
+    // 2. MODAL LOGIC (DETAILED VIEW)
     // ---------------------------------------------------------
     function openDeviceModal(index) {
         const d = allDevicesData[index];
@@ -94,31 +226,54 @@
         const current = d.current || {};
         const picks = d.picks || [];
         const totalPicks = picks.reduce((sum, p) => sum + (p.units || 0), 0);
+        
+        // Use liveRate calculated by backend, or 0
         const rate = current.liveRate || 0;
-        const customer = current.name || "None";
-        const startTime = d.startTime || "Not Started";
+        
+        // Customer Name (SAIEME etc) goes here in the modal, not on the card title
+        const customer = current.name || "None"; 
         const opId = current.operator_id || "Unknown User";
+        const startTime = d.startTime || "Not Started";
+        const savedAt = d.savedAt ? new Date(d.savedAt).toLocaleTimeString() : "Never";
 
         document.getElementById('modalTitle').textContent = opId;
         
         document.getElementById('modalContent').innerHTML = `
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
-                <div style="background:#1e293b; padding:10px; border-radius:8px; text-align:center;">
-                    <div style="font-size:0.8rem; color:#94a3b8;">Total Units</div>
-                    <div style="font-size:1.5rem; font-weight:bold;">${totalPicks}</div>
+            <div class="stat-grid">
+                <div class="stat-box">
+                    <div class="stat-label">Total Units</div>
+                    <div class="stat-val">${totalPicks}</div>
                 </div>
-                <div style="background:#1e293b; padding:10px; border-radius:8px; text-align:center;">
-                    <div style="font-size:0.8rem; color:#94a3b8;">Live Rate</div>
-                    <div style="font-size:1.5rem; font-weight:bold; color:${rate >= 300 ? '#22c55e' : '#f59e0b'}">${rate}</div>
+                <div class="stat-box">
+                    <div class="stat-label">Live Rate</div>
+                    <div class="stat-val" style="color:${rate >= 300 ? '#22c55e' : (rate < 250 ? '#ef4444' : '#f59e0b')}">
+                        ${rate} <span style="font-size:1rem; color:#94a3b8;">u/h</span>
+                    </div>
                 </div>
             </div>
             
-            <table style="width:100%; color:#cbd5e1;">
-                <tr><td style="padding:8px; border-bottom:1px solid #334155;">Shift Start</td><td style="text-align:right;">${startTime}</td></tr>
-                <tr><td style="padding:8px; border-bottom:1px solid #334155;">Current Customer</td><td style="text-align:right;">${customer}</td></tr>
-                <tr><td style="padding:8px; border-bottom:1px solid #334155;">Device ID</td><td style="text-align:right;">${d.device_id || 'N/A'}</td></tr>
-                <tr><td style="padding:8px;">Software Version</td><td style="text-align:right;">${d.version || 'v1.0'}</td></tr>
-            </table>
+            <div style="margin-top:10px;">
+                <div class="detail-row">
+                    <span>Current Customer</span>
+                    <span class="detail-val">${customer}</span>
+                </div>
+                <div class="detail-row">
+                    <span>Shift Start</span>
+                    <span class="detail-val">${startTime}</span>
+                </div>
+                <div class="detail-row">
+                    <span>Last Sync</span>
+                    <span class="detail-val">${savedAt}</span>
+                </div>
+                <div class="detail-row">
+                    <span>Device ID</span>
+                    <span class="detail-val" style="font-family:monospace;">${d.device_id || 'N/A'}</span>
+                </div>
+                 <div class="detail-row">
+                    <span>App Version</span>
+                    <span class="detail-val">${d.version || 'Unknown'}</span>
+                </div>
+            </div>
         `;
 
         document.getElementById('deviceModal').style.display = 'flex';
@@ -128,19 +283,24 @@
         document.getElementById('deviceModal').style.display = 'none';
     }
 
-    // Close modal on outside click
+    // Close on background click
     document.getElementById('deviceModal').addEventListener('click', function(e) {
         if (e.target === this) closeModal();
     });
 
     // ---------------------------------------------------------
-    // 3. LOGS LOGIC (Unchanged)
+    // 3. LOG TABLE LOGIC
     // ---------------------------------------------------------
     async function loadRecentLogs() {
         const events = await fetchJSON("/api/usage/recent?limit=20");
         const tbody = document.querySelector("#events-table tbody");
         tbody.innerHTML = "";
-        if (events.length === 0) { tbody.innerHTML = '<tr><td colspan="3">No events recorded.</td></tr>'; return; }
+
+        if (events.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3">No events recorded.</td></tr>';
+            return;
+        }
+
         events.forEach(ev => {
             const time = new Date(ev.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
             let detailStr = "";
@@ -149,10 +309,19 @@
                 else if (ev.detail.operator_id) detailStr += `ID: ${ev.detail.operator_id} `;
                 if (ev.detail.shift_id) detailStr += `(Shift #${ev.detail.shift_id})`;
             }
-            tbody.innerHTML += `<tr><td>${time}</td><td><span class="pill pill-blue">${ev.category}</span></td><td>${detailStr}</td></tr>`;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td style="white-space:nowrap;">${time}</td>
+                    <td><span class="pill pill-blue">${ev.category}</span></td>
+                    <td>${detailStr}</td>
+                </tr>
+            `;
         });
     }
 
     refreshAll();
     setInterval(refreshAll, 10000);
-</script>
+  </script>
+</body>
+</html>
