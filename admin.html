@@ -225,7 +225,7 @@
     // ---------------------------------------------------------
     async function loadLiveFloor() {
       const devices = await fetchJSON("/api/admin/devices");
-      allDevicesData = devices; // Save state for modal usage
+      allDevicesData = devices; 
       
       const container = document.getElementById("live-floor");
       
@@ -238,7 +238,6 @@
       container.innerHTML = "";
       document.getElementById("active-count").textContent = `${devices.length} Devices Found`;
 
-      // Sort by last saved time (newest first)
       devices.sort((a, b) => {
           const tA = new Date(a.savedAt || 0).getTime();
           const tB = new Date(b.savedAt || 0).getTime();
@@ -252,31 +251,50 @@
         const savedAt = d.savedAt ? new Date(d.savedAt).getTime() : 0;
         const current = d.current || {};
         
-        // --- NAME LOGIC ---
         const opName = current.operator_id || `Dev: ${devId.substring(0,6)}`;
-
         const minsAgo = Math.floor((now - savedAt) / 60000);
         
-        // --- STATUS LOGIC ---
         let status = "Active";
         let colorClass = "active";
         let badgeClass = "pill-green";
 
         if (minsAgo > 30) { 
-            // 1. Offline (No sync for 30m)
             status = "Offline"; colorClass = "offline"; badgeClass = "pill-red";
         } else if (current.active_break) {
-            // 2. Break / Lunch (Prioritized over Active Order)
-            status = current.active_break.type === 'L' ? "Lunch" : "Break";
-            colorClass = "break";       // Uses the purple border
-            badgeClass = "pill-purple"; // Uses the purple text
+            // --- BREAK & LATE LOGIC ---
+            const b = current.active_break;
+            status = b.type === 'L' ? "Lunch" : "Break";
+            colorClass = "break";       
+            badgeClass = "pill-purple"; 
+
+            // Calculate Late Status
+            // 1. Parse start time HH:MM to a date object for today
+            try {
+                const [h, m] = b.startHHMM.split(':');
+                const startTs = new Date();
+                startTs.setHours(parseInt(h), parseInt(m), 0, 0);
+                
+                // Handle midnight crossover (if break started yesterday)
+                if (startTs.getTime() > now + 3600000) { // if start appears to be in future, it was yesterday
+                     startTs.setDate(startTs.getDate() - 1);
+                }
+
+                // 2. Calculate elapsed minutes vs target
+                const elapsedMin = (now - startTs.getTime()) / 60000;
+                const targetMin = (b.targetSec || 1200) / 60; // default 20m
+
+                // 3. If Overrun by more than 1 minute -> RED LATE
+                if (elapsedMin > targetMin + 1) {
+                    status = `Late (${Math.floor(elapsedMin - targetMin)}m)`;
+                    colorClass = "offline"; // Use Red Border
+                    badgeClass = "pill-red"; // Use Red Badge
+                }
+            } catch(e) { console.warn("Time calc error", e); }
+
         } else if (!current.name) {
-            // 3. Idle (No active customer/order)
             status = "Idle"; colorClass = "idle"; badgeClass = "pill-yellow";
         }
-        // 4. Default is "Active" (Green) if none of the above match
 
-        // --- RENDER CARD ---
         const html = `
           <div class="user-card ${colorClass}" onclick="openDeviceModal(${index})">
             <div class="user-head">

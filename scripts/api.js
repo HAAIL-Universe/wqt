@@ -116,48 +116,46 @@ const WqtAPI = {
 // ... inside WqtAPI object ...
 
   async saveState(state) {
-    // `state` shape should mirror what loadInitialState returns.
+    // 1) Always write to localStorage (offline-first)
     const main        = state.main || {};
     const learnedUL   = state.learnedUL || {};
     const customCodes = state.customCodes || [];
 
-    // 1) Always write to localStorage (offline-first)
     Storage.saveMain(main);
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
 
-    // 2) Try to persist main blob to backend
+    // 2) Try to persist to backend
     try {
       const deviceId = getDeviceId();
-      
-      // Retrieve Operator ID & Active Break from local storage
       const opId = window.localStorage.getItem('wqt_operator_id');
       const breakDraftRaw = window.localStorage.getItem('breakDraft');
 
-      // Ensure 'current' object exists in the payload
-      if (!main.current) { main.current = {}; }
+      // --- CRITICAL FIX: Create a shallow copy of 'current' ---
+      // This prevents modifications here from sticking to the live app state
+      const payload = { ...main }; 
+      const safeCurrent = payload.current ? { ...payload.current } : {};
 
-      // [FIX 1] Inject Operator ID
+      // Inject Operator ID
       if (opId) {
-          main.current.operator_id = opId;
+          safeCurrent.operator_id = opId;
       }
 
-      // [FIX 2] Inject Active Break Status (AND CLEANUP)
+      // Inject OR Clean Active Break
       if (breakDraftRaw) {
           try {
               const bd = JSON.parse(breakDraftRaw);
               if (bd) {
-                  main.current.active_break = bd;
+                  safeCurrent.active_break = bd;
               }
           } catch(e) {}
       } else {
-          // *** CRITICAL FIX: Explicitly remove stale break data ***
-          // Since main.current persists in memory, we must delete this key 
-          // when the break is over, or it will send "On Break" forever.
-          if (main.current.active_break) {
-              delete main.current.active_break;
-          }
+          // Explicitly ensure no break data exists in the packet we send
+          delete safeCurrent.active_break;
       }
+
+      // Attach the modified current object to the payload
+      payload.current = safeCurrent;
 
       // Build Query String
       let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
@@ -168,14 +166,14 @@ const WqtAPI = {
       await fetchJSON(`/api/state${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(main),
+        body: JSON.stringify(payload), // Send the modified payload copy
       });
       console.log('[WQT API] Saved main state to backend');
     } catch (err) {
       console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
     }
   },
-  
+
   // ------------------------------------------------------------------
   // Shift/session-side data (outside main blob)
   // These stay in localStorage for now (no schema yet).
