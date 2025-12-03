@@ -3,9 +3,9 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+# Ensure these modules exist in your project
 from .models import MainState
 from .storage import load_main, save_main
 from .db import (
@@ -74,19 +74,19 @@ async def set_state(
 
     # Prepare detail log
     detail: Dict[str, Any] = {"version": state.version}
-    
+
     # Explicitly add identity info
     if operator_id:
         detail["operator_id"] = operator_id
     if device_id:
         detail["device_id"] = device_id
-        
+
     # Also grab the user name from the state if available (helpful for Admin UI)
     if state.current and isinstance(state.current, dict):
         if "name" in state.current:
             detail["current_name"] = state.current["name"]
 
-    # Log the event (Uncommented and improved)
+    # Log the event
     log_usage_event("STATE_SAVE", detail)
 
     return state

@@ -88,24 +88,27 @@
 
     function render(events) {
       const devices = {};
-      
-      // 1. Calculate Reference Time (Sync with Server)
-      // Find the absolute latest timestamp in the list. Assume that is "Now".
       const timestamps = events.map(e => new Date(e.created_at).getTime());
       const serverNow = Math.max(...timestamps, Date.now()); 
 
-      // Process oldest to newest
       [...events].reverse().forEach(ev => {
         if (!ev.detail) return;
         
-        let name = "Anonymous";
-        if (ev.detail.current && ev.detail.current.name) name = ev.detail.current.name;
-        const devId = ev.device_id || `User-${name}`; // Fallback if backend ID missing
+        // PRIORITIZE OPERATOR ID ("JU94658")
+        let displayName = ev.operator_id || ev.detail.operator_id || "Anonymous";
+        
+        // If Anonymous, fallback to Device ID snippet
+        if (displayName === "Anonymous" && ev.device_id) {
+            displayName = ev.device_id.substring(0,6);
+        }
+
+        // Use Device ID as unique key to track session
+        const uniqueKey = ev.device_id || `User-${displayName}`;
 
         if (ev.category === "STATE_SAVE") {
-          devices[devId] = {
-            id: devId,
-            name: name,
+          devices[uniqueKey] = {
+            id: uniqueKey,
+            name: displayName,  // <--- Shows JU94658
             lastSeen: new Date(ev.created_at).getTime(),
             current: ev.detail.current,
             picks: ev.detail.picks || []
