@@ -22,6 +22,8 @@ def init_db() -> None:
         return
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    # NOTE: This creates new tables but does NOT add columns to existing ones.
+    # You must run "ALTER TABLE shift_sessions ADD COLUMN device_id text;" manually.
     Base.metadata.create_all(bind=engine)
 
 def get_session() -> Session:
@@ -53,6 +55,8 @@ class ShiftSession(Base):
     __tablename__ = "shift_sessions"
     id = Column(Integer, primary_key=True, index=True)
     operator_id = Column(Text, nullable=False, index=True)
+    # FIX: Added device_id so the Admin Panel can link shifts to devices
+    device_id = Column(Text, nullable=True)
     operator_name = Column(Text, nullable=True)
     site = Column(Text, nullable=True)
     shift_type = Column(Text, nullable=True)
@@ -157,7 +161,10 @@ def get_usage_summary(days: int = 7) -> List[Dict[str, Any]]:
 # --- FIXED FUNCTIONS BELOW ---
 
 def start_shift(
-    operator_id: str, 
+    operator_id: str,
+    # FIX: Added device_id so we can save it to the DB
+    device_id: Optional[str] = None, 
+    # FIX: Explicit Optional types to satisfy Pylance
     operator_name: Optional[str] = None, 
     site: Optional[str] = None, 
     shift_type: Optional[str] = None
@@ -167,6 +174,7 @@ def start_shift(
     try:
         shift = ShiftSession(
             operator_id=operator_id, 
+            device_id=device_id, # Saving the link!
             operator_name=operator_name, 
             site=site, 
             shift_type=shift_type
@@ -203,6 +211,7 @@ def get_recent_shifts(limit: int = 50) -> List[Dict[str, Any]]:
         return [{
             "id": s.id,
             "operator_id": s.operator_id,
+            "device_id": s.device_id, # Returning the link!
             "operator_name": s.operator_name,
             "site": s.site,
             "shift_type": s.shift_type,
@@ -212,3 +221,26 @@ def get_recent_shifts(limit: int = 50) -> List[Dict[str, Any]]:
             "avg_rate": s.avg_rate
         } for s in q]
     finally: session.close()
+
+def get_all_device_states() -> List[Dict[str, Any]]:
+    """
+    Fetches the latest state (JSON payload) for ALL devices.
+    Used for the Admin Dashboard to show live status (Picks/Current).
+    """
+    if engine is None: return []
+    session = get_session()
+    try:
+        # Get all rows from device_states
+        rows = session.query(DeviceState).all()
+        results = []
+        for row in rows:
+            try:
+                data = json.loads(row.payload)
+                # Inject the device_id into the data so the frontend knows which is which
+                data['device_id'] = row.device_id 
+                results.append(data)
+            except:
+                continue
+        return results
+    finally:
+        session.close()

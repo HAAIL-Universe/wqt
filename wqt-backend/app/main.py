@@ -16,6 +16,7 @@ from .db import (
     start_shift,
     end_shift,
     get_recent_shifts,
+    get_all_device_states, # <--- IMPORTANT: Ensure this function exists in your db.py
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -111,6 +112,17 @@ async def api_usage_summary(
         "series": get_usage_summary(days=days),
     }
 
+# -------------------------------------------------------------------
+# Admin / Dashboard API (NEW)
+# -------------------------------------------------------------------
+@app.get("/api/admin/devices")
+async def api_admin_devices() -> List[Dict[str, Any]]:
+    """
+    Returns the full JSON state (including Picks & Current) for all devices.
+    Used by the Admin Dashboard to show live status.
+    """
+    return get_all_device_states()
+
 
 # -------------------------------------------------------------------
 # Shift/session API
@@ -133,8 +145,11 @@ async def api_shift_start(
     payload: ShiftStartPayload,
     device_id: Optional[str] = Query(default=None, alias="device-id"),
 ) -> Dict[str, Any]:
+    # FIX: Pass device_id to start_shift so it gets saved to the table
+    # This resolves the issue where shifts were not linked to devices
     shift_id = start_shift(
         operator_id=payload.operator_id,
+        device_id=device_id,  # <--- Critical Fix: Now saving the link to DB
         operator_name=payload.operator_name,
         site=payload.site,
         shift_type=payload.shift_type,
