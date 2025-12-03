@@ -292,7 +292,6 @@
       <div class="right">
         <button id="btnBreakMenu" class="btn" type="button" onclick="openBreakChoiceModal()" style="display:none;">☕ Break</button>
         
-        <button class="btn" type="button" id="btnCloseEarly" onclick="openCloseEarlyModal()" style="display:none;">Close Early…</button>
         <button class="btn ok" type="button" id="btnEndShift" onclick="endShift()" style="min-width:220px;">End Shift &amp; Archive →</button>
       </div>
     </div>
@@ -573,9 +572,10 @@
       <input id="wrapLeftInput" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 413">
       <div class="hint" id="wrapHint">Type 0 to enable Complete.</div>
     </div>
-    <div class="actions" style="justify-content:center; gap:8px;">
-      <button class="btn ghost" type="button" onclick="closeWrapModal()">Cancel</button>
+    <div class="actions" style="justify-content:space-between; align-items:center; gap:8px;">
+      <button class="btn" type="button" onclick="openCloseEarlyModal()">Close Early…</button>
       <button class="btn ok" type="button" onclick="submitWrapLeft()">Save Wrap</button>
+      <button class="btn ghost" type="button" onclick="closeWrapModal()">Cancel</button>
     </div>
   </div>
 </div>
