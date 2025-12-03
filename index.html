@@ -573,7 +573,9 @@
       <div class="hint" id="wrapHint">Type 0 to enable Complete.</div>
     </div>
     <div class="actions" style="justify-content:space-between; align-items:center; gap:8px;">
-      <button class="btn" type="button" onclick="openCloseEarlyModal()">Close Early…</button>
+      <button class="btn" type="button" onclick="closeWrapModal(); openCloseEarlyModal();">
+        Close Early…
+      </button>
       <button class="btn ok" type="button" onclick="submitWrapLeft()">Save Wrap</button>
       <button class="btn ghost" type="button" onclick="closeWrapModal()">Cancel</button>
     </div>
