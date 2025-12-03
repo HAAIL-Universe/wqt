@@ -524,6 +524,17 @@ function logWrap() {
   const done = prevLeft - left;
   if (done <= 0) { inp.focus(); return alert('No progress since last wrap'); }
 
+  // --- NEW: Safety Clean ---
+  // Ensure we clear any stuck break drafts or flags because logging a wrap implies we are ACTIVE.
+  if (window.breakDraft) {
+      try { localStorage.removeItem('breakDraft'); } catch(e){}
+      window.breakDraft = null;
+  }
+  if (current && current.active_break) {
+      delete current.active_break;
+  }
+  // -------------------------
+
   const t = nowHHMM();
   tempWraps.push({ left, done, t });
   undoStack.push({ type: 'wrap' });
@@ -600,7 +611,6 @@ function logWrap() {
 
   saveAll();
 }
-
 // Undo wrapper for wraps / breaks / delays / notes (never rewinds past order start)
 function undoLast() {
   if (!current) {

@@ -313,7 +313,7 @@
       });
     }
     // ---------------------------------------------------------
-    // 2. MODAL LOGIC (DETAILED VIEW + TIMELINE)
+    // 2. MODAL LOGIC (DETAILED VIEW + TIMELINE + MESSAGING)
     // ---------------------------------------------------------
     function openDeviceModal(index) {
         const d = allDevicesData[index];
@@ -321,6 +321,7 @@
 
         const current = d.current || {};
         const opId = current.operator_id || "Unknown User";
+        const devIdSafe = d.device_id || ""; // Needed for messaging
         
         // --- 1. BUILD THE TIMELINE DATA ---
         let timeline = [];
@@ -328,34 +329,31 @@
         // A. Completed Picks (Orders)
         (d.picks || []).forEach(p => {
             timeline.push({ type: 'ORDER_DONE', time: p.close, data: p });
-            // Add internal logs for this completed order
             if(p.log && p.log.wraps) p.log.wraps.forEach(w => timeline.push({ type: 'WRAP', time: w.t, data: w, ctx: p.name }));
             if(p.log && p.log.breaks) p.log.breaks.forEach(b => timeline.push({ type: b.type === 'D' ? 'DELAY' : 'BREAK', time: b.start, data: b, ctx: p.name }));
         });
 
         // B. Current Active Order Logs
-        if (current.total) { // If an order is active
+        if (current.total) { 
             timeline.push({ type: 'ORDER_START', time: current.start, data: current });
-            // Wraps
             (d.tempWraps || []).forEach(w => timeline.push({ type: 'WRAP', time: w.t, data: w, ctx: current.name }));
-            // Breaks/Notes/Delays
             (current.breaks || []).forEach(b => {
                  let t = b.type === 'D' ? 'DELAY' : (b.type === 'N' ? 'NOTE' : 'BREAK');
                  timeline.push({ type: t, time: b.t || b.start, data: b, ctx: current.name });
             });
         }
 
-        // C. Shift Events (Operative / Shift-level Breaks)
+        // C. Shift Events
         (d.shiftBreaks || []).forEach(b => timeline.push({ type: 'BREAK', time: b.start, data: b, ctx: 'Shift' }));
         (d.operativeLog || []).forEach(op => {
             timeline.push({ type: 'OPERATIVE', time: op.start, data: op });
             if(op.end) timeline.push({ type: 'OPERATIVE_END', time: op.end, data: op });
         });
 
-        // --- 2. SORT CHRONOLOGICALLY ---
+        // Sort Chronologically
         timeline.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
-        // --- 3. GENERATE HTML ---
+        // Generate Timeline HTML
         let logHtml = timeline.map(item => {
             let tagClass = 'tag-nte';
             let label = 'NOTE';
@@ -400,12 +398,11 @@
 
         if (timeline.length === 0) logHtml = '<div style="padding:10px; color:#64748b;">No activity recorded for this session.</div>';
 
-        // --- 4. RENDER MODAL ---
+        // --- RENDER MODAL ---
         document.getElementById('modalTitle').textContent = opId;
         
-        // Top Stats
+        // Stats
         const rate = current.liveRate || 0;
-        // Calc totals including shared
         const totalPicks = (d.picks || []).reduce((sum, p) => sum + (p.units || 0), 0) + (current.shared ? (window.sharedMySum || 0) : 0);
 
         const statsHtml = `
@@ -427,8 +424,21 @@
             <div class="detail-row"><span>Last Sync</span><span class="detail-val">${d.savedAt ? new Date(d.savedAt).toLocaleTimeString() : '--:--'}</span></div>
         `;
 
+        // NEW: Message Input HTML
+        const messageHtml = `
+            <div style="margin-top:20px; padding-top:15px; border-top:1px solid var(--border);">
+                <label style="display:block; color:var(--text-soft); font-size:0.8rem; margin-bottom:6px; font-weight:bold;">SEND NOTIFICATION</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="adminMsgInput" placeholder="Message for ${opId}..." 
+                           style="flex:1; padding:10px; border-radius:6px; border:1px solid var(--border); background:#0f172a; color:#fff;">
+                    <button class="refresh-btn" onclick="sendAdminMessage('${devIdSafe}')">Send</button>
+                </div>
+            </div>
+        `;
+
         document.getElementById('modalContent').innerHTML = `
             ${statsHtml}
+            ${messageHtml}
             <h3 style="margin: 20px 0 10px; font-size: 0.9rem; color: #94a3b8; text-transform:uppercase;">Session Timeline</h3>
             <div class="timeline-container">
                 ${logHtml}
@@ -436,6 +446,38 @@
         `;
 
         document.getElementById('deviceModal').style.display = 'flex';
+    }
+
+    // NEW: Function to handle sending message
+    async function sendAdminMessage(deviceId) {
+        const input = document.getElementById('adminMsgInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const btn = input.nextElementSibling;
+        const originalText = btn.textContent;
+        btn.textContent = "Sending...";
+        btn.disabled = true;
+
+        try {
+            await fetch(`${API_BASE}/api/admin/message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ device_id: deviceId, text: text })
+            });
+            input.value = "";
+            btn.textContent = "Sent!";
+            btn.style.background = "var(--success)";
+            setTimeout(() => { 
+                btn.textContent = originalText; 
+                btn.style.background = "";
+                btn.disabled = false; 
+            }, 2000);
+        } catch (e) {
+            alert("Failed to send: " + e.message);
+            btn.textContent = "Error";
+            btn.style.background = "var(--danger)";
+        }
     }
 
     function closeModal() {

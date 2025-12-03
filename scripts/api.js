@@ -116,49 +116,46 @@ const WqtAPI = {
 // ... inside WqtAPI object ...
 
   async saveState(state) {
-    // `state` shape should mirror what loadInitialState returns.
+    // 1) Always write to localStorage (offline-first)
+    // We save the raw state object provided by the app
     const main        = state.main || {};
     const learnedUL   = state.learnedUL || {};
     const customCodes = state.customCodes || [];
 
-    // --- SYNCHRONIZE BREAK STATE ---
-    // This is the fix. We force the main state to match the breakDraft reality.
-    try {
-        const breakDraftRaw = window.localStorage.getItem('breakDraft');
-        
-        // Ensure current exists
-        if (!main.current) { main.current = {}; }
-
-        // Inject Operator ID
-        const opId = window.localStorage.getItem('wqt_operator_id');
-        if (opId) {
-            main.current.operator_id = opId;
-        }
-
-        if (breakDraftRaw) {
-            // We ARE on break: Force the tag onto the object
-            const bd = JSON.parse(breakDraftRaw);
-            main.current.active_break = bd;
-        } else {
-            // We are NOT on break: Force remove the tag from the object
-            // This cleans it from Memory, LocalStorage, AND the Backend payload.
-            if (main.current.active_break) {
-                delete main.current.active_break;
-            }
-        }
-    } catch (e) {
-        console.warn("Error syncing break state", e);
-    }
-
-    // 1) Write the (now corrected) state to localStorage
     Storage.saveMain(main);
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
 
-    // 2) Send the (now corrected) state to backend
+    // 2) Try to persist to backend
     try {
       const deviceId = getDeviceId();
       const opId = window.localStorage.getItem('wqt_operator_id');
+      const breakDraftRaw = window.localStorage.getItem('breakDraft');
+
+      // --- DEEP COPY FIX ---
+      // We create a brand new object using JSON parse/stringify.
+      // This breaks all links to the live memory, ensuring no "sticky" data.
+      const payload = JSON.parse(JSON.stringify(main));
+
+      // Ensure 'current' exists in our copy
+      if (!payload.current) { payload.current = {}; }
+
+      // Inject Operator ID
+      if (opId) {
+          payload.current.operator_id = opId;
+      }
+
+      // Handle Break Status based ONLY on LocalStorage
+      if (breakDraftRaw) {
+          try {
+              // Valid break exists -> Attach tag
+              payload.current.active_break = JSON.parse(breakDraftRaw);
+          } catch(e) {}
+      } else {
+          // No break exists -> FORCE DELETE tag from our copy
+          // This guarantees the backend receives a clean object
+          delete payload.current.active_break;
+      }
 
       // Build Query String
       let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
@@ -169,7 +166,7 @@ const WqtAPI = {
       await fetchJSON(`/api/state${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(main),
+        body: JSON.stringify(payload), // Send the clean copy
       });
       console.log('[WQT API] Saved main state to backend');
     } catch (err) {
