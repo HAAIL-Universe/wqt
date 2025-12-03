@@ -317,6 +317,36 @@ const WqtAPI = {
   }
 };
 
+async function saveState(state) {
+    const main = state.main || {};
+    const learnedUL = state.learnedUL || {};
+    const customCodes = state.customCodes || [];
+
+    Storage.saveMain(main);
+    Storage.saveLearnedUL(learnedUL);
+    Storage.saveCustomCodes(customCodes);
+
+    try {
+      const deviceId = getDeviceId();
+      // NEW: Read Operator ID from local storage
+      const opId = localStorage.getItem('wqt_operator_id');
+      
+      let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+      if (opId) {
+          qs += (qs ? '&' : '?') + `operator-id=${encodeURIComponent(opId)}`;
+      }
+
+      await fetchJSON(`/api/state${qs}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(main),
+      });
+      console.log('[WQT API] Saved main state to backend');
+    } catch (err) {
+      console.warn('[WQT API] Backend save failed:', err);
+    }
+  }
+
 // Expose to window for non-module scripts
 if (typeof window !== 'undefined') {
   window.WqtAPI = window.WqtAPI || WqtAPI;

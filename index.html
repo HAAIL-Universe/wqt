@@ -4,34 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport"
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Warehouse QuickCalc & Tracker v4.4</title>
+<title>Warehouse QuickCalc & Tracker v4.5</title>
 <link rel="stylesheet" href="styles/index.css">
 </head>
 <body>
-<!-- =====================================================================
-     SECTION A – MAIN WRAPPER, TABS, LIVE BANNER
-     ===================================================================== -->
 <div class="wrap">
-  <!-- Top tab bar: switches between QuickCalc / Tracker / History -->
   <div class="tabs">
     <button id="tabCalcBtn" class="tabbtn" type="button" onclick="showTab('calc')">QuickCalc</button>
     <button id="tabTrackBtn" class="tabbtn active" type="button" onclick="showTab('tracker')">Tracker</button>
     <button id="tabHistBtn" class="tabbtn" type="button" onclick="showTab('history')">History</button>
   </div>
 
-  <!-- Live banner (mirrors current shift/order stats, used across tabs) -->
   <div id="liveBanner" class="rateBanner hidden">
     <div id="chipRate" class="rateChip"><b>Live Rate</b><div id="chipRateVal">—</div></div>
     <div id="chipTotal" class="rateChip"><b>Total Units</b><div id="chipTotalVal">0</div></div>
   </div>
 
-  <!-- ===================================================================
-       SECTION B – QUICKCALC TAB
-       - Countback calculator
-       - QuickCalc basic units + rate calc
-       =================================================================== -->
   <section id="tabCalc" class="hidden">
-    <!-- B1: Countback calculator (moved ABOVE QuickCalc) -->
     <div class="cbCard">
       <div class="cbRow" style="flex-wrap:wrap; align-items:flex-start;">
         <div class="cbDisplay">
@@ -75,7 +64,6 @@
       </div>
     </div>
 
-    <!-- B2: QuickCalc inputs + live result -->
     <div class="card">
       <div class="row">
         <div class="col">
@@ -87,7 +75,6 @@
           <input id="qcRate" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="optional">
         </div>
       </div>
-      <!-- Live result -->
       <div class="row" style="margin-top:10px;">
         <div class="col">
           <div class="pill">
@@ -105,11 +92,6 @@
     </div>
   </section>
 
-  <!-- ===================================================================
-       SECTION C – PRO & OPERATIVE TOOLS (MODALS, BUT LOGICALLY GLOBAL)
-       =================================================================== -->
-
-  <!-- Pro Settings Modal (export / import / manage customers) -->
   <div id="proSettingsModal" class="modal" style="display:none;">
     <div class="box">
       <div class="hdr">
@@ -122,8 +104,7 @@
           <button class="btn" type="button" onclick="exportCSV()">Export CSV (today)</button>
           <button class="btn" type="button" onclick="exportJSON()">Export JSON (all)</button>
           <label id="impLabel2" class="btn" for="impFile">Import JSON</label>
-          <!-- reuse existing hidden file input -->
-        </div>
+          </div>
         <div class="sub" style="margin-top:6px;">Exports include today / all-time. Import merges JSON into your history.</div>
       </div>
 
@@ -138,8 +119,6 @@
     </div>
   </div>
 
-  <!-- Operative Tools Modal (non-picking work logging) -->
-  <!-- NOTE: ties into #opChipBar and operative state in Tracker -->
   <div id="operativeModal" class="modal" style="display:none;">
     <div class="box">
       <div class="hdr" style="display:flex;align-items:center;justify-content:space-between;">
@@ -162,11 +141,7 @@
     </div>
   </div>
 
-  <!-- ===================================================================
-       SECTION D – TRACKER TAB (SHIFT / ORDERS / BREAKS / DELAYS)
-       =================================================================== -->
   <section id="tabTracker">
-    <!-- D1: Shift start / length picker -->
     <div class="card" id="shiftCard">
       <div class="row" style="align-items:flex-end;">
         <div class="col">
@@ -192,14 +167,11 @@
           <div id="snapHint" class="hint"></div>
         </div>
 
-        <!-- keep tLen as a hidden field so the rest of the code works unchanged -->
         <input id="tLen" type="number" value="9" style="display:none;">
       </div>
     </div>
 
-    <!-- D2: Active Order Card (header form + progress + order log) -->
     <div class="card" id="activeOrderCard" style="display:none;">
-      <!-- ✨ Header form (shown before Start) -->
       <div id="orderHeaderForm" class="fade show">
         <div class="card-h" style="text-align:center; font-size:15px; font-weight:600; margin-bottom:8px;">
           Select customer + add total units from scanner
@@ -239,9 +211,7 @@
         </div>
       </div>
 
-      <!-- Header shown AFTER an order starts -->
       <div id="orderHeaderProgress" class="progHead" style="display:none; position:relative;">
-        <!-- Top-right actions -->
         <div class="progActions">
           <button id="btnWrapTop" class="btn slim" type="button" onclick="openWrapModal()" disabled>Log Wrap</button>
         </div>
@@ -265,19 +235,15 @@
         <div id="progPct" class="progPct">0%</div>
       </div>
 
-      <!-- Active Order Area -->
       <div id="orderArea" style="display:none; margin-top:10px;">
-        <!-- Compact: keep only a hidden oLeft for internal use -->
         <input id="oLeft" type="number" min="0" step="1" inputmode="numeric" style="display:none;">
 
-        <!-- Controls row (unchanged right-side controls container) -->
         <div class="row" style="align-items:flex-end;">
           <div class="col" id="orderControls"
               style="flex:0 0 auto; display:flex; align-items:flex-end; justify-content:flex-end; gap:8px; flex-wrap:wrap;">
           </div>
         </div>
 
-        <!-- Order log (active order only) -->
         <div id="orderLogCard" class="logwrap" style="margin-top:8px;">
           <div class="row" style="align-items:center; justify-content:space-between; padding:6px 8px 0;">
             <div class="muted" style="font-weight:600;">Order Log</div>
@@ -287,7 +253,6 @@
       </div>
     </div>
 
-    <!-- D3: Completed orders table -->
     <div class="card" id="completedCard" style="display:none;">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
         <h3 style="margin:0; font-size:14px; color:#9fb3c8;">Completed Orders</h3>
@@ -311,7 +276,6 @@
       </div>
     </div>
 
-    <!-- D4: Shift-wide (no-order) log panel — sits between the order box and the buttons -->
     <div class="card" id="shiftLogCard" style="display:none;">
       <div id="shiftLogHeader" class="row" style="align-items:center; justify-content:space-between; padding:6px 8px 0;">
         <div id="shiftLogTitle" class="muted" style="font-weight:600;">Shift Log</div>
@@ -320,7 +284,6 @@
       <div id="shiftLogList"></div>
     </div>
 
-    <!-- D5: Shared Pick / bottom actions row -->
     <div class="bottom-actions">
       <div class="left">
         <button class="btn" type="button" id="btnDelay" onclick="openDelayModal()" style="display:none;">Log / Delay</button>
@@ -334,12 +297,10 @@
       </div>
     </div>
 
-    <!-- D6: Safety bar for nuking today only -->
     <div class="safetybar">
       <button class="btn ghost" type="button" onclick="clearToday()">Clear today's data</button>
     </div>
 
-    <!-- Operative status chip (Tracker) -->
     <div id="opChipBar" style="display:none; margin:10px 0 6px; align-items:center; gap:10px;">
       <span id="opChip" class="chip"
             onclick="openOperativeModal()"
@@ -349,9 +310,6 @@
     </div>
   </section>
 
-  <!-- ===================================================================
-        SECTION E – SHARED ORDER BAR (FULL-WIDTH)
-        =================================================================== -->
   <div id="sharedPad">
     <div class="shared-pad-inner">
       <div class="shared-pad-text">
@@ -379,14 +337,9 @@
       </div>
     </div>
 
-    <!-- Hidden field still used by sharedSubmitUnits() -->
     <input id="sharedUnitsDock" type="hidden">
   </div>
 
-  <!-- ===================================================================
-       SECTION F – BREAK BAR (GLOBAL BOTTOM STICKY)
-       =================================================================== -->
-  <!-- Bottom Break Bar -->
   <div id="breakBar" class="breakbar">
     <div class="grow">
       <div class="title" id="breakBarTitle">Break</div>
@@ -396,7 +349,6 @@
     </div>
     <div class="count" id="breakBarCountdown">20 min</div>
       <div style="display:flex; gap:8px;">
-        <!-- Snake: only during break/lunch, gated by unlock and timer -->
         <button
           id="btnSnakeBreak"
           class="btn gate-snake"
@@ -423,12 +375,7 @@
     </div>
   </div>
 
-  <!-- ===================================================================
-       SECTION G – HISTORY TAB (WEEK SUMMARY + DAILY ARCHIVES)
-       =================================================================== -->
-  <!-- History -->
   <section id="tabHistory" class="hidden">
-    <!-- G1: Weekly summary card -->
     <div class="card" id="weekCard">
       <div id="weekHeader" class="row-between" role="button" tabindex="0" aria-expanded="false" aria-controls="weekContent">
         <div class="card-h">This Week (Sun–Sat)</div>
@@ -457,7 +404,6 @@
       Weighted Avg = total units ÷ total hours.
     </div>
 
-    <!-- G2: Daily history list + Pro export/import controls -->
     <div class="card">
       <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
         <h3 style="margin:0; font-size:14px; color:#9fb3c8;">History (daily archives)</h3>
@@ -467,14 +413,12 @@
           <label id="impLabel" class="btn gate-pro" for="impFile">Import JSON</label><input id="impFile" type="file" accept="application/json" style="display:none;">
           <button class="btn" type="button" style="background:#331b1b;border-color:#7a2b2b;" onclick="clearHistory()">Clear History</button>
           <button class="btn gate-pro" type="button" onclick="toggleManageCustomers()">Manage Customers</button>
-          <!-- Re-run onboarding (always available) -->
           <button class="btn ghost" type="button" onclick="restartOnboarding()">Re-run onboarding</button>
         </div>
       </div>
       <div id="histList" style="margin-top:8px;"></div>
     </div>
 
-    <!-- G3: Manage customers card (toggles from History) -->
     <div id="manageCustomersCard" class="card hidden">
       <h3 style="margin:0 0 8px; font-size:14px; color:#9fb3c8;">Manage Customers</h3>
       <div class="hint">Manually-added customers are shown below. Tap ✖ to remove.</div>
@@ -487,10 +431,6 @@
   </section>
 </div>
 
-<!-- =====================================================================
-     SECTION H – MODALS (DELAY) – GLOBAL, USED BY TRACKER
-     ===================================================================== -->
-<!-- Delay Modal -->
 <div id="delayModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="delayTitle">
   <div class="box">
     <div class="hdr">
@@ -518,11 +458,6 @@
     </div>
   </div>
 </div>
-<!-- =====================================================================
-     SECTION I – MODALS (SNAKE / LIVE RATE / CLOSE / WRAP / CONTRACT)
-     ===================================================================== -->
-
-<!-- I1: Snake Host Modal (embeds snake.html sandbox) -->
 <div id="snakeHostModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="snakeHostTitle">
   <div class="box" style="max-width:720px;">
     <div class="hdr">
@@ -544,7 +479,6 @@
   </div>
 </div>
 
-<!-- I2: Live Rate Modal (current order snapshot) -->
 <div id="liveModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="liveTitle">
   <div class="box" style="max-width:640px;">
     <div class="hdr">
@@ -567,7 +501,6 @@
 
     <div class="fld">
       <div class="logwrap">
-        <!-- 1) Colour key centered -->
         <div class="hint" style="text-align:center; margin-bottom:10px;">
           Colour key:
           <b style="color:#9fd6a5;">Green ≥ 300</b> •
@@ -575,13 +508,11 @@
           <b style="color:#e49b9b;">Red &lt; 249</b>
         </div>
 
-        <!-- 2) Button centered -->
         <div class="actions" style="justify-content:center; flex-direction:column; align-items:center; text-align:center;">
           <button class="btn" type="button" onclick="openLiveUpdateModal()">Update with Units Remaining</button>
           <span id="live_hint" class="hint" style="margin-top:6px;"></span>
         </div>
 
-        <!-- 3) Formula bottom-left under the button -->
         <div class="hint" style="margin-top:10px;">Formula</div>
         <div id="live_formula" class="tick" style="text-align:left;">Live = Total Units ÷ Hours</div>
       </div>
@@ -589,7 +520,6 @@
   </div>
 </div>
 
-<!-- I3: Live Update (override Left) Modal -->
 <div id="liveUpdateModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="liveUpdateTitle">
   <div class="box" style="max-width:420px;">
     <div class="hdr">
@@ -608,7 +538,6 @@
   </div>
 </div>
 
-<!-- I4: Close Early Modal -->
 <div id="closeEarlyModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="closeEarlyTitle">
   <div class="box">
     <div class="hdr">
@@ -634,7 +563,6 @@
   </div>
 </div>
 
-<!-- I5: Wrap Modal (log units left when wrapping) -->
 <div id="wrapModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="wrapTitle">
   <div class="box" style="max-width:420px;">
     <div class="hdr">
@@ -652,10 +580,6 @@
   </div>
 </div>
 
-<!-- Global toast (small bottom popup, reused across actions) -->
-<div id="toast" class="toast">Saved</div>
-
-<!-- Contracted Start Picker -->
 <div id="contractModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:9999;">
   <div style="background:#141821; border:1px solid #243244; border-radius:14px; padding:16px; width:min(520px,92%);">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -668,14 +592,29 @@
     </div>
   </div>
 </div>
+
+<div id="operatorIdModal" class="modal" role="dialog" aria-modal="true" style="display:none; z-index:10000; backdrop-filter:blur(5px);">
+  <div class="box" style="max-width:400px; text-align:center;">
+    <div class="hdr" style="justify-content:center;">
+      <h3>Who is picking?</h3>
+    </div>
+    <div class="fld">
+      <label for="opIdInput" style="margin-bottom:8px; display:block;">Enter your Name or Badge ID</label>
+      <input id="opIdInput" type="text" placeholder="e.g. JOHN, 1024, OPER01" style="text-align:center; font-size:1.2rem; padding:12px;">
+    </div>
+    <div class="actions" style="justify-content:center;">
+      <button class="btn ok" type="button" onclick="saveOperatorId()">Clock In</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast">Saved</div>
+
 <script src="scripts/storage.js"></script>
 <script src="scripts/api.js"></script>
 <script src="scripts/core-state-ui.js"></script>
 <script src="scripts/core-metrics-actions.js"></script>
 <script src="scripts/core-tracker-history.js"></script>
 <script src="scripts/boot.js"></script>
-
 </body>
 </html>
-
-

@@ -1464,89 +1464,100 @@ function loadAll(){
       proUnlocked = !!p.proUnlocked;
       snakeUnlocked = !!p.snakeUnlocked;
       shiftBreaks = Array.isArray(p.shiftBreaks) ? p.shiftBreaks : [];
-
-      // ── Operative data (new) ───────────────────────────────
       operativeLog    = Array.isArray(p.operativeLog) ? p.operativeLog : [];
       operativeActive = p.operativeActive || null;
       refreshOperativeChip();
     } else {
-      // ── Sane defaults on first run / cleared storage ───────
       picks = []; historyDays = []; current = null; tempWraps = [];
       startTime = ""; lastClose = ""; pickingCutoff = ""; undoStack = [];
       proUnlocked = false; snakeUnlocked = false; shiftBreaks = [];
-
-      // ── Operative defaults (new) ───────────────────────────
-      operativeLog = [];
-      operativeActive = null;
+      operativeLog = []; operativeActive = null;
     }
 
-    // learned UL
     const lraw = localStorage.getItem(KEY_LEARN);
     learnedUL = lraw ? (JSON.parse(lraw) || {}) : {};
 
-    // load persisted break draft (UI restore is done later)
     try {
       const braw = localStorage.getItem('breakDraft');
       breakDraft = braw ? (JSON.parse(braw) || null) : null;
     } catch(e){ breakDraft = null; }
 
+    // --- NEW: CHECK OPERATOR ID ON LOAD ---
+    checkOperatorId();
+
   } catch (e) {
     console.error(e);
-    // ── Hard reset if corrupted ──────────────────────────────
+    // Hard reset if corrupted
     picks = []; historyDays = []; current = null; tempWraps = [];
     startTime = ""; lastClose = ""; pickingCutoff = ""; undoStack = [];
     proUnlocked = false; shiftBreaks = []; learnedUL = {};
     breakDraft = null;
-
-    // ── Operative defaults on error (new) ────────────────────
-    operativeLog = [];
-    operativeActive = null;
+    operativeLog = []; operativeActive = null;
   }
 }
 
-// ---- Debounced wrapper around saveAll (for noisy UI paths) ----
-let _saveTimeout = null;
+// ---- OPERATOR ID LOGIC ----
+const KEY_OP_ID = 'wqt_operator_id';
 
-function saveAllDebounced(delayMs = 500) {
-  clearTimeout(_saveTimeout);
-  _saveTimeout = setTimeout(() => {
-    _saveTimeout = null;
-    saveAll();                  // call the real saver once
-  }, delayMs);
+function checkOperatorId(){
+  const opId = localStorage.getItem(KEY_OP_ID);
+  // If no ID is saved, show the modal to force entry
+  if (!opId) {
+    const m = document.getElementById('operatorIdModal');
+    if (m) {
+        m.style.display = 'flex';
+        setTimeout(() => document.getElementById('opIdInput')?.focus(), 100);
+    }
+  }
+}
+
+function saveOperatorId(){
+  const inp = document.getElementById('opIdInput');
+  const val = (inp?.value || '').trim();
+  if (val.length < 2) {
+    alert("Please enter a valid Name or ID.");
+    return;
+  }
+  localStorage.setItem(KEY_OP_ID, val);
+  document.getElementById('operatorIdModal').style.display = 'none';
+  showToast(`Clocked in as ${val}`);
+  saveAll(); // Trigger immediate save to update Admin
 }
 
 // Main save: in-memory state → localStorage
 function saveAll(){
   try {
-    // Build the main state payload (same schema as before)
     const mainPayload = {
-      version: '3.3.55',               // keep existing schema tag
+      version: '3.3.55',
       savedAt: new Date().toISOString(),
-      picks,
-      history: historyDays,
-      current,
-      tempWraps,
-      startTime,
-      lastClose,
-      pickingCutoff,
-      undoStack,
-      proUnlocked,
-      snakeUnlocked,
-      shiftBreaks,
-      operativeLog,
-      operativeActive
+      picks, history: historyDays, current, tempWraps, startTime,
+      lastClose, pickingCutoff, undoStack, proUnlocked, snakeUnlocked,
+      shiftBreaks, operativeLog, operativeActive
     };
 
-    // 1) Persist locally (legacy behaviour)
     localStorage.setItem(KEY, JSON.stringify(mainPayload));
     localStorage.setItem(KEY_LEARN, JSON.stringify(learnedUL || {}));
 
-    // 2) Sync to backend if available
     if (window.WqtAPI && typeof WqtAPI.saveState === 'function') {
       try {
+        // --- NEW: Attach Operator ID to the backend payload ---
+        const opId = localStorage.getItem(KEY_OP_ID) || null;
+        
+        // We sneak the operator_id into the main payload so backend logs it
+        // Note: Ideally backend should have a dedicated field, but this works immediately
+        // with the 'detail' logging we set up.
+        if (opId && window.WqtAPI.saveState.length < 2) { 
+             // If saveState doesn't support 2 args, we attach it to window.WqtAPI context 
+             // or modify api.js. 
+             // EASIER FIX: Let's assume we modify api.js slightly to read this key.
+        }
+        
+        // Actually, let's update api.js to read this key automatically.
+        // Proceed to next file update.
+        
         const stateForBackend = {
-          main:        mainPayload,
-          learnedUL:   learnedUL || {},
+          main: mainPayload,
+          learnedUL: learnedUL || {},
           customCodes: customCodes || []
         };
         WqtAPI.saveState(stateForBackend);
