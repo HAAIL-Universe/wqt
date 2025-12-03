@@ -263,31 +263,32 @@
         } else if (current.active_break) {
             // --- BREAK & LATE LOGIC ---
             const b = current.active_break;
-            status = b.type === 'L' ? "Lunch" : "Break";
+            const label = b.type === 'L' ? "Lunch" : "Break";
+            status = label;
             colorClass = "break";       
             badgeClass = "pill-purple"; 
 
-            // Calculate Late Status
-            // 1. Parse start time HH:MM to a date object for today
+            // Calculate if Late
             try {
                 const [h, m] = b.startHHMM.split(':');
                 const startTs = new Date();
                 startTs.setHours(parseInt(h), parseInt(m), 0, 0);
                 
-                // Handle midnight crossover (if break started yesterday)
-                if (startTs.getTime() > now + 3600000) { // if start appears to be in future, it was yesterday
+                // Handle midnight crossover
+                if (startTs.getTime() > now + 3600000) { 
                      startTs.setDate(startTs.getDate() - 1);
                 }
 
-                // 2. Calculate elapsed minutes vs target
+                // Elapsed mins vs target
                 const elapsedMin = (now - startTs.getTime()) / 60000;
                 const targetMin = (b.targetSec || 1200) / 60; // default 20m
 
-                // 3. If Overrun by more than 1 minute -> RED LATE
+                // If Overrun by > 1 minute -> RED LATE
                 if (elapsedMin > targetMin + 1) {
-                    status = `Late (${Math.floor(elapsedMin - targetMin)}m)`;
-                    colorClass = "offline"; // Use Red Border
-                    badgeClass = "pill-red"; // Use Red Badge
+                    const lateMins = Math.floor(elapsedMin - targetMin);
+                    status = `${label} - Late (+${lateMins}m)`;
+                    colorClass = "offline"; // Red Border
+                    badgeClass = "pill-red"; // Red Badge
                 }
             } catch(e) { console.warn("Time calc error", e); }
 

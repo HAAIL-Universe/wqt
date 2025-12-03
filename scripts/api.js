@@ -125,14 +125,22 @@ const WqtAPI = {
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
 
-    // 2) Try to persist to backend
+    // 2) Try to persist main blob to backend
     try {
       const deviceId = getDeviceId();
+      
+      // Retrieve Operator ID & Active Break
       const opId = window.localStorage.getItem('wqt_operator_id');
       const breakDraftRaw = window.localStorage.getItem('breakDraft');
 
-      // --- CRITICAL FIX: Create a shallow copy of 'current' ---
-      // This prevents modifications here from sticking to the live app state
+      // --- SELF-HEAL FIX ---
+      // If we are NOT on a break locally, but the memory still thinks we are,
+      // forcibly remove the tag from the source to fix the "Stuck" issue.
+      if (!breakDraftRaw && window.current && window.current.active_break) {
+          delete window.current.active_break;
+      }
+
+      // Create a clean payload copy
       const payload = { ...main }; 
       const safeCurrent = payload.current ? { ...payload.current } : {};
 
@@ -141,7 +149,7 @@ const WqtAPI = {
           safeCurrent.operator_id = opId;
       }
 
-      // Inject OR Clean Active Break
+      // Inject Break Status into Payload (if valid)
       if (breakDraftRaw) {
           try {
               const bd = JSON.parse(breakDraftRaw);
@@ -150,11 +158,10 @@ const WqtAPI = {
               }
           } catch(e) {}
       } else {
-          // Explicitly ensure no break data exists in the packet we send
+          // Double-check: ensure payload is clean
           delete safeCurrent.active_break;
       }
 
-      // Attach the modified current object to the payload
       payload.current = safeCurrent;
 
       // Build Query String
@@ -166,14 +173,13 @@ const WqtAPI = {
       await fetchJSON(`/api/state${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload), // Send the modified payload copy
+        body: JSON.stringify(payload),
       });
       console.log('[WQT API] Saved main state to backend');
     } catch (err) {
       console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
     }
   },
-
   // ------------------------------------------------------------------
   // Shift/session-side data (outside main blob)
   // These stay in localStorage for now (no schema yet).
