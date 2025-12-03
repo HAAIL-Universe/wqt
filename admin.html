@@ -505,7 +505,7 @@
                 `;
             }
 
-            // Everything else stays as individual timeline items
+            // Everything else stays as individual timeline items (but now single-line layout)
             let tagClass = 'tag-nte';
             let label = 'NOTE';
             let desc = '';
@@ -518,7 +518,7 @@
                 desc = `Started <b>${item.data.name}</b> (Target: ${item.data.total})`;
             } else if (item.type === 'BREAK') {
                 tagClass = 'tag-brk'; label = item.data.type === 'L' ? 'LUNCH' : 'BREAK';
-                desc = `${item.data.minutes ? item.data.minutes + 'm' : 'Started'} (${item.ctx || 'Shift'})`;
+                desc = `${item.data.minutes ? item.data.minutes + 'm' : 'Started'} (${item.data.ctx || 'Shift'})`;
             } else if (item.type === 'DELAY') {
                 tagClass = 'tag-dly'; label = 'DELAY';
                 desc = `${item.data.cause || 'Unknown'} (${item.data.minutes || '?'}m)`;
@@ -534,21 +534,23 @@
             }
 
             return `
-            <div class="t-item">
-                <div class="t-content" style="position:relative;">
-                    <span class="t-tag ${tagClass}">${label}</span>
-                    <div style="color:#cbd5e1;">${desc}</div>
-                    <div style="
-                        position:absolute;
-                        top:8px;
-                        right:12px;
-                        font-family:monospace;
-                        font-size:0.8rem;
-                        color:#94a3b8;
-                    ">${item.time}</div>
+                <div class="t-item">
+                    <div class="t-content" style="display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <span class="t-tag ${tagClass}">${label}</span>
+                            <span style="color:#cbd5e1; margin-left:6px;">${desc}</span>
+                        </div>
+                        <div style="
+                            font-family:monospace;
+                            font-size:0.8rem;
+                            color:#94a3b8;
+                            margin-left:12px;
+                            white-space:nowrap;
+                        ">${item.time}</div>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+
         }).join('');
 
 
