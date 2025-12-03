@@ -578,3 +578,45 @@ setTimeout(() => {
     })
     .catch(err => console.warn("Onboarding preload failed:", err));
 })();
+
+// --- Message Poller (NEW) ---
+// Checks for admin messages every 30 seconds
+setInterval(async function pollForMessages() {
+  // Safe check for device ID getter (from api.js scope or window)
+  const getID = (typeof getDeviceId === 'function') ? getDeviceId 
+              : (window.WqtAPI && window.WqtAPI.getDeviceId) ? window.WqtAPI.getDeviceId : null;
+  
+  if (!getID) return; // Not ready yet
+
+  // If we have a custom fetch helper, use it; else generic fetch
+  const doFetch = (typeof fetchJSON === 'function') ? fetchJSON : null; 
+  if (!doFetch) return; // Wait for api.js
+
+  // Actually get the ID
+  let devId = null;
+  try { devId = getID(); } catch(e){}
+  if (!devId) return;
+
+  try {
+    // If you used the `fetchJSON` helper, it likely prepends API_BASE automatically
+    // But here we might just raw fetch to be safe or use the helper if exported.
+    
+    // Simplest: use raw fetch with the same base you used in api.js
+    // We'll guess API_BASE or assume relative path / proxy.
+    // If `API_BASE` is global, use it.
+    const baseUrl = (typeof API_BASE !== 'undefined') ? API_BASE : 'https://wqt-backend.onrender.com';
+    
+    const res = await fetch(`${baseUrl}/api/messages/check?device-id=${encodeURIComponent(devId)}`);
+    if (res.ok) {
+        const messages = await res.json();
+        if (Array.isArray(messages) && messages.length > 0) {
+            messages.forEach(msg => {
+                // Simple Alert for now
+                alert("🔔 SUPERVISOR MESSAGE:\n\n" + msg);
+            });
+        }
+    }
+  } catch (e) {
+    // Silent fail
+  }
+}, 30000); // 30s

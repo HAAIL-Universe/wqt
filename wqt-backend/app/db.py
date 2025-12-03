@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import create_engine, Column, Integer, Text, DateTime, Float, func
+from sqlalchemy import create_engine, Column, Integer, Text, DateTime, Float, func, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -64,6 +64,15 @@ class ShiftSession(Base):
     ended_at = Column(DateTime(timezone=True), nullable=True)
     total_units = Column(Integer, nullable=True)
     avg_rate = Column(Float, nullable=True)
+
+# NEW: Admin Message Table
+class AdminMessage(Base):
+    __tablename__ = "admin_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Text, index=True, nullable=False)
+    message_text = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    read_at = Column(DateTime(timezone=True), nullable=True)
 
 # --- Helpers ---
 
@@ -157,6 +166,42 @@ def get_usage_summary(days: int = 7) -> List[Dict[str, Any]]:
             for i in range(days)
         ]
     finally: session.close()
+
+# NEW: Admin Message Helpers
+
+def send_admin_message(device_id: str, text: str) -> None:
+    if engine is None: return
+    session = get_session()
+    try:
+        msg = AdminMessage(device_id=device_id, message_text=text)
+        session.add(msg)
+        session.commit()
+    finally:
+        session.close()
+
+def pop_admin_messages(device_id: str) -> List[str]:
+    """
+    Fetch unread messages for a device and mark them as read immediately.
+    Returns a list of message strings.
+    """
+    if engine is None: return []
+    session = get_session()
+    try:
+        # Find unread messages
+        msgs = session.query(AdminMessage).filter(
+            AdminMessage.device_id == device_id,
+            AdminMessage.read_at == None
+        ).all()
+        
+        results = []
+        for m in msgs:
+            results.append(m.message_text)
+            m.read_at = datetime.now(timezone.utc) # Mark as read
+        
+        session.commit()
+        return results
+    finally:
+        session.close()
 
 # --- FIXED FUNCTIONS BELOW ---
 

@@ -18,6 +18,8 @@ from .db import (
     end_shift,
     get_recent_shifts,
     get_all_device_states,
+    send_admin_message,  # NEW
+    pop_admin_messages   # NEW
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -162,6 +164,32 @@ async def api_admin_devices() -> List[Dict[str, Any]]:
     Used by the Admin Dashboard to show live status.
     """
     return get_all_device_states()
+
+
+# -------------------------------------------------------------------
+# Admin Message API (NEW)
+# -------------------------------------------------------------------
+class MessagePayload(BaseModel):
+    device_id: str
+    text: str
+
+@app.post("/api/admin/message")
+async def api_send_message(payload: MessagePayload) -> Dict[str, str]:
+    """
+    Send a message from Admin to a specific Device.
+    """
+    send_admin_message(payload.device_id, payload.text)
+    return {"status": "sent"}
+
+@app.get("/api/messages/check")
+async def api_check_messages(
+    device_id: str = Query(..., alias="device-id")
+) -> List[str]:
+    """
+    Called by the WQT App (client) to poll for new admin messages.
+    Returns list of message texts and marks them as read.
+    """
+    return pop_admin_messages(device_id)
 
 
 # -------------------------------------------------------------------
