@@ -381,12 +381,55 @@
         // --- 1. BUILD THE TIMELINE DATA ---
         let timeline = [];
 
-        // A. Completed Picks (Orders)
+        // A. Completed Picks (Orders) — collapse into a single summary box
         (d.picks || []).forEach(p => {
-            timeline.push({ type: 'ORDER_DONE', time: p.close, data: p });
-            if(p.log && p.log.wraps) p.log.wraps.forEach(w => timeline.push({ type: 'WRAP', time: w.t, data: w, ctx: p.name }));
-            if(p.log && p.log.breaks) p.log.breaks.forEach(b => timeline.push({ type: b.type === 'D' ? 'DELAY' : 'BREAK', time: b.start, data: b, ctx: p.name }));
+            if (!p) return;
+
+            const orderName = p.name || 'Order';
+            const units = p.units || p.total || p.qty || 0;
+
+            // Collect all known timestamps for this order
+            const timeCandidates = [];
+
+            if (p.start) timeCandidates.push(p.start);
+            if (p.open) timeCandidates.push(p.open);
+            if (p.log && p.log.start) timeCandidates.push(p.log.start);
+
+            if (p.log && p.log.wraps) {
+                p.log.wraps.forEach(w => {
+                    if (w && (w.t || w.time || w.timestamp)) {
+                        timeCandidates.push(w.t || w.time || w.timestamp);
+                    }
+                });
+            }
+
+            if (p.log && p.log.breaks) {
+                p.log.breaks.forEach(b => {
+                    if (b && (b.start || b.t)) {
+                        timeCandidates.push(b.start || b.t);
+                    }
+                });
+            }
+
+            if (p.close) timeCandidates.push(p.close);
+
+            // Sort and derive start/end
+            timeCandidates.sort();
+            const startTime = timeCandidates[0] || p.close || '';
+            const endTime   = p.close || timeCandidates[timeCandidates.length - 1] || '';
+
+            timeline.push({
+                type: 'ORDER_SUMMARY',
+                time: startTime,   // used for global sort
+                startTime,
+                endTime,
+                data: {
+                    name: orderName,
+                    units
+                }
+            });
         });
+
 
         // B. Current Active Order Logs
         if (current.total) {
@@ -432,6 +475,36 @@
 
         // Generate Timeline HTML
         let logHtml = timeline.map(item => {
+            // Completed order summary -> single merged box
+            if (item.type === 'ORDER_SUMMARY') {
+                const name  = item.data?.name || 'Order';
+                const units = item.data?.units ?? '?';
+                const start = item.startTime || item.time || '';
+                const end   = item.endTime   || '';
+
+                return `
+                    <div class="timeline-summary">
+                        <div class="summary-main">
+                            <div class="summary-title">
+                                <span class="t-tag tag-ord">COMPLETE</span>
+                                Finished <b>${name}</b> — ${units} units
+                            </div>
+                        </div>
+                        <div class="summary-times">
+                            <div class="summary-time-block">
+                                <div class="label">STARTED</div>
+                                <div class="time">${start}</div>
+                            </div>
+                            <div class="summary-time-block">
+                                <div class="label">FINISHED</div>
+                                <div class="time">${end}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Everything else stays as individual timeline items
             let tagClass = 'tag-nte';
             let label = 'NOTE';
             let desc = '';
@@ -439,9 +512,6 @@
             if (item.type === 'WRAP') {
                 tagClass = 'tag-wrp'; label = 'WRAP';
                 desc = `Pallet wrapped. <b>${item.data.done}</b> done, <b>${item.data.left}</b> left.`;
-            } else if (item.type === 'ORDER_DONE') {
-                tagClass = 'tag-ord'; label = 'COMPLETE';
-                desc = `Finished <b>${item.data.name}</b>. Total: ${item.data.units} units.`;
             } else if (item.type === 'ORDER_START') {
                 tagClass = 'tag-ord'; label = 'START';
                 desc = `Started <b>${item.data.name}</b> (Target: ${item.data.total})`;
@@ -472,6 +542,7 @@
                 </div>
             `;
         }).join('');
+
 
         if (timeline.length === 0) logHtml = '<div style="padding:10px; color:#64748b;">No activity recorded for this session.</div>';
 
