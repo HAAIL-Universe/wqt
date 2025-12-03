@@ -1,5 +1,6 @@
 # app/main.py
 from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta  # <--- Added for Live Rate calc
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +17,7 @@ from .db import (
     start_shift,
     end_shift,
     get_recent_shifts,
-    get_all_device_states, # <--- IMPORTANT: Ensure this function exists in your db.py
+    get_all_device_states,
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -69,25 +70,64 @@ async def set_state(
 ) -> MainState:
     """
     Save MainState.
-    FIX: Now explicitly logs the usage event with the device_id so the Admin Panel works.
+    Includes fixes for User ID persistence and Live Rate calculation.
     """
+    
+    # --- FIX 1: Ensure Operator ID is inside the state object ---
+    # This ensures the Admin Dashboard Card shows the User ID, not "SAIEME"
+    if operator_id and state.current:
+        state.current["operator_id"] = operator_id
+
+    # --- FIX 2: Calculate Live Rate on Backend ---
+    # Since the phone might not be sending a live rate, we calculate it here
+    # Formula: Total Closed Units / Hours Elapsed since Start Time
+    if state.current and state.startTime:
+        try:
+            # 1. Sum up total units from completed picks
+            total_units = sum(p.get("units", 0) for p in state.picks)
+            
+            # 2. Calculate elapsed hours
+            # Parse "HH:MM" (e.g. "06:30")
+            now = datetime.now()
+            start_parts = state.startTime.split(":")
+            if len(start_parts) == 2:
+                start_dt = now.replace(hour=int(start_parts[0]), minute=int(start_parts[1]), second=0, microsecond=0)
+                
+                # Handle shift crossing midnight (if start time is in future, it meant yesterday)
+                if start_dt > now:
+                    start_dt -= timedelta(days=1)
+                    
+                elapsed_hours = (now - start_dt).total_seconds() / 3600.0
+                
+                # 3. Inject Rate if valid
+                if elapsed_hours > 0.05: # Avoid divide-by-zero or tiny intervals
+                    calculated_rate = int(total_units / elapsed_hours)
+                    state.current["liveRate"] = calculated_rate
+        except Exception:
+            # If date parsing fails, just ignore rate calc
+            pass
+
+    # Save to DB
     save_main(state, device_id=device_id)
 
-    # Prepare detail log
+    # --- Logging Logic ---
     detail: Dict[str, Any] = {"version": state.version}
 
-    # Explicitly add identity info
     if operator_id:
         detail["operator_id"] = operator_id
     if device_id:
         detail["device_id"] = device_id
 
-    # Also grab the user name from the state if available (helpful for Admin UI)
-    if state.current and isinstance(state.current, dict):
+    # --- FIX 3: Fix Log "User" Display ---
+    # The Admin Panel looks for 'current_name'. Previously this was set to 
+    # state.current['name'] which is the Customer ID (SAIEME).
+    # We now prioritize the actual Operator ID.
+    if operator_id:
+        detail["current_name"] = operator_id
+    elif state.current and isinstance(state.current, dict):
         if "name" in state.current:
             detail["current_name"] = state.current["name"]
 
-    # Log the event
     log_usage_event("STATE_SAVE", detail)
 
     return state
@@ -113,7 +153,7 @@ async def api_usage_summary(
     }
 
 # -------------------------------------------------------------------
-# Admin / Dashboard API (NEW)
+# Admin / Dashboard API
 # -------------------------------------------------------------------
 @app.get("/api/admin/devices")
 async def api_admin_devices() -> List[Dict[str, Any]]:
@@ -145,11 +185,9 @@ async def api_shift_start(
     payload: ShiftStartPayload,
     device_id: Optional[str] = Query(default=None, alias="device-id"),
 ) -> Dict[str, Any]:
-    # FIX: Pass device_id to start_shift so it gets saved to the table
-    # This resolves the issue where shifts were not linked to devices
     shift_id = start_shift(
         operator_id=payload.operator_id,
-        device_id=device_id,  # <--- Critical Fix: Now saving the link to DB
+        device_id=device_id,
         operator_name=payload.operator_name,
         site=payload.site,
         shift_type=payload.shift_type,
