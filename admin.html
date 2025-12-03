@@ -55,6 +55,10 @@
     .refresh-btn:hover { opacity: 0.9; }
     
     .error-banner { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger); color: #fca5a5; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: none; }
+    
+    /* NEW: Purple styles for Break/Lunch */
+    .user-card.break { border-left: 4px solid #a855f7; }
+    .pill-purple { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
 
     /* Modal Styles */
     .modal-overlay {
@@ -252,18 +256,27 @@
         const opName = current.operator_id || `Dev: ${devId.substring(0,6)}`;
 
         const minsAgo = Math.floor((now - savedAt) / 60000);
+        
+        // --- STATUS LOGIC ---
         let status = "Active";
         let colorClass = "active";
         let badgeClass = "pill-green";
 
         if (minsAgo > 30) { 
+            // 1. Offline (No sync for 30m)
             status = "Offline"; colorClass = "offline"; badgeClass = "pill-red";
+        } else if (current.active_break) {
+            // 2. Break / Lunch (Prioritized over Active Order)
+            status = current.active_break.type === 'L' ? "Lunch" : "Break";
+            colorClass = "break";       // Uses the purple border
+            badgeClass = "pill-purple"; // Uses the purple text
         } else if (!current.name) {
+            // 3. Idle (No active customer/order)
             status = "Idle"; colorClass = "idle"; badgeClass = "pill-yellow";
         }
+        // 4. Default is "Active" (Green) if none of the above match
 
-        // --- RENDER CARD (Simplified) ---
-        // Click calls openDeviceModal with the array index
+        // --- RENDER CARD ---
         const html = `
           <div class="user-card ${colorClass}" onclick="openDeviceModal(${index})">
             <div class="user-head">
@@ -280,7 +293,6 @@
         container.innerHTML += html;
       });
     }
-
     // ---------------------------------------------------------
     // 2. MODAL LOGIC (DETAILED VIEW + TIMELINE)
     // ---------------------------------------------------------
