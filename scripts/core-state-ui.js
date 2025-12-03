@@ -1448,6 +1448,7 @@ function tryBeep(){
 
 // Main load: everything from localStorage → in-memory state
 function loadAll(){
+  // 1. Attempt to load data
   try {
     const raw = localStorage.getItem(KEY);
 
@@ -1482,11 +1483,8 @@ function loadAll(){
       breakDraft = braw ? (JSON.parse(braw) || null) : null;
     } catch(e){ breakDraft = null; }
 
-    // --- NEW: CHECK OPERATOR ID ON LOAD ---
-    checkOperatorId();
-
   } catch (e) {
-    console.error(e);
+    console.error("Data load failed, resetting:", e);
     // Hard reset if corrupted
     picks = []; historyDays = []; current = null; tempWraps = [];
     startTime = ""; lastClose = ""; pickingCutoff = ""; undoStack = [];
@@ -1494,6 +1492,12 @@ function loadAll(){
     breakDraft = null;
     operativeLog = []; operativeActive = null;
   }
+
+  // 2. CHECK OPERATOR ID (Safe separate block)
+  // We do this after data load so if it fails, it doesn't wipe data
+  setTimeout(() => {
+      try { checkOperatorId(); } catch(e) { console.warn("Op ID check failed", e); }
+  }, 500);
 }
 
 // ---- OPERATOR ID LOGIC ----
@@ -1506,6 +1510,7 @@ function checkOperatorId(){
     const m = document.getElementById('operatorIdModal');
     if (m) {
         m.style.display = 'flex';
+        // Small delay to ensure modal is rendered before focusing
         setTimeout(() => document.getElementById('opIdInput')?.focus(), 100);
     }
   }
@@ -1514,16 +1519,23 @@ function checkOperatorId(){
 function saveOperatorId(){
   const inp = document.getElementById('opIdInput');
   const val = (inp?.value || '').trim();
+  
+  // Basic validation
   if (val.length < 2) {
     alert("Please enter a valid Name or ID.");
     return;
   }
+  
   localStorage.setItem(KEY_OP_ID, val);
-  document.getElementById('operatorIdModal').style.display = 'none';
+  
+  const m = document.getElementById('operatorIdModal');
+  if (m) m.style.display = 'none';
+  
   showToast(`Clocked in as ${val}`);
-  saveAll(); // Trigger immediate save to update Admin
+  
+  // Trigger immediate save so api.js sends the new name to the backend
+  saveAll(); 
 }
-
 // Main save: in-memory state → localStorage
 function saveAll(){
   try {

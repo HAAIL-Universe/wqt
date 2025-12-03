@@ -132,9 +132,15 @@
         
         // "Current" object (Live Status)
         const current = d.current || {};
-        const opName = current.name || "No Operator";
-        const units = current.units || 0; 
-        const rate = current.orderRateUh || 0;
+        
+        // [FIX 1] Prioritize Operator ID over Customer Name
+        // We look for operator_id first. If empty, we fall back to name, then device ID.
+        const opName = current.operator_id || current.name || devId.substring(0,8);
+
+        // [FIX 2] Use Live Rate instead of Order Rate
+        // Note: This requires your phone JS to be sending "liveRate" in the JSON.
+        // If it shows 0, we may need to calculate it here manually.
+        const rate = current.liveRate || 0;
 
         // "Picks" array (History within the payload)
         const picks = d.picks || [];
@@ -151,12 +157,14 @@
             colorClass = "offline"; 
             badgeClass = "pill-red";
         } else if (!current.name) {
+            // If no customer name is set, they are likely idle
             status = "Idle";
             colorClass = "idle";
             badgeClass = "pill-yellow";
         }
 
         // --- Build HTML ---
+        // [FIX 3] Removed the "Current Order" block completely
         const html = `
           <div class="user-card ${colorClass}">
             <div class="user-head">
@@ -171,15 +179,11 @@
 
             <div class="metric-row">
                 <div class="metric">
-                    <span class="metric-label">Current Order</span>
-                    <span class="metric-val">${units}</span>
-                </div>
-                <div class="metric">
                     <span class="metric-label">Total Units</span>
                     <span class="metric-val">${totalPicks}</span>
                 </div>
                  <div class="metric">
-                    <span class="metric-label">Rate (u/h)</span>
+                    <span class="metric-label">Live Rate</span>
                     <span class="metric-val">${rate}</span>
                 </div>
             </div>
@@ -188,7 +192,6 @@
         container.innerHTML += html;
       });
     }
-
     // ---------------------------------------------------------
     // 2. LOG TABLE LOGIC (The "Luggage Tag" Data)
     // ---------------------------------------------------------
