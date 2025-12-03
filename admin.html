@@ -152,7 +152,8 @@
         margin-bottom: 4px;
         text-transform: uppercase;
     }
-        /* Collapsed summary for completed sessions/orders */
+
+    /* Collapsed summary for completed sessions/orders */
     .timeline-summary {
         background: #1e293b;
         border: 1px solid #334155;
@@ -161,12 +162,12 @@
         display: flex;
         gap: 12px;
         align-items: flex-end;
-        cursor: pointer;
+        cursor: default; /* make it non-interactive */
         margin-bottom: 8px;
     }
 
     .timeline-summary:hover {
-        border-color: #38bdf8;
+        border-color: #334155; /* no hover hint */
     }
 
     .timeline-summary .summary-main {
@@ -487,7 +488,7 @@
                         <div class="summary-main">
                             <div class="summary-title">
                                 <span class="t-tag tag-ord">COMPLETE</span>
-                                Finished <b>${name}</b> — ${units} units
+                                <b>${name}</b> — ${units} units
                             </div>
                         </div>
                         <div class="summary-times">
@@ -549,13 +550,13 @@
         // --- RENDER MODAL ---
         document.getElementById('modalTitle').textContent = opId;
         
-                // Stats
+        // Stats
         const rate = current.liveRate || 0;
 
         // Units from completed orders
         const completedUnits = (d.picks || []).reduce(
-        (sum, p) => sum + (p.units || p.total || 0),
-        0
+            (sum, p) => sum + (p.units || p.total || 0),
+            0
         );
 
         // Units from current open order (based on latest wrap)
@@ -563,19 +564,19 @@
         const tempWraps = d.tempWraps || [];
 
         if (tempWraps.length > 0) {
-        const lastWrap = tempWraps[tempWraps.length - 1];
-        currentUnitsDone = lastWrap && typeof lastWrap.done === 'number'
-            ? lastWrap.done
-            : 0;
+            const lastWrap = tempWraps[tempWraps.length - 1];
+            currentUnitsDone = lastWrap && typeof lastWrap.done === 'number'
+                ? lastWrap.done
+                : 0;
         } else if (current && typeof current.done === 'number') {
-        // Fallback if backend ever exposes a `done` field on current order
-        currentUnitsDone = current.done;
+            // Fallback if backend ever exposes a `done` field on current order
+            currentUnitsDone = current.done;
         }
 
         const totalPicks =
-        completedUnits +
-        currentUnitsDone +
-        (current.shared ? (window.sharedMySum || 0) : 0);
+            completedUnits +
+            currentUnitsDone +
+            (current.shared ? (window.sharedMySum || 0) : 0);
 
         const statsHtml = `
             <div class="stat-grid">
