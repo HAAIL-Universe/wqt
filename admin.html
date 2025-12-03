@@ -14,107 +14,31 @@
       --accent: #38bdf8;
       --success: #22c55e;
       --danger: #ef4444;
-      --warn: #f59e0b;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text-main);
-      padding: 2rem;
-      min-height: 100vh;
-    }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 1px solid var(--border);
-    }
-    .card-title {
-      font-size: 0.875rem;
-      font-weight: 600;
-      color: var(--text-soft);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    /* Live Floor Table */
-    .live-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 1rem;
-    }
-    .user-card {
-      background: #1e293b;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-      position: relative;
-      overflow: hidden;
-      transition: all 0.2s;
-    }
-    .user-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text-main); padding: 2rem; min-height: 100vh; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+    .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+    .user-card { background: #1e293b; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; position: relative; overflow: hidden; }
     .user-card.active { border-left: 4px solid var(--success); }
     .user-card.idle { border-left: 4px solid var(--text-soft); }
-    
-    .user-head { display: flex; justify-content: space-between; align-items:center; margin-bottom: 0.75rem; }
-    .user-name { font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; }
-    .user-status { font-size: 0.75rem; padding: 2px 8px; border-radius: 99px; background: #334155; white-space: nowrap; }
-    .user-card.active .user-status { background: rgba(34, 197, 94, 0.2); color: var(--success); }
-    
-    .user-meta { font-size: 0.85rem; color: var(--text-soft); display: flex; flex-direction: column; gap: 6px; }
-    .stat-row { display: flex; justify-content: space-between; align-items: center; }
-    
-    /* Tables */
+    .user-card.offline { border-left: 4px solid var(--danger); opacity: 0.7; }
+    .user-head { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+    .user-name { font-weight: bold; font-size: 1.1rem; }
+    .pill { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    .pill-green { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+    .pill-blue { background: rgba(56, 189, 248, 0.2); color: var(--accent); }
     table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th { text-align: left; color: var(--text-soft); padding: 10px 8px; border-bottom: 1px solid var(--border); font-weight: 600; }
-    td { padding: 10px 8px; border-bottom: 1px solid var(--border); color: var(--text-main); vertical-align: middle; }
-    .pill { padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; display: inline-block; }
-    .pill-green { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.3); }
-    .pill-blue { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
-    .pill-gray { background: #334155; color: var(--text-soft); }
-    
-    .refresh-btn {
-      background: var(--accent);
-      color: #000;
-      border: none;
-      padding: 0.5rem 1rem;
-      border-radius: 6px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .error-banner {
-      background: rgba(239, 68, 68, 0.2);
-      border: 1px solid var(--danger);
-      color: #fca5a5;
-      padding: 1rem;
-      border-radius: 8px;
-      margin-bottom: 1.5rem;
-      display: none;
-    }
+    td, th { padding: 8px; border-bottom: 1px solid var(--border); text-align: left; color: var(--text-soft); }
+    .refresh-btn { background: var(--accent); color: #000; border: none; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .error-banner { background: rgba(239, 68, 68, 0.2); border: 1px solid var(--danger); color: #fca5a5; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; display: none; }
   </style>
 </head>
 <body>
 
   <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
-    <div>
-      <h1 style="font-size:1.5rem;">WQT Admin Dashboard</h1>
-      <p style="color:var(--text-soft); font-size:0.9rem;">Live view of warehouse floor activity</p>
-    </div>
+    <h1>WQT Admin Dashboard</h1>
     <button class="refresh-btn" onclick="loadData()">Refresh Data</button>
   </header>
 
@@ -122,210 +46,121 @@
 
   <section class="card" style="margin-bottom: 2rem;">
     <div class="card-header">
-      <div class="card-title">Live Floor Activity</div>
-      <div class="card-title" id="active-count">0 Active</div>
+      <div style="font-weight:600; color:var(--text-soft);">LIVE FLOOR ACTIVITY</div>
+      <div id="active-count">0 Active</div>
     </div>
-    <div id="live-floor" class="live-grid">
-      <div style="color:var(--text-soft); padding:1rem;">Loading live state...</div>
-    </div>
+    <div id="live-floor" class="live-grid">Loading...</div>
   </section>
 
-  <div class="grid">
-    <section class="card">
-      <div class="card-header">
-        <div class="card-title">Recent System Events</div>
-      </div>
-      <div style="overflow-x: auto;">
-        <table id="events-table">
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Identity</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td colspan="3" style="text-align:center; padding:1rem;">Loading events...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </div>
+  <section class="card">
+    <div class="card-header"><div style="font-weight:600; color:var(--text-soft);">RECENT EVENTS</div></div>
+    <table id="events-table">
+      <thead><tr><th>Time</th><th>User</th><th>Action</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
 
   <script>
-    // --- CONFIG ---
-    // Always point to live backend
     const API_BASE = "https://wqt-backend.onrender.com";
 
     async function fetchJSON(endpoint) {
       const errBox = document.getElementById("error-box");
       try {
         const res = await fetch(`${API_BASE}${endpoint}`);
-        if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         errBox.style.display = 'none';
         return await res.json();
       } catch (e) {
-        console.error("Fetch failed:", e);
-        errBox.textContent = `Connection Failed: ${e.message}. Is the backend URL correct?`;
+        errBox.textContent = `Connection Failed: ${e.message}`;
         errBox.style.display = 'block';
         return [];
       }
     }
 
-    // --- LOGIC ---
-
     async function loadData() {
-      // 1. Load Recent Events
       const events = await fetchJSON("/api/usage/recent?limit=50");
-      
-      if (events.length === 0 && document.getElementById("error-box").style.display === 'none') {
-         document.getElementById("live-floor").innerHTML = '<div style="padding:1rem">No recent data found.</div>';
+      if (events.length === 0) {
+         document.getElementById("live-floor").innerHTML = '<div style="padding:1rem">No recent data.</div>';
          return;
       }
-      
-      renderEventsTable(events);
-      const deviceState = processLiveState(events);
-      renderLiveFloor(deviceState);
+      render(events);
     }
 
-    // Smart processing to find names even if Device ID is missing
-    function processLiveState(events) {
+    function render(events) {
       const devices = {};
-      // Process oldest to newest
-      const chronology = [...events].reverse();
+      
+      // 1. Calculate Reference Time (Sync with Server)
+      // Find the absolute latest timestamp in the list. Assume that is "Now".
+      const timestamps = events.map(e => new Date(e.created_at).getTime());
+      const serverNow = Math.max(...timestamps, Date.now()); 
 
-      chronology.forEach(ev => {
+      // Process oldest to newest
+      [...events].reverse().forEach(ev => {
         if (!ev.detail) return;
         
-        // 1. Try to find a real name inside the data
-        let detectedName = "Anonymous";
-        if (ev.detail.current && ev.detail.current.name) {
-          detectedName = ev.detail.current.name; // e.g. "ASDAVO"
-        }
-        
-        // 2. Create a synthetic ID if the backend ID is missing
-        // If we have a backend ID, use it. If not, group by the detected name.
-        const devId = ev.device_id || `User-${detectedName}`;
-        
+        let name = "Anonymous";
+        if (ev.detail.current && ev.detail.current.name) name = ev.detail.current.name;
+        const devId = ev.device_id || `User-${name}`; // Fallback if backend ID missing
+
         if (ev.category === "STATE_SAVE") {
           devices[devId] = {
             id: devId,
-            displayName: detectedName,
-            lastSeen: new Date(ev.created_at), 
+            name: name,
+            lastSeen: new Date(ev.created_at).getTime(),
             current: ev.detail.current,
             picks: ev.detail.picks || []
           };
         }
       });
-      return Object.values(devices).sort((a,b) => b.lastSeen - a.lastSeen);
-    }
 
-    function renderLiveFloor(devices) {
+      // Render Cards
       const container = document.getElementById("live-floor");
-      const countEl = document.getElementById("active-count");
       container.innerHTML = "";
+      
+      const activeList = Object.values(devices)
+        .sort((a,b) => b.lastSeen - a.lastSeen)
+        .filter(d => (serverNow - d.lastSeen) < 86400000); // 24h filter
 
-      // 24 Hour Filter
-      const now = new Date();
-      const activeDevices = devices.filter(d => (now - d.lastSeen) < 86400000);
+      document.getElementById("active-count").textContent = `${activeList.length} Active (24h)`;
 
-      countEl.textContent = `${activeDevices.length} Active (24h)`;
-
-      if (activeDevices.length === 0) {
-        container.innerHTML = `<div style="color:var(--text-soft)">No active devices found in the last 24h.</div>`;
-        return;
-      }
-
-      activeDevices.forEach(d => {
+      activeList.forEach(d => {
+        const minsAgo = Math.floor((serverNow - d.lastSeen) / 60000);
         const isIdle = !d.current;
-        const minsAgo = Math.floor((now - d.lastSeen) / 60000);
         
-        let statusColor = "active";
-        let statusText = "Picking";
+        let status = "Picking";
+        let colorClass = "active";
 
-        if (isIdle) {
-            statusColor = "idle";
-            statusText = "Idle";
-        }
-        if (minsAgo > 30) {
-            statusColor = "offline";
-            statusText = "Offline";
-        }
+        if (isIdle) { status = "Idle"; colorClass = "idle"; }
+        // Relaxed offline threshold: 20 mins
+        if (minsAgo > 20) { status = "Offline"; colorClass = "offline"; }
 
-        const totalUnits = (d.picks || []).reduce((sum, p) => sum + (p.units || 0), 0);
-        const nameDisplay = d.displayName === "Anonymous" ? d.id.substring(0,8) : d.displayName;
+        const total = (d.picks || []).reduce((a,b) => a + (b.units||0), 0);
+        let detailText = isIdle ? "No active order" : `${d.current.name} (${d.current.orderRateUh||0} u/h)`;
 
-        let orderInfo = `<span style="color:var(--text-soft)">No active order</span>`;
-        if (d.current) {
-            orderInfo = `
-                <div class="stat-row">
-                    <span>${d.current.name}</span>
-                    <span style="color:var(--accent)">${d.current.orderRateUh || 0} u/h</span>
-                </div>
-                <div style="width:100%; background:#334155; height:4px; border-radius:2px; margin-top:4px;">
-                   <div style="width:10%; background:var(--accent); height:100%; border-radius:2px;"></div>
-                </div>`;
-        }
-
-        const card = document.createElement("div");
-        card.className = `user-card ${statusColor}`;
-        // If offline, dim opacity
-        if (statusColor === 'offline') card.style.opacity = '0.6';
-
-        card.innerHTML = `
-          <div class="user-head">
-            <span class="user-name">${nameDisplay}</span>
-            <span class="user-status">${statusText}</span>
-          </div>
-          <div class="user-meta">
-            ${orderInfo}
-            <div class="stat-row" style="margin-top:8px; border-top:1px solid #334155; padding-top:8px;">
-                <span>Total Today:</span>
-                <span style="color:var(--text-main); font-weight:bold;">${totalUnits}</span>
+        container.innerHTML += `
+          <div class="user-card ${colorClass}">
+            <div class="user-head">
+              <span class="user-name">${d.name === "Anonymous" ? d.id.substring(0,8) : d.name}</span>
+              <span class="pill ${status==='Picking'?'pill-green':'pill-blue'}">${status}</span>
             </div>
-            <div class="stat-row" style="font-size:0.75rem; color:var(--text-soft);">
-               <span>Sync: ${minsAgo}m ago</span>
+            <div class="user-meta" style="font-size:0.9rem; color:#94a3b8; margin-top:8px;">
+              <div>${detailText}</div>
+              <div style="border-top:1px solid #334155; margin-top:6px; padding-top:6px;">
+                 Total Today: <b style="color:#f1f5f9">${total}</b>
+              </div>
+              <div style="font-size:0.75rem; margin-top:4px;">Sync: ${minsAgo}m ago</div>
             </div>
-          </div>
-        `;
-        container.appendChild(card);
+          </div>`;
       });
-    }
 
-    function renderEventsTable(events) {
+      // Render Table
       const tbody = document.querySelector("#events-table tbody");
       tbody.innerHTML = "";
-      
-      events.slice(0, 20).forEach(ev => {
-        const tr = document.createElement("tr");
-        const time = new Date(ev.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
-        let action = `<span class="pill pill-gray">System Check</span>`;
-        let details = "";
-        
-        // Try to identify user even if ID is null
-        let identity = ev.device_id ? ev.device_id.substring(0,8) : "???";
-        if (ev.detail && ev.detail.current && ev.detail.current.name) {
-            identity = ev.detail.current.name; // Use customer code as identity
-        }
-
-        if (ev.category === "STATE_SAVE") {
-            const d = ev.detail || {};
-            if (d.current) {
-                action = `<span class="pill pill-green">Picking</span>`;
-                details = `${d.current.name} (${d.current.total}u)`;
-            } else {
-                action = `<span class="pill pill-blue">Idle</span>`;
-                details = "No active order";
-            }
-        }
-
-        tr.innerHTML = `
-          <td><span style="color:var(--text-soft)">${time}</span></td>
-          <td style="font-weight:600; color:var(--accent);">${identity}</td>
-          <td>${action} <span style="margin-left:8px; color:var(--text-soft); font-size:0.8em;">${details}</span></td>
-        `;
-        tbody.appendChild(tr);
+      events.slice(0, 15).forEach(ev => {
+        const time = new Date(ev.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const name = (ev.detail && ev.detail.current) ? ev.detail.current.name : "???";
+        const action = (ev.detail && ev.detail.current) ? "Picking" : "Idle";
+        tbody.innerHTML += `<tr><td>${time}</td><td>${name}</td><td>${action}</td></tr>`;
       });
     }
 

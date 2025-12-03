@@ -141,11 +141,6 @@ def log_usage_event(category: str, detail: Optional[Dict[str, Any]] = None) -> N
 
 
 def get_recent_usage(limit: int = 100) -> List[Dict[str, Any]]:
-    """
-    Return recent usage events. 
-    FIX: Now extracts 'device_id' from the detail blob and returns it 
-    as a top-level field so the Admin UI doesn't have to guess.
-    """
     if engine is None: return []
     session = get_session()
     try:
@@ -154,25 +149,21 @@ def get_recent_usage(limit: int = 100) -> List[Dict[str, Any]]:
         
         results = []
         for r in rows:
-            # Safely parse JSON detail
             det = {}
             if r.detail:
                 try:
                     det = json.loads(r.detail)
-                    # Handle case where detail isn't a dict (e.g. list or primitive)
-                    if not isinstance(det, dict):
-                        det = {"raw": det}
+                    if not isinstance(det, dict): det = {"raw": det}
                 except:
                     det = {}
             
-            # Lift device_id out of the detail blob if present
             dev_id = det.get("device_id")
 
             results.append({
                 "id": r.id,
                 "created_at": None if r.created_at is None else r.created_at.isoformat(),
                 "category": r.category,
-                "device_id": dev_id,  # <--- Helper for Frontend
+                "device_id": dev_id,
                 "detail": det,
             })
         return results
