@@ -1803,7 +1803,8 @@ function updCalcGate() {
   }
 
   // No special code → just re-run normal QuickCalc logic
-  updCalc?.();
+  // Fixed: Use safe call to recalcQuick instead of updCalc
+  if (typeof recalcQuick === 'function') recalcQuick();
 }
 
 // ====== Tabs ======

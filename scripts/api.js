@@ -25,9 +25,9 @@ function resolveApiBase() {
       const host = window.location.hostname;
 
       // Local dev: open index.html via localhost
-      if (host === 'localhost' || host === '127.0.0.1') {
-        return 'http://127.0.0.1:8000';
-      }
+      // if (host === 'localhost' || host === '127.0.0.1') {
+      //   return 'http://127.0.0.1:8000';
+      // }
     }
   } catch (e) {
     console.warn('[WQT API] Failed to resolve API base from window, using default:', e);
@@ -38,6 +38,33 @@ function resolveApiBase() {
 }
 
 const API_BASE = resolveApiBase();
+
+// ------------------------------------------------------------------
+// Device ID helper (per-browser identity, no login needed)
+// ------------------------------------------------------------------
+
+const DEVICE_ID_KEY = 'wqt_device_id';
+
+function getDeviceId() {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+
+  try {
+    let id = window.localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+      if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        id = window.crypto.randomUUID();
+      } else {
+        // Fallback: reasonably unique random string
+        id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      }
+      window.localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+  } catch (e) {
+    console.warn('[WQT API] Failed to get/create device id:', e);
+    return null;
+  }
+}
 
 // Tiny helper: fetch JSON from backend with basic error handling.
 async function fetchJSON(path, options = {}) {
@@ -68,7 +95,9 @@ const WqtAPI = {
 
     // 1) Try backend
     try {
-      main = await fetchJSON('/api/state');
+      const deviceId = getDeviceId();
+      const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+      main = await fetchJSON(`/api/state${qs}`);
       // mirror into localStorage for offline cache
       Storage.saveMain(main);
       console.log('[WQT API] Loaded main state from backend');
@@ -95,9 +124,11 @@ const WqtAPI = {
     Storage.saveLearnedUL(learnedUL);
     Storage.saveCustomCodes(customCodes);
 
-    // 2) Try to persist main blob to backend
+    // 2) Try to persist main blob to backend (scoped by device-id)
     try {
-      await fetchJSON('/api/state', {
+      const deviceId = getDeviceId();
+      const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+      await fetchJSON(`/api/state${qs}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(main),

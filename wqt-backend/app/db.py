@@ -63,6 +63,19 @@ class GlobalState(Base):
     payload = Column(Text, nullable=False)
 
 
+class DeviceState(Base):
+    """
+    Per-device state table. Each browser / device gets a device_id and
+    its own JSON payload. This is what lets us keep data isolated per device
+    without logins.
+    """
+    __tablename__ = "device_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(Text, unique=True, index=True, nullable=False)
+    payload = Column(Text, nullable=False)
+
+
 class UsageEvent(Base):
     """
     Append-only usage log so you can see how often WQT is used.
@@ -129,6 +142,65 @@ def save_global_state(payload: dict) -> None:
         row = session.query(GlobalState).filter(GlobalState.id == 1).first()
         if not row:
             row = GlobalState(id=1, payload=json.dumps(payload or {}))
+            session.add(row)
+        else:
+            row.payload = json.dumps(payload or {})
+        session.commit()
+    finally:
+        session.close()
+
+
+# ------------------------ Device state helpers ------------------------
+
+
+def load_device_state(device_id: str) -> Optional[dict]:
+    """
+    Load state for a specific device_id from Postgres.
+    Returns None if DB isn't configured or row doesn't exist / is invalid.
+    """
+    if engine is None:
+        return None
+
+    if not device_id:
+        return None
+
+    session = get_session()
+    try:
+        row = (
+            session.query(DeviceState)
+            .filter(DeviceState.device_id == device_id)
+            .first()
+        )
+        if not row:
+            return None
+        try:
+            return json.loads(row.payload)
+        except json.JSONDecodeError:
+            return None
+    finally:
+        session.close()
+
+
+def save_device_state(device_id: str, payload: dict) -> None:
+    """
+    Upsert per-device state row in Postgres.
+    No-op if DB isn't configured or device_id is missing.
+    """
+    if engine is None:
+        return
+
+    if not device_id:
+        return
+
+    session = get_session()
+    try:
+        row = (
+            session.query(DeviceState)
+            .filter(DeviceState.device_id == device_id)
+            .first()
+        )
+        if not row:
+            row = DeviceState(device_id=device_id, payload=json.dumps(payload or {}))
             session.add(row)
         else:
             row.payload = json.dumps(payload or {})
