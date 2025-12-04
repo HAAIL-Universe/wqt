@@ -140,7 +140,63 @@
       </div>
     </div>
   </div>
+  <!-- NEW: Stock Audit pad (ephemeral, local-only) -->
+  <div id="stockAuditModal" class="modal" style="display:none;">
+    <div class="box">
+      <div class="hdr">
+        <h3>Stock Audit Pad</h3>
+        <button class="btn ghost slim" type="button" onclick="closeStockAuditModal()">✖</button>
+      </div>
 
+      <div class="fld">
+        <div class="hint">
+          Temporary pad for locations that don’t match. Not saved to history or backend.
+        </div>
+      </div>
+
+      <div class="fld">
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <div class="col">
+            <label>Location</label>
+            <input id="saLocation" type="text" placeholder="e.g. A01-03-02">
+          </div>
+          <div class="col">
+            <label>Expected</label>
+            <input id="saExpected" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 48">
+          </div>
+          <div class="col">
+            <label>Actual</label>
+            <input id="saActual" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 36">
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px; justify-content:flex-end; gap:8px;">
+          <button class="btn ghost" type="button" onclick="clearStockAuditRows()">Clear All</button>
+          <button class="btn ok" type="button" onclick="addStockAuditRow()">Add Row</button>
+        </div>
+      </div>
+
+      <div class="fld">
+        <div class="tablewrap" style="max-height:260px; overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Location</th>
+                <th>Expected</th>
+                <th>Actual</th>
+                <th>Diff</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="stockAuditBody"></tbody>
+          </table>
+        </div>
+        <div class="hint" style="margin-top:6px;">
+          Pad is wiped on Clear All or page refresh.
+        </div>
+      </div>
+    </div>
+  </div>
   <section id="tabTracker">
     <div class="card" id="shiftCard">
       <div class="row" style="align-items:flex-end;">
@@ -638,6 +694,55 @@
     </div>
     <div class="actions" style="justify-content:center; margin-top:10px;">
       <button class="btn ghost" type="button" onclick="closeBreakChoiceModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+<div id="stockAuditModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="stockAuditTitle" style="display:none;">
+  <div class="box" style="max-width:520px;">
+    <div class="hdr" style="display:flex;align-items:center;justify-content:space-between;">
+      <h3 id="stockAuditTitle">Stock Audit (Temporary)</h3>
+      <button class="btn slim ghost" type="button" onclick="closeStockAuditModal()">✖</button>
+    </div>
+
+    <div class="fld">
+      <label class="sub" style="margin-bottom:6px;">Add discrepancy</label>
+      <div class="row" style="gap:8px; flex-wrap:wrap;">
+        <input id="auditLocation" type="text" placeholder="Location (e.g. A03-05)" style="flex:1; min-width:120px;">
+        <input id="auditExpected" type="number" inputmode="numeric" placeholder="Expected" style="width:90px;">
+        <input id="auditActual" type="number" inputmode="numeric" placeholder="Actual" style="width:90px;">
+      </div>
+      <input id="auditNote" type="text" placeholder="Note (optional – e.g. on wrong pallet)" style="width:100%; margin-top:8px;">
+      <div style="margin-top:8px; display:flex; justify-content:flex-end;">
+        <button class="btn" type="button" onclick="addStockAuditEntry()">Add</button>
+      </div>
+    </div>
+
+    <div class="fld">
+      <div class="tablewrap" style="max-height:220px; overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Location</th>
+              <th>Expected</th>
+              <th>Actual</th>
+              <th>Note</th>
+            </tr>
+          </thead>
+          <tbody id="auditTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="actions" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
+      <div class="actions-left" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn ghost" type="button" onclick="clearStockAudit()">Clear</button>
+        <button class="btn" type="button" onclick="copyStockAuditToClipboard()">Copy</button>
+      </div>
+      <button class="btn ok" type="button" onclick="closeStockAuditModal()">Close</button>
+    </div>
+
+    <div class="hint" style="margin-top:6px;">
+      This list is <b>temporary</b> for today only (not saved to database).
     </div>
   </div>
 </div>

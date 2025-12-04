@@ -7,6 +7,7 @@ let picks = [];         // closed orders
 let etaSmooth = [];            // rolling window of recent order rates
 let lastETAmin = null;         // last computed (smoothed) ETA in minutes
 let lastRenderedETAmin = null; // last value we actually showed (for 1m threshold)
+let stockAuditRows = [];   // Ephemeral rows for Stock Audit pad (not persisted)
 
 // Reset predictive ETA smoothing buffer
 function resetEtaSmoother(){
@@ -173,6 +174,95 @@ function openOperativeModal(){
   }
   refreshOperativeUI();
 }
+
+// Open the Stock Audit modal
+function openStockAuditModal(){
+  const m = document.getElementById('stockAuditModal');
+  if (!m) return;
+  m.style.display = 'flex';
+  renderStockAuditRows();
+}
+
+// Close the Stock Audit modal
+function closeStockAuditModal(){
+  const m = document.getElementById('stockAuditModal');
+  if (!m) return;
+  m.style.display = 'none';
+}
+
+// Add a row to the Stock Audit pad
+function addStockAuditRow(){
+  const locEl = document.getElementById('saLocation');
+  const expEl = document.getElementById('saExpected');
+  const actEl = document.getElementById('saActual');
+  if (!locEl || !expEl || !actEl) return;
+
+  const location = (locEl.value || '').trim();
+  const expected = parseInt(expEl.value || '0', 10);
+  const actual   = parseInt(actEl.value || '0', 10);
+
+  if (!location) {
+    showToast?.('Add a location first');
+    locEl.focus();
+    return;
+  }
+
+  if (!Array.isArray(stockAuditRows)) stockAuditRows = [];
+  stockAuditRows.push({ location, expected, actual });
+
+  // Reset inputs for the next line
+  locEl.value = '';
+  expEl.value = '';
+  actEl.value = '';
+
+  renderStockAuditRows();
+}
+
+// Clear all rows from the pad
+function clearStockAuditRows(){
+  stockAuditRows = [];
+  renderStockAuditRows();
+}
+
+// Remove a specific row (by index)
+function removeStockAuditRow(idx){
+  if (!Array.isArray(stockAuditRows)) return;
+  stockAuditRows.splice(idx, 1);
+  renderStockAuditRows();
+}
+
+// Render the rows into the table body
+function renderStockAuditRows(){
+  const body = document.getElementById('stockAuditBody');
+  if (!body) return;
+
+  body.innerHTML = '';
+  if (!Array.isArray(stockAuditRows)) stockAuditRows = [];
+
+  stockAuditRows.forEach((row, i) => {
+    const tr   = document.createElement('tr');
+    const diff = (Number(row.actual) || 0) - (Number(row.expected) || 0);
+
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+      <td>${row.location || ''}</td>
+      <td>${row.expected ?? ''}</td>
+      <td>${row.actual ?? ''}</td>
+      <td>${diff > 0 ? '+' + diff : diff}</td>
+      <td>
+        <button class="btn slim ghost" type="button" onclick="removeStockAuditRow(${i})">✖</button>
+      </td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+// Backdrop click to close Stock Audit modal
+(function(){
+  document.getElementById('stockAuditModal')?.addEventListener('click', (e) => {
+    if (e.target?.id === 'stockAuditModal') closeStockAuditModal();
+  });
+})();
 
 // Entry point when starting a break/lunch via Operative modal
 function opOpenBreak(kind){
@@ -928,6 +1018,7 @@ const KEY_LEARN = 'wqt_learn_ul';
 const PRO_UNLOCK_CODE = '0000';
 const OPER_UNLOCK_CODE = '2222';
 const ADMIN_UNLOCK_CODE = '1234';
+const AUDIT_UNLOCK_CODE = '5555';
 
 let proUnlocked  = false;  // Gate: Export/Import/Manage Customers
 let snakeUnlocked = false; // Gate: Snake congestion game
@@ -1822,6 +1913,13 @@ function updCalcGate() {
       return;
     }
     openOperativeModal();
+    return;
+  }
+
+  // ---- Stock audit unlock --------------------------------
+  if (digits.endsWith(AUDIT_UNLOCK_CODE) && digits.length >= AUDIT_UNLOCK_CODE.length) {
+    inp.value = '';
+    openStockAuditModal?.();
     return;
   }
 
