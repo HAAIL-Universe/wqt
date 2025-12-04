@@ -30,6 +30,37 @@ def get_session() -> Session:
     if SessionLocal is None:
         raise RuntimeError("DB not initialised")
     return SessionLocal()
+    
+# --- NEW: User Authentication Helper Functions ---
+
+# NOTE: These functions must be defined before use in main.py, 
+# but rely on the User model being available in the session.
+def create_user(username: str, pin: str) -> bool:
+    """Creates a new user with a PIN."""
+    if engine is None: return False
+    session = get_session()
+    try:
+        # Check if exists
+        existing = session.query(User).filter(User.username == username).first()
+        if existing: return False
+        
+        new_user = User(username=username, pin=pin)
+        session.add(new_user)
+        session.commit()
+        return True
+    finally: session.close()
+
+def verify_user(username: str, pin: str) -> bool:
+    """Verifies a username and PIN."""
+    if engine is None: return False
+    session = get_session()
+    try:
+        # Note: In a production app, you would hash the PIN/password (e.g., using bcrypt)
+        user = session.query(User).filter(User.username == username).first()
+        if user and user.pin == pin:
+            return True
+        return False
+    finally: session.close()
 
 # --- Models ---
 
@@ -65,6 +96,14 @@ class ShiftSession(Base):
     total_units = Column(Integer, nullable=True)
     avg_rate = Column(Float, nullable=True)
 
+# --- NEW: User Authentication Table ---
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(Text, unique=True, index=True, nullable=False)
+    pin = Column(Text, nullable=False) # Plain text 4-digit PIN for simplicity
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
 # NEW: Admin Message Table
 class AdminMessage(Base):
     __tablename__ = "admin_messages"

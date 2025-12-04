@@ -1,6 +1,6 @@
 # app/main.py
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta  # <--- Added for Live Rate calc
+from datetime import datetime, timedelta 
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,7 +19,9 @@ from .db import (
     get_recent_shifts,
     get_all_device_states,
     send_admin_message,  # NEW
-    pop_admin_messages   # NEW
+    pop_admin_messages,  # NEW
+    create_user,         # NEW - Added for login system
+    verify_user,         # NEW - Added for login system
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -52,16 +54,20 @@ async def health() -> Dict[str, str]:
 
 
 # -------------------------------------------------------------------
-# Main state API (now device-aware)
+# Main state API (now user/device-aware)
 # -------------------------------------------------------------------
 @app.get("/api/state", response_model=MainState)
 async def get_state(
     device_id: Optional[str] = Query(default=None, alias="device-id"),
+    user_id: Optional[str] = Query(default=None, alias="user-id"), # NEW: For user-locked state
 ) -> MainState:
     """
-    Load MainState. Prefer device-specific state if device-id is provided.
+    Load MainState. Prefer user-locked state, then device-specific state.
     """
-    return load_main(device_id=device_id)
+    # PRIORITY: If a user is logged in, use their ID as the storage key (e.g., 'user:Urma')
+    target_id = f"user:{user_id}" if user_id else device_id
+    
+    return load_main(device_id=target_id)
 
 
 @app.post("/api/state", response_model=MainState)
@@ -69,15 +75,23 @@ async def set_state(
     state: MainState,
     device_id: Optional[str] = Query(default=None, alias="device-id"),
     operator_id: Optional[str] = Query(default=None, alias="operator-id"),
+    user_id: Optional[str] = Query(default=None, alias="user-id"), # NEW: For user-locked state
 ) -> MainState:
     """
     Save MainState.
     Includes fixes for User ID persistence and Live Rate calculation.
     """
     
+    # NEW: 1. Determine Storage Key (User > Device)
+    target_id = f"user:{user_id}" if user_id else device_id
+
     # --- FIX 1: Ensure Operator ID is inside the state object ---
-    # This ensures the Admin Dashboard Card shows the User ID, not "SAIEME"
-    if operator_id and state.current:
+    # If user is logged in, force operator_id to match username (User Identity)
+    if user_id and state.current:
+        state.current["operator_id"] = user_id
+    # Else, use the provided operator_id (Device Identity / Guest)
+    # PATCH: Check 'is not None' so we allow empty strings to clear the ID
+    elif operator_id is not None and state.current:
         state.current["operator_id"] = operator_id
 
     # --- FIX 2: Calculate Live Rate on Backend ---
@@ -109,22 +123,31 @@ async def set_state(
             # If date parsing fails, just ignore rate calc
             pass
 
-    # Save to DB
-    save_main(state, device_id=device_id)
+    # Save to DB (using the determined target_id)
+    save_main(state, device_id=target_id)
 
     # --- Logging Logic ---
     detail: Dict[str, Any] = {"version": state.version}
+    
+    # Log the target key used for storage
+    if target_id:
+        detail["storage_key"] = target_id
 
-    if operator_id:
+    if user_id:
+        detail["logged_in_user"] = user_id
+    elif operator_id is not None:
         detail["operator_id"] = operator_id
+    
     if device_id:
         detail["device_id"] = device_id
 
     # --- FIX 3: Fix Log "User" Display ---
-    # The Admin Panel looks for 'current_name'. Previously this was set to 
-    # state.current['name'] which is the Customer ID (SAIEME).
-    # We now prioritize the actual Operator ID.
-    if operator_id:
+    # The Admin Panel looks for 'current_name'. 
+    # Prioritize logged in user, then operator_id, then state.current['name']
+    if user_id:
+        detail["current_name"] = user_id
+    # PATCH: Allow empty string to reflect cleared name
+    elif operator_id is not None:
         detail["current_name"] = operator_id
     elif state.current and isinstance(state.current, dict):
         if "name" in state.current:
@@ -265,3 +288,32 @@ async def api_shifts_recent(
     limit: int = Query(50, ge=1, le=200),
 ) -> List[Dict[str, Any]]:
     return get_recent_shifts(limit=limit)
+
+# -------------------------------------------------------------------
+# Auth API (NEW)
+# -------------------------------------------------------------------
+class AuthPayload(BaseModel):
+    username: str
+    pin: str
+
+@app.post("/api/auth/register")
+async def api_register(payload: AuthPayload) -> Dict[str, Any]:
+    # Basic validation
+    if len(payload.pin) < 4:
+        return {"success": False, "message": "PIN must be 4 digits"}
+    
+    clean_user = payload.username.strip()
+    success = create_user(clean_user, payload.pin) 
+    if success:
+        return {"success": True, "username": clean_user}
+    else:
+        return {"success": False, "message": "Username taken"}
+
+@app.post("/api/auth/login")
+async def api_login(payload: AuthPayload) -> Dict[str, Any]:
+    clean_user = payload.username.strip()
+    valid = verify_user(clean_user, payload.pin) 
+    if valid:
+        return {"success": True, "username": clean_user}
+    else:
+        return {"success": False, "message": "Invalid PIN"}

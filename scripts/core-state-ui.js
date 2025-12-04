@@ -195,11 +195,13 @@ function addStockAuditRow(){
   const locEl = document.getElementById('saLocation');
   const expEl = document.getElementById('saExpected');
   const actEl = document.getElementById('saActual');
+  const noteEl = document.getElementById('saNote');           // NEW
   if (!locEl || !expEl || !actEl) return;
 
   const location = (locEl.value || '').trim();
-  const expected = parseInt(expEl.value || '0', 10);
-  const actual   = parseInt(actEl.value || '0', 10);
+  const expectedStr = (expEl.value || '').trim();
+  const actualStr   = (actEl.value || '').trim();
+  const note        = (noteEl?.value || '').trim();           // NEW
 
   if (!location) {
     showToast?.('Add a location first');
@@ -207,22 +209,30 @@ function addStockAuditRow(){
     return;
   }
 
+  const expected = expectedStr === '' ? null : parseInt(expectedStr, 10);
+  const actual   = actualStr === ''   ? null : parseInt(actualStr, 10);
+
   if (!Array.isArray(stockAuditRows)) stockAuditRows = [];
-  stockAuditRows.push({ location, expected, actual });
+  stockAuditRows.push({ location, expected, actual, note });  // NEW: note
 
   // Reset inputs for the next line
   locEl.value = '';
   expEl.value = '';
   actEl.value = '';
+  if (noteEl) noteEl.value = '';                              // NEW
 
   renderStockAuditRows();
 }
+
 
 // Clear all rows from the pad
 function clearStockAuditRows(){
   stockAuditRows = [];
+  const noteEl = document.getElementById('saNote');
+  if (noteEl) noteEl.value = '';
   renderStockAuditRows();
 }
+
 
 // Remove a specific row (by index)
 function removeStockAuditRow(idx){
@@ -240,21 +250,43 @@ function renderStockAuditRows(){
   if (!Array.isArray(stockAuditRows)) stockAuditRows = [];
 
   stockAuditRows.forEach((row, i) => {
-    const tr   = document.createElement('tr');
-    const diff = (Number(row.actual) || 0) - (Number(row.expected) || 0);
+    const tr = document.createElement('tr');
+
+    const exp = row.expected;
+    const act = row.actual;
+
+    let diffDisplay = '—';
+    if (exp !== null && exp !== undefined && act !== null && act !== undefined &&
+        !isNaN(exp) && !isNaN(act)) {
+      const diff = act - exp;
+      diffDisplay = diff > 0 ? `+${diff}` : String(diff);
+    }
+
+    const hasNote = !!(row.note && row.note.trim().length);
 
     tr.innerHTML = `
       <td>${i + 1}</td>
       <td>${row.location || ''}</td>
-      <td>${row.expected ?? ''}</td>
-      <td>${row.actual ?? ''}</td>
-      <td>${diff > 0 ? '+' + diff : diff}</td>
+      <td>${exp ?? '—'}</td>
+      <td>${act ?? '—'}</td>
+      <td>${diffDisplay}</td>
+      <td>
+        ${hasNote
+          ? `<button class="btn slim" type="button" onclick="showStockAuditNote(${i})">📝</button>`
+          : ''}
+      </td>
       <td>
         <button class="btn slim ghost" type="button" onclick="removeStockAuditRow(${i})">✖</button>
       </td>
     `;
     body.appendChild(tr);
   });
+}
+function showStockAuditNote(idx){
+  const row = stockAuditRows[idx];
+  if (!row || !row.note) return;
+  const title = row.location ? `Location ${row.location}` : 'Note';
+  alert(`${title}:\n\n${row.note}`);
 }
 
 // Backdrop click to close Stock Audit modal

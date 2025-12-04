@@ -169,9 +169,19 @@
             <input id="saActual" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 36">
           </div>
         </div>
-        <div class="row" style="margin-top:8px; justify-content:flex-end; gap:8px;">
-          <button class="btn ghost" type="button" onclick="clearStockAuditRows()">Clear All</button>
-          <button class="btn ok" type="button" onclick="addStockAuditRow()">Add Row</button>
+        <div class="row" style="margin-top:8px; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <!-- NEW: inline note box on the left -->
+          <input
+            id="saNote"
+            type="text"
+            placeholder="Note for this location (optional)"
+            style="flex:1; min-width:180px;"
+          >
+
+          <div style="display:flex; gap:8px;">
+            <button class="btn ghost" type="button" onclick="clearStockAuditRows()">Clear All</button>
+            <button class="btn ok" type="button" onclick="addStockAuditRow()">Add Row</button>
+          </div>
         </div>
       </div>
 
@@ -185,6 +195,7 @@
                 <th>Expected</th>
                 <th>Actual</th>
                 <th>Diff</th>
+                <th>Note</th> 
                 <th></th>
               </tr>
             </thead>
