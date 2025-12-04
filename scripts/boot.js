@@ -2,6 +2,15 @@
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
     try {
+      // NEW: show login/identity prompt for brand new users
+      if (typeof ensureAuthOnBoot === 'function') {
+        try {
+          ensureAuthOnBoot();
+        } catch (e) {
+          console.warn('[Boot] ensureAuthOnBoot failed', e);
+        }
+      }
+
       // ── 0) Try to hydrate from backend first (then localStorage) ───
       if (window.WqtAPI && typeof WqtAPI.loadInitialState === 'function') {
         try {
@@ -620,3 +629,107 @@ setInterval(async function pollForMessages() {
     // Silent fail
   }
 }, 30000); // 30s
+
+// ====== Auth / Login helpers ======
+
+function ensureAuthOnBoot() {
+  try {
+    // getLoggedInUser is defined in api.js and exposed globally
+    const hasUser = (typeof getLoggedInUser === 'function')
+      ? getLoggedInUser()
+      : null;
+
+    const opId = (typeof window !== 'undefined' && window.localStorage)
+      ? window.localStorage.getItem('wqt_operator_id')
+      : null;
+
+    // If we already know the user (or have an operator id), don't block boot.
+    if ((hasUser && String(hasUser).trim()) || (opId && opId.trim())) {
+      return;
+    }
+
+    // Brand new device + user: show the login modal if present.
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) {
+      loginModal.style.display = 'flex';
+      const uEl = document.getElementById('loginUsername');
+      if (uEl) uEl.focus();
+    } else {
+      // Fallback to legacy "Who is picking?" modal.
+      const opModal = document.getElementById('operatorIdModal');
+      if (opModal) opModal.style.display = 'flex';
+    }
+  } catch (e) {
+    console.warn('[Boot] ensureAuthOnBoot error:', e);
+  }
+}
+
+async function loginSubmit(mode) {
+  if (!window.WqtAPI || typeof WqtAPI.login !== 'function' || typeof WqtAPI.register !== 'function') {
+    alert('Login is not available (backend offline).');
+    return;
+  }
+
+  const uEl = document.getElementById('loginUsername');
+  const pEl = document.getElementById('loginPin');
+  const username = (uEl?.value || '').trim();
+  const pin = (pEl?.value || '').trim();
+
+  if (!username) {
+    alert('Enter your Operator ID.');
+    if (uEl) uEl.focus();
+    return;
+  }
+  if (!pin || pin.length < 4) {
+    alert('Enter your 4-digit PIN.');
+    if (pEl) pEl.focus();
+    return;
+  }
+
+  try {
+    const fn = mode === 'register' ? WqtAPI.register : WqtAPI.login;
+    const res = await fn(username, pin);
+    if (!res || !res.success) {
+      alert(res?.message || (mode === 'register' ? 'Registration failed.' : 'Login failed.'));
+      return;
+    }
+
+    // Mirror into the legacy operator-id key so the rest of the app sees it.
+    try {
+      localStorage.setItem('wqt_operator_id', res.username);
+    } catch (e) {
+      console.warn('[Auth] Failed to persist operator id:', e);
+    }
+
+    // Close modals
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) loginModal.style.display = 'none';
+
+    const opModal = document.getElementById('operatorIdModal');
+    if (opModal) opModal.style.display = 'none';
+
+    if (typeof showToast === 'function') {
+      showToast(`Signed in as ${res.username}`);
+    }
+
+    // Trigger a save so the backend gets the new user-id key immediately.
+    if (typeof saveAll === 'function') {
+      try { saveAll(); } catch (e) { console.warn('[Auth] saveAll after login failed:', e); }
+    }
+  } catch (e) {
+    console.error('[Auth] Login/register error:', e);
+    alert('Login failed – please try again.');
+  }
+}
+
+function loginAsGuest() {
+  const loginModal = document.getElementById('loginModal');
+  if (loginModal) loginModal.style.display = 'none';
+
+  const opModal = document.getElementById('operatorIdModal');
+  if (opModal) {
+    opModal.style.display = 'flex';
+    const inp = document.getElementById('opIdInput');
+    if (inp) inp.focus();
+  }
+}

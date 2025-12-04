@@ -66,12 +66,25 @@ function getDeviceId() {
     }
 }
 
-// NEW: Auth Helpers
 const USER_KEY = 'wqt_username';
 
 function getLoggedInUser() {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem(USER_KEY);
+    try {
+        const stored = localStorage.getItem(USER_KEY);
+        if (stored && stored.trim()) {
+            return stored.trim();
+        }
+        // Fallback: reuse the existing operator id as username if present
+        const opId = localStorage.getItem('wqt_operator_id');
+        if (opId && opId.trim()) {
+            return opId.trim();
+        }
+        return null;
+    } catch (e) {
+        console.warn('[WQT API] getLoggedInUser failed:', e);
+        return null;
+    }
 }
 
 // Tiny helper: fetch JSON from backend with basic error handling.
