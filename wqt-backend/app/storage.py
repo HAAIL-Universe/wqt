@@ -47,14 +47,15 @@ def _save_to_file(payload: dict) -> None:
 
 def load_main(device_id: Optional[str] = None) -> MainState:
     """
-    Load the MainState from, in order of preference:
-      1. Per-device state in Postgres (if device_id is provided and DB is configured)
-      2. Global state in Postgres (if configured)
-      3. Local JSON file
-      4. A fresh default MainState
+    Load the MainState for a specific device.
 
-    This lets each device have its own slice of state while still preserving
-    legacy behaviour for existing installs.
+    Order of precedence now:
+      1. Per-device state in Postgres (device_id required)
+      2. Local JSON file (legacy single-device / offline)
+      3. A fresh default MainState
+
+    We deliberately do NOT fall back to a global DB state anymore,
+    to avoid cross-device history bleed.
     """
     payload: Optional[dict] = None
 
@@ -62,38 +63,35 @@ def load_main(device_id: Optional[str] = None) -> MainState:
     if device_id:
         payload = load_device_state(device_id)
 
-    # 2) Fall back to global state if nothing found
-    if not payload:
-        payload = load_global_state()
-
-    # 3) Fall back to legacy file
+    # 2) Fall back to legacy file (for offline / dev)
     if not payload:
         payload = _load_from_file()
 
-    # 4) Fresh install / first run – minimal sane defaults.
+    # 3) Fresh install / first run – minimal sane defaults.
     if not payload:
         return MainState(version="3.3.55")
 
-    # Ensure it maps into MainState safely – Pydantic will enforce shape.
     return MainState(**payload)
 
 
 def save_main(state: MainState, device_id: Optional[str] = None) -> None:
     """
-    Persist main state to Postgres (per-device if device_id is provided, or
-    global otherwise), and always to the legacy JSON file as backup / local
-    dev support.
+    Persist main state to Postgres *per-device* when we know the device_id.
+    If we don't know the device, only write to the local JSON snapshot to
+    avoid creating a shared global blob.
     """
     if isinstance(state, MainState):
         payload = state.model_dump()
     else:
         payload = dict(state or {})
 
-    # 1) Save to per-device or global DB, depending on whether we know the device
+    # Only use per-device rows in Postgres now
     if device_id:
         save_device_state(device_id, payload)
     else:
-        save_global_state(payload)
+        # No device_id – only keep a local backup, don't pollute global DB state
+        _save_to_file(payload)
+        return
 
-    # 2) Also save to local JSON file (acts as a "last known state" snapshot)
+    # Still keep the local JSON snapshot as a last-known-state backup
     _save_to_file(payload)
