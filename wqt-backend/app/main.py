@@ -317,3 +317,46 @@ async def api_login(payload: AuthPayload) -> Dict[str, Any]:
         return {"success": True, "username": clean_user}
     else:
         return {"success": False, "message": "Invalid PIN"}
+
+        # -------------------------------------------------------------------
+# Unified PIN Login  (NEW)
+# -------------------------------------------------------------------
+class PinLoginPayload(BaseModel):
+    pin_code: str
+    device_id: Optional[str] = None
+
+@app.post("/auth/login_pin")
+async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
+    """
+    Unified identity entrypoint.
+    - Uses PIN as username.
+    - Auto-creates user if missing.
+    - Returns stable identity object for frontend.
+    """
+    pin = payload.pin_code.strip()
+    if not pin:
+        return {"success": False, "message": "PIN required"}
+
+    # Username = PIN
+    username = pin
+
+    # Check if user exists; if not, auto-create
+    exists = verify_user(username, pin)
+    if not exists:
+        created = create_user(username, pin)
+        if not created:
+            return {"success": False, "message": "Unable to create user"}
+
+    # Now verify (covers existing + new)
+    valid = verify_user(username, pin)
+    if not valid:
+        return {"success": False, "message": "Invalid PIN"}
+
+    # SUCCESS – unified identity response
+    return {
+        "success": True,
+        "user_id": username,
+        "display_name": username,
+        "role": "picker",
+        "token": None
+    }

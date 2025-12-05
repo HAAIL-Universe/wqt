@@ -57,44 +57,47 @@
   async function loginWithPin(pin) {
     const deviceId = ensureDeviceId();
 
-    // For now: use the 5-digit code as both username + pin.
-    // Backend: /api/auth/login expects { username, pin }.
     const body = {
-      username: pin,
-      pin: pin,
-      device_id: deviceId // extra; backend will just ignore this field
+        pin_code: pin,
+        device_id: deviceId
     };
 
-    const resp = await fetch(getApiBase() + '/api/auth/login', {
-      method: 'POST',
-      headers: {
+    const resp = await fetch(getApiBase() + '/auth/login_pin', {
+        method: 'POST',
+        headers: {
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
+        },
+        body: JSON.stringify(body)
     });
 
     if (!resp.ok) {
-      const text = await resp.text().catch(() => '');
-      throw new Error(text || 'Login failed (' + resp.status + ')');
+        const text = await resp.text().catch(() => '');
+        throw new Error(text || 'Login failed (' + resp.status + ')');
     }
 
     const data = await resp.json();
-
     if (!data.success) {
-      throw new Error(data.message || 'Invalid code');
+        throw new Error(data.message || 'Invalid code');
     }
 
     const userPayload = {
-      userId: data.username,          // matches backend
-      displayName: data.username,     // can be prettified later
-      role: data.role || 'picker',
-      token: data.token || null,
-      lastLoginAt: new Date().toISOString()
+        userId: data.user_id,
+        displayName: data.display_name,
+        role: data.role || 'picker',
+        token: data.token || null,
+        lastLoginAt: new Date().toISOString()
     };
 
+    // NEW: save unified identity
     saveCurrentUser(userPayload);
+
+    // Mirror compatibility keys
+    localStorage.setItem('wqt_operator_id', data.user_id);
+    localStorage.setItem('wqt_username', data.user_id);
+
     return userPayload;
-  }
+    }
+
     async function registerWithPin(pin) {
     const deviceId = ensureDeviceId();
 
