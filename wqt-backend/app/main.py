@@ -295,6 +295,8 @@ async def api_shifts_recent(
 class AuthPayload(BaseModel):
     username: str
     pin: str
+    full_name: Optional[str] = None
+    role: Optional[str] = None
 
 @app.post("/api/auth/register")
 async def api_register(payload: AuthPayload) -> Dict[str, Any]:
@@ -303,22 +305,41 @@ async def api_register(payload: AuthPayload) -> Dict[str, Any]:
         return {"success": False, "message": "PIN must be 4 digits"}
     
     clean_user = payload.username.strip()
-    success = create_user(clean_user, payload.pin) 
+    # Prefer provided full_name, else fall back to username
+    full_name = (payload.full_name or "").strip() or clean_user
+    # Normalise role, default to 'picker' for now
+    role = (payload.role or "picker").strip() or "picker"
+
+    # NOTE: DB currently only stores username + pin.
+    # Name/role are echoed back in the response for the frontend
+    # and can be wired into the DB once we patch the User model.
+    success = create_user(clean_user, payload.pin)
     if success:
-        return {"success": True, "username": clean_user}
+        return {
+            "success": True,
+            "username": clean_user,
+            "display_name": full_name,
+            "role": role,
+        }
     else:
         return {"success": False, "message": "Username taken"}
 
 @app.post("/api/auth/login")
 async def api_login(payload: AuthPayload) -> Dict[str, Any]:
     clean_user = payload.username.strip()
-    valid = verify_user(clean_user, payload.pin) 
+    valid = verify_user(clean_user, payload.pin)
     if valid:
-        return {"success": True, "username": clean_user}
+        # Until the DB stores name/role, we just mirror username and default role.
+        return {
+            "success": True,
+            "username": clean_user,
+            "display_name": clean_user,
+            "role": "picker",
+        }
     else:
-        return {"success": False, "message": "Invalid PIN"}
+        return {"success": False, "message": "Invalid username or PIN"}
 
-        # -------------------------------------------------------------------
+# -------------------------------------------------------------------
 # Unified PIN Login  (NEW)
 # -------------------------------------------------------------------
 class PinLoginPayload(BaseModel):

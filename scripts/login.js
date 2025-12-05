@@ -1,7 +1,7 @@
 // scripts/login.js
 // Front-door login module for WQT.
 // Assumes (optionally) that scripts/api.js defines resolveApiBase().
-// Adjust backend endpoint name to whatever you implement.
+// Uses /auth/login_pin for login and /api/auth/register for user creation.
 
 (function () {
   const CURRENT_USER_KEY = 'WQT_CURRENT_USER';
@@ -58,53 +58,58 @@
     const deviceId = ensureDeviceId();
 
     const body = {
-        pin_code: pin,
-        device_id: deviceId
+      pin_code: pin,
+      device_id: deviceId
     };
 
     const resp = await fetch(getApiBase() + '/auth/login_pin', {
-        method: 'POST',
-        headers: {
+      method: 'POST',
+      headers: {
         'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
+      },
+      body: JSON.stringify(body)
     });
 
     if (!resp.ok) {
-        const text = await resp.text().catch(() => '');
-        throw new Error(text || 'Login failed (' + resp.status + ')');
+      const text = await resp.text().catch(() => '');
+      throw new Error(text || 'Login failed (' + resp.status + ')');
     }
 
     const data = await resp.json();
     if (!data.success) {
-        throw new Error(data.message || 'Invalid code');
+      throw new Error(data.message || 'Invalid code');
     }
 
+    // /auth/login_pin returns: { success, user_id, display_name, role, token }
+    const userId = data.user_id || data.username || pin;
+
     const userPayload = {
-        userId: data.user_id,
-        displayName: data.display_name,
-        role: data.role || 'picker',
-        token: data.token || null,
-        lastLoginAt: new Date().toISOString()
+      userId: userId,
+      displayName: data.display_name || userId,
+      role: data.role || 'picker',
+      token: data.token || null,
+      lastLoginAt: new Date().toISOString()
     };
 
-    // NEW: save unified identity
+    // Save unified identity
     saveCurrentUser(userPayload);
 
     // Mirror compatibility keys
-    localStorage.setItem('wqt_operator_id', data.user_id);
-    localStorage.setItem('wqt_username', data.user_id);
+    localStorage.setItem('wqt_operator_id', userId);
+    localStorage.setItem('wqt_username', userId);
 
     return userPayload;
-    }
+  }
 
-    async function registerWithPin(pin) {
+  async function registerWithPin(pin, fullName, role) {
     const deviceId = ensureDeviceId();
 
     const body = {
       username: pin,
       pin: pin,
-      device_id: deviceId
+      device_id: deviceId,
+      full_name: fullName,
+      role: role
     };
 
     const resp = await fetch(getApiBase() + '/api/auth/register', {
@@ -126,15 +131,22 @@
       throw new Error(data.message || 'Could not create user');
     }
 
+    // /api/auth/register returns: { success, username, display_name, role }
+    const userId = data.username || pin;
+
     const userPayload = {
-      userId: data.username,
-      displayName: data.username,
+      userId: userId,
+      displayName: data.display_name || userId,
       role: data.role || 'picker',
       token: data.token || null,
       lastLoginAt: new Date().toISOString()
     };
 
     saveCurrentUser(userPayload);
+    // Also mirror legacy keys for consistency
+    localStorage.setItem('wqt_operator_id', userId);
+    localStorage.setItem('wqt_username', userId);
+
     return userPayload;
   }
 
@@ -251,7 +263,8 @@
         }
       });
     }
-        if (registerBtn && pinInput) {
+
+    if (registerBtn && pinInput) {
       registerBtn.addEventListener('click', async (e) => {
         e.preventDefault();
 
@@ -262,11 +275,32 @@
           return;
         }
 
+        // Prompt for Name
+        let fullName = window.prompt(
+          'Enter your name (as you want it to appear in WQT):',
+          ''
+        );
+        if (!fullName || !fullName.trim()) {
+          setStatus('Name is required to create a user.', true);
+          return;
+        }
+        fullName = fullName.trim();
+
+        // Prompt for Job Role
+        let role = window.prompt(
+          'Enter your job role (e.g. picker, operative, supervisor):',
+          'picker'
+        );
+        if (!role || !role.trim()) {
+          role = 'picker';
+        }
+        role = role.trim().toLowerCase();
+
         registerBtn.disabled = true;
         setStatus('Creating user…', false);
 
         try {
-          await registerWithPin(pin);
+          await registerWithPin(pin, fullName, role);
           setStatus('User created. Loading WQT…', false);
           gotoWqtApp();
         } catch (err) {
