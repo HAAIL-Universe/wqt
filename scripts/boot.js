@@ -1,3 +1,36 @@
+function logoutAndReset() {
+  // Identity
+  localStorage.removeItem('WQT_CURRENT_USER');
+  localStorage.removeItem('wqt_operator_id');
+  localStorage.removeItem('wqt_username');
+
+  // Core state blobs
+  localStorage.removeItem('wqt_v2722_data');
+  localStorage.removeItem('wqt_learn_ul');
+  localStorage.removeItem('wqt_codes');
+
+  // Side-channel state
+  localStorage.removeItem('shiftActive');
+  localStorage.removeItem('currentOrder');
+  localStorage.removeItem('shiftDelays');
+  localStorage.removeItem('shiftNotes');
+  localStorage.removeItem('breakDraft');
+  localStorage.removeItem('sharedBlock');
+  localStorage.removeItem('sharedDockOpen');
+  localStorage.removeItem('sharedMySum');
+  localStorage.removeItem('snakeDelayDraft');
+  localStorage.removeItem('snakeDelayCompleted');
+  localStorage.removeItem('snakeLiveRateUh');
+  localStorage.removeItem('weekCardCollapsed');
+  localStorage.removeItem('proUnlocked');
+
+  // OPTIONAL: reset device identity if you want fresh devices each time
+  // localStorage.removeItem('wqt_device_id'); 
+
+  // Redirect to login screen
+  window.location.href = 'login.html';
+}
+
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
