@@ -2,14 +2,8 @@
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
     try {
-      // NEW: show login/identity prompt for brand new users
-      if (typeof ensureAuthOnBoot === 'function') {
-        try {
-          ensureAuthOnBoot();
-        } catch (e) {
-          console.warn('[Boot] ensureAuthOnBoot failed', e);
-        }
-      }
+      // Login now handled by front-door (login.html + WQT_CURRENT_USER).
+      // If this script is running, gateWqtByLogin has already ensured a user.
 
       // ── 0) Try to hydrate from backend first (then localStorage) ───
       if (window.WqtAPI && typeof WqtAPI.loadInitialState === 'function') {
