@@ -808,6 +808,36 @@
 <script src="scripts/core-state-ui.js"></script>
 <script src="scripts/core-metrics-actions.js"></script>
 <script src="scripts/core-tracker-history.js"></script>
+<script>
+  // ====== Login gate (front-door auth) ======
+  (function gateWqtByLogin() {
+    const KEY = 'WQT_CURRENT_USER';
+
+    const path = (window.location && window.location.pathname) || '';
+    const onLoginPage = path.includes('login');
+
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) {
+        if (!onLoginPage) window.location.href = 'login.html';
+        return;
+      }
+
+      const user = JSON.parse(raw);
+      if (!user || !user.userId) {
+        localStorage.removeItem(KEY);
+        if (!onLoginPage) window.location.href = 'login.html';
+        return;
+      }
+
+      window.WQT_CURRENT_USER = user;
+    } catch (e) {
+      console.warn('[Auth] Failed to read WQT_CURRENT_USER', e);
+      localStorage.removeItem(KEY);
+      if (!onLoginPage) window.location.href = 'login.html';
+    }
+  })();
+</script>
 <script src="scripts/boot.js"></script>
 </body>
 </html>
