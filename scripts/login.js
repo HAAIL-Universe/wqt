@@ -56,12 +56,16 @@
   // --------------------------
   async function loginWithPin(pin) {
     const deviceId = ensureDeviceId();
+
+    // For now: use the 5-digit code as both username + pin.
+    // Backend: /api/auth/login expects { username, pin }.
     const body = {
-      pin_code: pin,
-      device_id: deviceId
+      username: pin,
+      pin: pin,
+      device_id: deviceId // extra; backend will just ignore this field
     };
 
-    const resp = await fetch(getApiBase() + '/auth/login_pin', {
+    const resp = await fetch(getApiBase() + '/api/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -76,12 +80,52 @@
 
     const data = await resp.json();
 
-    // Expected backend response shape – adjust fields to your actual API.
-    // Example FastAPI response:
-    // { "user_id": "123", "display_name": "Julius", "role": "picker", "token": "..." }
+    if (!data.success) {
+      throw new Error(data.message || 'Invalid code');
+    }
+
     const userPayload = {
-      userId: data.user_id,
-      displayName: data.display_name,
+      userId: data.username,          // matches backend
+      displayName: data.username,     // can be prettified later
+      role: data.role || 'picker',
+      token: data.token || null,
+      lastLoginAt: new Date().toISOString()
+    };
+
+    saveCurrentUser(userPayload);
+    return userPayload;
+  }
+    async function registerWithPin(pin) {
+    const deviceId = ensureDeviceId();
+
+    const body = {
+      username: pin,
+      pin: pin,
+      device_id: deviceId
+    };
+
+    const resp = await fetch(getApiBase() + '/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      throw new Error(text || 'Registration failed (' + resp.status + ')');
+    }
+
+    const data = await resp.json();
+
+    if (!data.success) {
+      throw new Error(data.message || 'Could not create user');
+    }
+
+    const userPayload = {
+      userId: data.username,
+      displayName: data.username,
       role: data.role || 'picker',
       token: data.token || null,
       lastLoginAt: new Date().toISOString()
@@ -109,6 +153,7 @@
     const loginForm = document.getElementById('login-form');
     const pinInput = document.getElementById('pin-input');
     const loginBtn = document.getElementById('login-btn');
+    const registerBtn = document.getElementById('register-btn');
     const statusEl = document.getElementById('status');
     const onlineBadge = document.getElementById('online-badge');
     const deviceHint = document.getElementById('device-hint');
@@ -200,6 +245,31 @@
           } else {
             setStatus(err.message || 'Login failed. Check code or connection.', true);
           }
+        }
+      });
+    }
+        if (registerBtn && pinInput) {
+      registerBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+
+        const pin = (pinInput.value || '').trim();
+        if (!pin) {
+          setStatus('Enter a 5-digit code to register.', true);
+          pinInput.focus();
+          return;
+        }
+
+        registerBtn.disabled = true;
+        setStatus('Creating user…', false);
+
+        try {
+          await registerWithPin(pin);
+          setStatus('User created. Loading WQT…', false);
+          gotoWqtApp();
+        } catch (err) {
+          console.error(err);
+          registerBtn.disabled = false;
+          setStatus(err.message || 'Registration failed.', true);
         }
       });
     }
