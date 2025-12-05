@@ -143,7 +143,7 @@
     };
 
     saveCurrentUser(userPayload);
-    // Also mirror legacy keys for consistency
+    // Mirror legacy keys for consistency
     localStorage.setItem('wqt_operator_id', userId);
     localStorage.setItem('wqt_username', userId);
 
@@ -172,6 +172,13 @@
     const statusEl = document.getElementById('status');
     const onlineBadge = document.getElementById('online-badge');
     const deviceHint = document.getElementById('device-hint');
+
+    const registerFields = document.getElementById('register-fields');
+    const nameInput = document.getElementById('name-input');
+    const roleInput = document.getElementById('role-input');
+    const roleButtons = document.querySelectorAll('.role-btn');
+
+    let inRegisterMode = false;
 
     // Show device ID hint (mostly for you while testing)
     try {
@@ -229,6 +236,28 @@
       });
     }
 
+    // Role buttons wiring
+    if (roleButtons && roleButtons.length) {
+      roleButtons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          roleButtons.forEach((b) => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          if (roleInput) {
+            roleInput.value = btn.dataset.role || 'picker';
+          }
+        });
+      });
+    }
+
+    function enterRegisterMode() {
+      inRegisterMode = true;
+      if (registerFields) registerFields.style.display = 'block';
+      if (loginBtn) loginBtn.disabled = true;
+      if (registerBtn) registerBtn.textContent = 'Create user';
+      setStatus('Add your name and pick your role, then press Create user.', false);
+      if (nameInput) nameInput.focus();
+    }
+
     if (loginForm && pinInput && loginBtn) {
       loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -275,26 +304,21 @@
           return;
         }
 
-        // Prompt for Name
-        let fullName = window.prompt(
-          'Enter your name (as you want it to appear in WQT):',
-          ''
-        );
-        if (!fullName || !fullName.trim()) {
-          setStatus('Name is required to create a user.', true);
+        // First click: switch the card into register mode
+        if (!inRegisterMode) {
+          enterRegisterMode();
           return;
         }
-        fullName = fullName.trim();
 
-        // Prompt for Job Role
-        let role = window.prompt(
-          'Enter your job role (e.g. picker, operative, supervisor):',
-          'picker'
-        );
-        if (!role || !role.trim()) {
-          role = 'picker';
+        // Already in register mode: actually register
+        const fullName = (nameInput && nameInput.value ? nameInput.value.trim() : '');
+        const role = (roleInput && roleInput.value ? roleInput.value.trim() : 'picker');
+
+        if (!fullName) {
+          setStatus('Name is required to create a user.', true);
+          if (nameInput) nameInput.focus();
+          return;
         }
-        role = role.trim().toLowerCase();
 
         registerBtn.disabled = true;
         setStatus('Creating user…', false);

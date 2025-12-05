@@ -103,6 +103,33 @@
       justify-content: center;
     }
 
+    .register-fields {
+      margin-top: 6px;
+    }
+
+    .role-buttons {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    .role-btn {
+      flex: 1;
+      padding: 6px 8px;
+      font-size: 0.8rem;
+      border-radius: 999px;
+      border: 1px solid #1e293b;
+      background: #020617;
+      color: #e5e7eb;
+      cursor: pointer;
+    }
+
+    .role-btn.selected {
+      border-color: #22c55e;
+      background: rgba(34, 197, 94, 0.15);
+    }
+
     #status {
       margin-top: 8px;
       font-size: 0.8rem;
@@ -179,15 +206,38 @@
           placeholder="e.g. 12345">
       </div>
 
+      <!-- Register face (hidden until Create user is pressed) -->
+      <div id="register-fields" class="register-fields" style="display:none;">
+        <div class="login-field">
+          <label for="name-input">Your name</label>
+          <input
+            id="name-input"
+            type="text"
+            autocomplete="name"
+            placeholder="e.g. Julius Deane">
+        </div>
+
+        <div class="login-field">
+          <label>Job role</label>
+          <div class="role-buttons">
+            <button type="button" class="role-btn selected" data-role="picker">Picker</button>
+            <button type="button" class="role-btn" data-role="operative">Operative</button>
+            <button type="button" class="role-btn" data-role="supervisor">Supervisor</button>
+          </div>
+          <input id="role-input" type="hidden" value="picker">
+        </div>
+      </div>
+
       <div class="login-actions">
         <button id="login-btn" class="btn ok" type="submit">
-            Log in
+          Log in
         </button>
         <button id="register-btn" class="btn" type="button">
-            Create user
+          Create user
         </button>
-        </div>
+      </div>
     </form>
+
     <div id="status"></div>
     <div id="device-hint"></div>
   </div>
