@@ -212,7 +212,8 @@
     }
 
     // Faster tick → characters update more often, but fall speed stays low
-    setInte
+    setInterval(draw, 70);
+  }
 
   // --------------------------
   // DOM wiring
