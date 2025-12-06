@@ -17,17 +17,22 @@ function resetEtaSmoother(){
 }
 // --- Unified Summary Chip Refresh (Live Rate + Perf Score) ---
 // This function updates the dual summary chip using the same state and logic as the modal
-function refreshSummaryChips() {
+function refreshSummaryChips(main) {
   const lrEl = document.getElementById('live-rate-value');
   const psEl = document.getElementById('perf-score-value');
+  
+  if (!lrEl) console.warn("Live Rate element not found");
+  if (!psEl) console.warn("Perf Score element not found");
   if (!lrEl || !psEl) return;
 
   // Live Rate: use the same computation as the Live Rate modal
   let liveRate = null;
   if (typeof computeLiveRateSnapshot === 'function') {
-    const snapshot = computeLiveRateSnapshot();
-    liveRate = snapshot && snapshot.live != null ? snapshot.live : null;
+    // computeLiveRateSnapshot() returns the live rate number directly (not an object)
+    liveRate = computeLiveRateSnapshot();
   }
+  
+  console.debug("LiveRate for chip:", liveRate, "state:", main);
   
   lrEl.textContent =
     liveRate != null && isFinite(liveRate) && liveRate > 0
