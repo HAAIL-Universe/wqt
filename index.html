@@ -480,44 +480,40 @@
       </div>
 
       <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
-        <h4 style="margin:0; font-size:0.9rem; opacity:0.8;">Shift tools</h4>
+        <!-- ...existing code... -->
       </div>
 
-      <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
-        <!-- Clear today’s data -->
-        <button
-          class="btn ghost"
-          type="button"
-          id="btnClearToday"
-          onclick="clearToday()">
-          Clear today’s data
-        </button>
+      <!-- NEW: Shift & account tools card -->
+      <div class="card" id="shiftToolsCard">
+        <div class="card-header">
+          <h3>Shift &amp; account tools</h3>
+        </div>
+        <div class="card-body">
+          <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
+            <button
+              class="btn ghost"
+              type="button"
+              id="btnClearToday"
+              onclick="clearToday()">
+              Clear today’s data
+            </button>
 
-        <!-- End Shift & Archive -->
-        <button
-          class="btn ok"
-          type="button"
-          id="btnEndShift"
-          onclick="endShift()">
-          End Shift &amp; Archive →
-        </button>
+            <button
+              class="btn ghost"
+              type="button"
+              id="btnExitShift"
+              onclick="exitShiftFromHistory()">
+              Exit shift (no archive)
+            </button>
 
-        <!-- Exit Shift (no archive) -->
-        <button
-          class="btn ghost"
-          type="button"
-          id="btnExitShift"
-          onclick="exitShiftFromHistory()">
-          Exit shift (no archive)
-        </button>
-
-        <!-- Log Out -->
-        <button
-          class="btn bad"
-          type="button"
-          onclick="logoutAndReset()">
-          Log Out
-        </button>
+            <button
+              class="btn bad"
+              type="button"
+              onclick="logoutAndReset()">
+              Log Out
+            </button>
+          </div>
+        </div>
       </div>
 
       <div id="histList" style="margin-top:8px;"></div>
