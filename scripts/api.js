@@ -145,7 +145,10 @@ const WqtAPI = {
 
             // Overlay session login
     async loginOverlaySession(pin, requestedRole) {
-        const deviceId = getDeviceIdSafe?.() || null;
+        const deviceId =
+            localStorage.getItem('wqt_device_id') ||
+            localStorage.getItem('device_id') ||
+            null;
 
         const resp = await fetch('/auth/login_pin', {
             method: 'POST',
