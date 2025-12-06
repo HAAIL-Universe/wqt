@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
 )
+from sqlalchemy import text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -40,6 +41,15 @@ def init_db() -> None:
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    # Attempt to add new columns to existing tables where possible.
+    # This is a best-effort migration for the `locations` column on `orders`.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS locations INTEGER DEFAULT 0;"))
+    except Exception:
+        # If ALTER fails (e.g., non-Postgres or permission issues), ignore —
+        # admins can run the migration manually in the DB.
+        pass
 
 
 def get_session() -> Session:
@@ -132,6 +142,7 @@ class OrderRecord(Base):
     is_shared = Column(Boolean, nullable=False, default=False)
     total_units = Column(Integer, nullable=True)             # e.g. p["units"]
     pallets = Column(Integer, nullable=True)
+    locations = Column(Integer, nullable=True, default=0)
 
     # Timing
     order_date = Column(DateTime(timezone=True), index=True, server_default=func.now())
@@ -256,11 +267,51 @@ def save_device_state(device_id: str, payload: dict) -> None:
         return
     session = get_session()
     try:
+        # Defensive normalization: ensure any order objects include `locations`
+        safe_payload = dict(payload or {})
+        try:
+            # Normalize top-level current.locations
+            cur = safe_payload.get('current')
+            if isinstance(cur, dict):
+                cur['locations'] = int(cur.get('locations') or 0)
+        except Exception:
+            pass
+
+        try:
+            # Normalize picks[] entries
+            picks = safe_payload.get('picks')
+            if isinstance(picks, list):
+                for p in picks:
+                    try:
+                        if isinstance(p, dict):
+                            p['locations'] = int(p.get('locations') or 0)
+                    except Exception:
+                        p['locations'] = 0
+        except Exception:
+            pass
+
+        try:
+            # Normalize history -> each day's picks if present
+            history = safe_payload.get('history')
+            if isinstance(history, list):
+                for day in history:
+                    if isinstance(day, dict):
+                        day_picks = day.get('picks')
+                        if isinstance(day_picks, list):
+                            for p in day_picks:
+                                try:
+                                    if isinstance(p, dict):
+                                        p['locations'] = int(p.get('locations') or 0)
+                                except Exception:
+                                    p['locations'] = 0
+        except Exception:
+            pass
+
         row = session.query(DeviceState).filter(DeviceState.device_id == device_id).first()
         if not row:
-            session.add(DeviceState(device_id=device_id, payload=json.dumps(payload or {})))
+            session.add(DeviceState(device_id=device_id, payload=json.dumps(safe_payload or {})))
         else:
-            row.payload = json.dumps(payload or {})
+            row.payload = json.dumps(safe_payload or {})
         session.commit()
     finally:
         session.close()
@@ -625,6 +676,18 @@ def record_order_from_payload(
     except Exception:
         excl_min = None
 
+    # Locations (new): optional integer number of locations in the order
+    locations = p.get("locations")
+    try:
+        if isinstance(locations, str):
+            locations = int(locations)
+        elif locations is None:
+            locations = 0
+        else:
+            locations = int(locations)
+    except Exception:
+        locations = 0
+
     closed_early = bool(p.get("closedEarly"))
     early_reason = p.get("earlyReason") or None
 
@@ -648,6 +711,7 @@ def record_order_from_payload(
             is_shared=is_shared,
             total_units=total_units,
             pallets=pallets,
+            locations=locations,
             start_hhmm=start_hhmm,
             close_hhmm=close_hhmm,
             duration_min=duration_min,
@@ -692,7 +756,8 @@ def get_recent_orders_for_operator(
                     "device_id": o.device_id,
                     "order_name": o.order_name,
                     "is_shared": o.is_shared,
-                    "total_units": o.total_units,
+                        "total_units": o.total_units,
+                        "locations": o.locations,
                     "pallets": o.pallets,
                     "order_date": o.order_date.isoformat() if o.order_date else None,
                     "start_hhmm": o.start_hhmm,

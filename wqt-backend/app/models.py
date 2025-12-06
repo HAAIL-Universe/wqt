@@ -2,6 +2,26 @@
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
+class OrderSummary(BaseModel):
+  """
+  Lightweight schema for a single closed-order summary as carried
+  inside `picks[]` and history blobs. This makes the `locations`
+  field explicit for validation / docs, while keeping MainState
+  flexible.
+  """
+  name: Optional[str] = None
+  units: Optional[int] = None
+  locations: int = 0
+  start: Optional[str] = None
+  close: Optional[str] = None
+  pallets: Optional[int] = None
+  excl: Optional[int] = None
+  closedEarly: Optional[bool] = False
+  log: Optional[Dict[str, Any]] = None
+
+  class Config:
+    extra = "allow"
+
 
 class MainState(BaseModel):
     """

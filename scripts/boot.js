@@ -207,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
       renderShiftPanel?.();
 
       // ── 8) Start button validation (order of entry agnostic) ──────
-      ['oTotal','oOther'].forEach(id=>{
+      ['oTotal','oOther','order-locations'].forEach(id=>{
         const el = document.getElementById(id);
         if (!el) return;
         ['input','change','keyup','blur'].forEach(ev =>

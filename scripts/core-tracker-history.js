@@ -288,6 +288,8 @@ function refreshStartButton(){
   const sel   = document.getElementById('oCust');
   const other = document.getElementById('oOther');
   const total = parseInt(document.getElementById('oTotal').value||'0',10);
+  // Optional: read locations to allow UI to re-evaluate when it changes.
+  const locations = parseInt((document.getElementById('order-locations')?.value || '0'), 10);
   const hasCust = sel.value && sel.value!=='__OTHER__' ||
                   (sel.value==='__OTHER__' && /^[A-Z]{6}$/.test((other.value||'').toUpperCase()));
   const ok = hasCust && total>0;
@@ -462,6 +464,7 @@ function startOrder() {
   const sel   = document.getElementById('oCust');
   const name  = sel ? sel.value : '';
   const total = parseInt((document.getElementById('oTotal').value || '0'), 10);
+  const locations = Math.max(0, parseInt((document.getElementById('order-locations')?.value || '0'), 10));
 
   if (!startTime) return alert('Set shift start before starting an order.');
   pickingCutoff = ""; // resume counting time if we start picking again
@@ -483,6 +486,7 @@ function startOrder() {
   current = {
     name: finalName,
     total,
+    locations: locations || 0,
     start: nowHHMM(),
     breaks: [],
     notes: [],
@@ -935,6 +939,7 @@ function completeOrder() {
   const archived = {
     name:    current.name,
     units:   unitsDone,
+    locations: current.locations || 0,
     pallets: palletsCount,
     start:   current.start,
     close:   closeHHMM,
@@ -2337,11 +2342,11 @@ function renderHistory(){
       tr.dataset.idx = i;
       tr.innerHTML =
         '<td>'+(i+1)+'</td>'+
-        '<td>'+o.name+'</td>'+
-        '<td>'+o.units+'</td>'+
-        '<td>'+o.pallets+'</td>'+
-        '<td>'+o.start+'</td>'+
-        '<td>'+o.close+'</td>'+
+        '<td>'+ (o.name || '') +'</td>'+
+        '<td>Units: <b>' + (o.units || 0) + '</b>' + (o.locations ? ' • Locations: <b>'+ (o.locations || 0) + '</b>' : '') + '</td>'+
+        '<td>'+ (o.pallets || 0) +'</td>'+
+        '<td>'+ (o.start || '') +'</td>'+
+        '<td>'+ (o.close || '') +'</td>'+
         '<td>'+rate+' u/h</td>';
 
       var logTr = document.createElement('tr');
@@ -2778,7 +2783,7 @@ function exitShiftFromHistory(){
 
 // ====== Export / Import (gated) ======
 function exportCSV(){
-  let rows = [['#','Customer','Units','Pallets','Start','Closed','OrderRate']];
+  let rows = [['#','Customer','Units','Locations','Pallets','Start','Closed','OrderRate']];
   picks.forEach((o,i)=>{
     var s = hm(o.start), e = hm(o.close);
     var excl = (o.log && Array.isArray(o.log.breaks))
@@ -2786,7 +2791,7 @@ function exportCSV(){
       : (o.excl||0);
     var net  = (e > s) ? (e - s) - (excl)/60 : 0.01;
     var rate = Math.round(o.units/Math.max(0.01,net));
-    rows.push([i+1,o.name,o.units,o.pallets,o.start,o.close,rate]);
+    rows.push([i+1,o.name,o.units,(o.locations||0),o.pallets,o.start,o.close,rate]);
   });
 
   let csv  = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');

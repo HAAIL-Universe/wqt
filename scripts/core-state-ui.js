@@ -1274,6 +1274,9 @@ function resetNewOrderForm() {
   const total = document.getElementById('oTotal');
   if (total) total.value = '';
 
+  const locations = document.getElementById('order-locations');
+  if (locations) locations.value = '';
+
   const btnStart = document.getElementById('btnStart');
   if (btnStart) { btnStart.disabled = true; btnStart.style.display = ''; }
 }
