@@ -2485,9 +2485,9 @@ function updateExitShiftVisibility(){
 function updateEndPickingVisibility(){
   const btn = document.getElementById('btnEndPicking');
   if (!btn) return;
-
-  const trackerTab = document.getElementById('tabTracker');
-  const trackerVisible = trackerTab ? !trackerTab.classList.contains('hidden') : false;
+  // Show only when History tab is visible (button moved there)
+  const histTab = document.getElementById('tabHistory');
+  const historyVisible = histTab ? !histTab.classList.contains('hidden') : false;
 
   const hasShift = !!startTime;
   const inOrder  = !!(current && Number.isFinite(current.total));
@@ -2506,7 +2506,7 @@ function updateEndPickingVisibility(){
   }
 
   // Only show between orders, during an active shift, after gate time, before we’ve frozen picking
-  const show = trackerVisible && hasShift && !inOrder && !frozen && lateEnough;
+  const show = historyVisible && hasShift && !inOrder && !frozen && lateEnough;
   btn.style.display = show ? 'inline-block' : 'none';
 }
 

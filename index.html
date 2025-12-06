@@ -266,13 +266,7 @@
             <input id="oTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 1024">
           </div>
           <div class="col" style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-            <button id="btnEndPicking"
-                    class="btn ghost"
-                    type="button"
-                    style="display:none; margin-right:auto;"
-                    onclick="markPickingComplete()">
-              Picking finished
-            </button>
+            <!-- Moved: Picking finished button relocated to History/Shift tools -->
 
             <button class="btn" type="button" id="btnSharedStart" onclick="openSharedStart()" disabled>Shared Pick</button>
             <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled>Start</button>
@@ -506,6 +500,16 @@
                       id="btnRequestOverlay"
                       onclick="openOverlayModal()">
                 Request role access
+              </button>
+            </div>
+            <!-- NEW ROW: Picking controls (moved from Tracker) -->
+            <div class="row" style="margin-top:6px; gap:8px; flex-wrap:wrap; align-items:center;">
+              <button class="btn ghost" id="btnEndPicking" onclick="markPickingComplete()">
+                Picking finished
+              </button>
+
+              <button class="btn" id="btnEndShift" onclick="endShift()">
+                End shift & archive
               </button>
             </div>
 
