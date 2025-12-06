@@ -1617,6 +1617,15 @@ function loadAll(){
       operativeLog = []; operativeActive = null;
     }
 
+    // Debug: report which source we used for main hydration to aid troubleshooting
+    try {
+      if (typeof window !== 'undefined' && window.Storage && typeof Storage.loadMain === 'function') {
+        // If Storage.loadMain returned something, prefer it; otherwise legacy was used
+        if (p && p.version) console.log('[loadAll] Hydrated main state from namespaced Storage');
+        else console.log('[loadAll] Hydrated main state from legacy key or blank');
+      }
+    } catch(e){}
+
     // Load learned units: prefer Storage wrapper (namespaced) then fall back to legacy key
     try {
       if (typeof window !== 'undefined' && window.Storage && typeof Storage.loadLearnedUL === 'function') {
@@ -1698,8 +1707,33 @@ function saveAll(){
       shiftBreaks, operativeLog, operativeActive
     };
 
-    localStorage.setItem(KEY, JSON.stringify(mainPayload));
-    localStorage.setItem(KEY_LEARN, JSON.stringify(learnedUL || {}));
+    // Persist main state via Storage abstraction (handles per-user namespacing)
+    try {
+      if (typeof window !== 'undefined' && window.Storage && typeof Storage.saveMain === 'function') {
+        Storage.saveMain(mainPayload);
+        console.log('[saveAll] Saved via Storage.saveMain (namespaced blob)');
+        Storage.saveLearnedUL(learnedUL || {});
+        console.log('[saveAll] Saved learned UL via Storage.saveLearnedUL');
+        // customCodes may be undefined in some contexts
+        if (typeof Storage.saveCustomCodes === 'function') {
+          Storage.saveCustomCodes(customCodes || []);
+          console.log('[saveAll] Saved custom codes via Storage.saveCustomCodes (namespaced)');
+        }
+      } else {
+        localStorage.setItem(KEY, JSON.stringify(mainPayload));
+        console.log('[saveAll] FELL BACK to legacy KEY_MAIN');
+        localStorage.setItem(KEY_LEARN, JSON.stringify(learnedUL || {}));
+        console.log('[saveAll] FELL BACK to legacy KEY_LEARN');
+        try {
+          localStorage.setItem(KEY_CODES, JSON.stringify(customCodes || []));
+          console.log('[saveAll] FELL BACK to legacy KEY_CODES');
+        } catch(_){}
+      }
+    } catch (e) {
+      // Fallback to legacy keys if Storage.* calls fail for any reason
+      try { localStorage.setItem(KEY, JSON.stringify(mainPayload)); } catch(_){}
+      try { localStorage.setItem(KEY_LEARN, JSON.stringify(learnedUL || {})); } catch(_){}
+    }
 
     if (window.WqtAPI && typeof WqtAPI.saveState === 'function') {
       try {
@@ -1736,9 +1770,11 @@ function saveAll(){
 // Custom codes
 function loadCustomCodes(){
   try{
-    var raw=localStorage.getItem(KEY_CODES);
-    if(raw){
-      customCodes=JSON.parse(raw)||[];
+    if (typeof window !== 'undefined' && window.Storage && typeof Storage.loadCustomCodes === 'function') {
+      customCodes = Storage.loadCustomCodes() || [];
+    } else {
+      var raw = localStorage.getItem(KEY_CODES);
+      if(raw){ customCodes = JSON.parse(raw)||[]; }
     }
   }catch(e){
     customCodes=[];
@@ -1746,7 +1782,11 @@ function loadCustomCodes(){
 }
 function saveCustomCodes(){
   try{
-    localStorage.setItem(KEY_CODES, JSON.stringify(customCodes||[]));
+    if (typeof window !== 'undefined' && window.Storage && typeof Storage.saveCustomCodes === 'function') {
+      Storage.saveCustomCodes(customCodes || []);
+    } else {
+      localStorage.setItem(KEY_CODES, JSON.stringify(customCodes||[]));
+    }
   }catch(e){}
 }
 

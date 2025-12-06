@@ -3,11 +3,40 @@ function logoutAndReset() {
   localStorage.removeItem('WQT_CURRENT_USER');
   localStorage.removeItem('wqt_operator_id');
   localStorage.removeItem('wqt_username');
-
   // Core state blobs
-  localStorage.removeItem('wqt_v2722_data');
-  localStorage.removeItem('wqt_learn_ul');
-  localStorage.removeItem('wqt_codes');
+  try {
+    if (window.Storage && typeof Storage.saveMain === 'function') {
+      // Reset namespaced main state to a blank payload (preserves Storage API semantics)
+      Storage.saveMain({});
+      console.log('[logout] Cleared namespaced main via Storage.saveMain');
+    } else {
+      localStorage.removeItem('wqt_v2722_data');
+    }
+  } catch (e) {
+    try { localStorage.removeItem('wqt_v2722_data'); } catch(_){}
+  }
+
+  try {
+    if (window.Storage && typeof Storage.saveLearnedUL === 'function') {
+      Storage.saveLearnedUL({});
+      console.log('[logout] Cleared namespaced learned UL via Storage.saveLearnedUL');
+    } else {
+      localStorage.removeItem('wqt_learn_ul');
+    }
+  } catch (e) {
+    try { localStorage.removeItem('wqt_learn_ul'); } catch(_){}
+  }
+
+  try {
+    if (window.Storage && typeof Storage.saveCustomCodes === 'function') {
+      Storage.saveCustomCodes([]);
+      console.log('[logout] Cleared namespaced custom codes via Storage.saveCustomCodes');
+    } else {
+      localStorage.removeItem('wqt_codes');
+    }
+  } catch (e) {
+    try { localStorage.removeItem('wqt_codes'); } catch(_){}
+  }
 
   // Side-channel state
   localStorage.removeItem('shiftActive');
