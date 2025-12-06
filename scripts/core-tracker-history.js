@@ -2457,13 +2457,7 @@ function renderHistory(){
 function updateEndShiftVisibility(){
   const btn = document.getElementById('btnEndShift');
   if (!btn) return;
-
-  // Show only when History tab is visible
-  const histTab = document.getElementById('tabHistory');
-  const historyVisible = histTab ? !histTab.classList.contains('hidden') : false;
-
-  const show = historyVisible && !current && picks.length > 0;
-  btn.style.display = show ? 'inline-block' : 'none';
+  btn.style.display = 'inline-block';
 }
 // ====== Exit Shift button visibility (History tab; no-archive path) ======
 function updateExitShiftVisibility(){
