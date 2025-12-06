@@ -460,6 +460,75 @@
       Weighted Avg = total units ÷ total hours.
     </div>
 
+    <!-- Shift & account tools card (separate card, placed before History) -->
+    <div class="card" id="shift-tools-card">
+      <div class="card-header accordion-header"
+           id="shift-tools-toggle"
+           role="button"
+           tabindex="0"
+           aria-expanded="false"
+           aria-controls="shift-tools-body"
+           onclick="toggleShiftTools()">
+        <span>Shift &amp; account tools</span>
+        <span class="chevron" id="shift-tools-chevron">▸</span>
+      </div>
+
+      <div class="card-body hidden" id="shift-tools-body">
+        <div class="row" style="margin-bottom:6px; gap:8px;">
+          <span id="rolePrimaryChip" class="tag">
+            Role: Picker
+          </span>
+
+          <span id="roleOverlayChip" class="tag ghost hidden"
+                onclick="endOverlaySessionUI()">
+            Overlay active — tap to end
+          </span>
+
+          <button type="button"
+                  class="btn slim ghost"
+                  id="btnRequestOverlay"
+                  onclick="openOverlayModal()">
+            Request role access
+          </button>
+        </div>
+
+        <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn ghost" id="btnEndPicking" onclick="markPickingComplete()">
+            Picking finished
+          </button>
+
+          <button class="btn" id="btnEndShift" onclick="endShift()">
+            End shift &amp; archive
+          </button>
+        </div>
+
+        <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
+          <button
+            class="btn ghost"
+            type="button"
+            id="btnClearToday"
+            onclick="clearToday()">
+            Clear today’s data
+          </button>
+
+          <button
+            class="btn ghost"
+            type="button"
+            id="btnExitShift"
+            onclick="exitShiftFromHistory()">
+            Exit shift (no archive)
+          </button>
+
+          <button
+            class="btn bad"
+            type="button"
+            onclick="logoutAndReset()">
+            Log Out
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
         <h3 style="margin:0; font-size:14px; color:#9fb3c8;">History (daily archives)</h3>
@@ -470,79 +539,6 @@
           <button class="btn" type="button" style="background:#331b1b;border-color:#7a2b2b;" onclick="clearHistory()">Clear History</button>
           <button class="btn gate-pro" type="button" onclick="toggleManageCustomers()">Manage Customers</button>
           <button class="btn ghost" type="button" onclick="restartOnboarding()">Re-run onboarding</button>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
-        <!-- ...existing code... -->
-      </div>
-
-      <!-- NEW: Shift & account tools card (accordion) -->
-      <div class="card" id="shift-tools-card">
-        <div class="card-header accordion-header"
-             id="shift-tools-toggle"
-             role="button"
-             tabindex="0"
-             aria-expanded="false"
-             aria-controls="shift-tools-body"
-             onclick="toggleShiftTools()">
-          <span>Shift &amp; account tools</span>
-          <span class="chevron" id="shift-tools-chevron">▾</span>
-        </div>
-
-        <div class="card-body hidden" id="shift-tools-body">
-          <div class="row" style="margin-bottom:6px; gap:8px;">
-            <span id="rolePrimaryChip" class="tag">
-              Role: Picker
-            </span>
-
-            <span id="roleOverlayChip" class="tag ghost hidden"
-                  onclick="endOverlaySessionUI()">
-              Overlay active — tap to end
-            </span>
-
-            <button type="button"
-                    class="btn slim ghost"
-                    id="btnRequestOverlay"
-                    onclick="openOverlayModal()">
-              Request role access
-            </button>
-          </div>
-
-          <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap; align-items:center;">
-            <button class="btn ghost" id="btnEndPicking" onclick="markPickingComplete()">
-              Picking finished
-            </button>
-
-            <button class="btn" id="btnEndShift" onclick="endShift()">
-              End shift &amp; archive
-            </button>
-          </div>
-
-          <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
-            <button
-              class="btn ghost"
-              type="button"
-              id="btnClearToday"
-              onclick="clearToday()">
-              Clear today’s data
-            </button>
-
-            <button
-              class="btn ghost"
-              type="button"
-              id="btnExitShift"
-              onclick="exitShiftFromHistory()">
-              Exit shift (no archive)
-            </button>
-
-            <button
-              class="btn bad"
-              type="button"
-              onclick="logoutAndReset()">
-              Log Out
-            </button>
-          </div>
         </div>
       </div>
 
