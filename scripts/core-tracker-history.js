@@ -2112,11 +2112,11 @@ function renderDone(){
     tr.dataset.idx = i;
     tr.innerHTML =
       '<td>'+(i+1)+'</td>'+
-      '<td>'+o.name+'</td>'+
-      '<td>'+o.units+'</td>'+
-      '<td>'+o.pallets+'</td>'+
-      '<td>'+o.start+'</td>'+
-      '<td>'+o.close+'</td>'+
+      '<td>'+ (o.name || '') +'</td>'+
+      '<td>Units: <b>' + (o.units || 0) + '</b>' + (o.locations ? ' • Locations: <b>'+ (o.locations || 0) + '</b>' : '') + '</td>'+
+      '<td>'+ (o.pallets || 0) +'</td>'+
+      '<td>'+ (o.start || '') +'</td>'+
+      '<td>'+ (o.close || '') +'</td>'+
       '<td>'+rate+' u/h</td>';
     tb.appendChild(tr);
 

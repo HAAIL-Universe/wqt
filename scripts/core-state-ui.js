@@ -1424,6 +1424,16 @@ function updateProgressHeader() {
 
   // Keep tint logic for color bands based on frozen rate
   tintProgressByPace(displayRate);
+  // Update locations display in case it was changed
+  try {
+    const locWrap = document.getElementById('progLocs');
+    const locVal = document.getElementById('progLocsVal');
+    const locNum = Number(current.locations || 0) || 0;
+    if (locWrap && locVal) {
+      if (locNum > 0) { locVal.textContent = String(locNum); locWrap.style.display = ''; }
+      else { locWrap.style.display = 'none'; }
+    }
+  } catch (e) {}
   updateHeaderActions?.();
 }
 
@@ -1440,6 +1450,20 @@ function showProgressHeader() {
   document.getElementById('progCust').textContent    = current.name;
   document.getElementById('progQty').textContent     = current.total;
   document.getElementById('progPallets').textContent = '0';
+  // Show locations if provided
+  try {
+    const locWrap = document.getElementById('progLocs');
+    const locVal = document.getElementById('progLocsVal');
+    const locNum = Number(current.locations || 0) || 0;
+    if (locWrap && locVal) {
+      if (locNum > 0) {
+        locVal.textContent = String(locNum);
+        locWrap.style.display = '';
+      } else {
+        locWrap.style.display = 'none';
+      }
+    }
+  } catch (e) {}
   updateLeftLabel(getCurrentLeft());
   document.getElementById('progRate').textContent    = '—';
   document.getElementById('progETA').textContent     = '—';
