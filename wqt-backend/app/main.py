@@ -67,30 +67,33 @@ async def get_state(
     """
     Load MainState.
 
-    - Primary: user-locked state (device_states.device_id = "user:<PIN>")
-    - Fallback: legacy device-specific state (device_states.device_id = "<uuid>")
-      if no user row exists yet.
+    Priority:
+      1) Per-user state: device_states.device_id = "user:<PIN>"
+      2) Legacy per-device state (device_states.device_id = "<device uuid>"),
+         migrated into the user key when found.
+      3) Global / legacy fallback from storage.load_main().
     """
+    # Build keys
     primary_key: Optional[str] = f"user:{user_id}" if user_id else device_id
     legacy_key: Optional[str] = device_id if (user_id and device_id) else None
 
     raw: Optional[dict] = None
 
-    # 1) Try the primary key first (user:<PIN> or bare device_id if no user)
+    # 1) Try the primary key (user:<PIN> or bare device_id if no user)
     if primary_key:
         raw = load_device_state(primary_key)
 
-    # 2) If there is no user row yet, but we *do* have a device_id,
-    #    fall back to the legacy device-only record and migrate it.
-    if raw is None and legacy_key and primary_key and legacy_key != primary_key:
+    # 2) Fallback: legacy device-only state, then migrate → user:<PIN>
+    if raw is None and legacy_key and legacy_key != primary_key:
         legacy_raw = load_device_state(legacy_key)
         if legacy_raw:
             raw = legacy_raw
             try:
-                # Migrate into the user:<PIN> key so future loads go straight there
-                save_device_state(primary_key, legacy_raw)
+                # Only migrate when we *know* primary_key is real
+                if primary_key:
+                    save_device_state(primary_key, legacy_raw)
             except Exception:
-                # Migration failure should not break load; just continue with legacy
+                # Migration failure should not break load
                 pass
 
     # 3) If we found anything, return it as a MainState
@@ -99,7 +102,6 @@ async def get_state(
 
     # 4) Final fallback: let storage decide (global JSON or blank state)
     return load_main(device_id=None)
-
 
 @app.post("/api/state", response_model=MainState)
 async def set_state(

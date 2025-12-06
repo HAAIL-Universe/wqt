@@ -152,7 +152,6 @@ const WqtAPI = {
         const localMain = Storage.loadMain ? Storage.loadMain() : null;
         let remoteMain = null;
 
-        // Helper: decide if a state is "real" rather than just an empty shell
         function looksPopulated(state) {
             if (!state || typeof state !== 'object') return false;
             if (Array.isArray(state.history) && state.history.length > 0) return true;
@@ -174,20 +173,17 @@ const WqtAPI = {
             console.warn('[WQT API] Backend load failed, continuing local-only:', err);
         }
 
-        // 2) Decide which one to treat as source of truth
+        // 2) Decide which one to trust
         let main;
 
         if (looksPopulated(remoteMain)) {
-            // Backend has something real for this user → trust it
             main = remoteMain;
             Storage.saveMain(main);
             console.log('[WQT API] Loaded main state from backend (User/Device)');
         } else if (looksPopulated(localMain)) {
-            // Backend is empty or useless → keep our existing local history
             main = localMain;
             console.log('[WQT API] Using local main state (backend empty or unavailable)');
         } else {
-            // Both are empty → start fresh and mirror that
             main = remoteMain || localMain || {};
             Storage.saveMain(main);
             console.log('[WQT API] Initialised blank main state');
@@ -198,7 +194,6 @@ const WqtAPI = {
 
         return { main: main || {}, learnedUL, customCodes };
     },
-
 
     async saveState(state) {
         // 1) Always write to localStorage (offline-first)
