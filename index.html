@@ -12,7 +12,9 @@
   <div class="tabs">
     <button id="tabCalcBtn" class="tabbtn" type="button" onclick="showTab('calc')">QuickCalc</button>
     <button id="tabTrackBtn" class="tabbtn active" type="button" onclick="showTab('tracker')">Tracker</button>
-    <button id="tabHistBtn" class="tabbtn" type="button" onclick="showTab('history')">History</button>
+    <button id="tabHistBtn" class="tabbtn" type="button" onclick="showTab('history')">
+      <span id="userTabLabel">History</span>
+    </button>
   </div>
 
   <div id="liveBanner" class="rateBanner hidden">
@@ -816,6 +818,21 @@
     const path = (window.location && window.location.pathname) || '';
     const onLoginPage = path.includes('login');
 
+    function updateUserTabLabel(user) {
+      try {
+        const el = document.getElementById('userTabLabel');
+        if (!el) return;
+
+        const name =
+          (user && (user.displayName || user.userId || user.username)) ||
+          'User';
+
+        el.textContent = name;
+      } catch (e) {
+        console.warn('[Auth] Failed to update user tab label', e);
+      }
+    }
+
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) {
@@ -831,6 +848,7 @@
       }
 
       window.WQT_CURRENT_USER = user;
+      updateUserTabLabel(user);
     } catch (e) {
       console.warn('[Auth] Failed to read WQT_CURRENT_USER', e);
       localStorage.removeItem(KEY);
