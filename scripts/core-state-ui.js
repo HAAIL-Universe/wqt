@@ -15,38 +15,46 @@ function resetEtaSmoother(){
   lastETAmin = null;
   lastRenderedETAmin = null;
 }
-// --- Patch: Update Live Rate and Performance Score in summary chip (side-by-side, per hour) ---
-function updateSummaryChipsUI() {
-  // Live Rate (u/h)
-  let liveRate = null;
-  if (typeof getLiveRateUh === 'function') {
-    liveRate = getLiveRateUh();
-  }
-  const liveRateEl = document.getElementById('live-rate-value');
-  if (liveRateEl) {
-    liveRateEl.textContent = (liveRate && isFinite(liveRate) && liveRate > 0) ? `${Math.round(liveRate)} u/h` : '—';
-  }
+// --- Unified Summary Chip Refresh (Live Rate + Perf Score) ---
+// This function updates the dual summary chip using the same state and logic as the modal
+function refreshSummaryChips() {
+  const lrEl = document.getElementById('live-rate-value');
+  const psEl = document.getElementById('perf-score-value');
+  if (!lrEl || !psEl) return;
 
-  // Performance Score (pts/h)
+  // Live Rate: use the same computation as the Live Rate modal
+  let liveRate = null;
+  if (typeof computeLiveRateSnapshot === 'function') {
+    const snapshot = computeLiveRateSnapshot();
+    liveRate = snapshot && snapshot.live != null ? snapshot.live : null;
+  }
+  
+  lrEl.textContent =
+    liveRate != null && isFinite(liveRate) && liveRate > 0
+      ? `${Math.round(liveRate)} u/h`
+      : '—';
+
+  // Performance Score: per hour for today's shift
   let perfScore = null;
   if (typeof computePerformancePointsPerHourToday === 'function') {
     perfScore = computePerformancePointsPerHourToday();
   }
-  const perfEl = document.getElementById('perf-score-value');
-  if (perfEl) {
-    perfEl.textContent = (perfScore && isFinite(perfScore)) ? `${perfScore.toFixed(1)} pts/h` : '—';
-  }
+  
+  psEl.textContent =
+    perfScore != null && isFinite(perfScore)
+      ? `${perfScore.toFixed(1)} pts/h`
+      : '—';
 }
 
-// Patch updateSummary to call our UI updater
+// Patch updateSummary to also refresh the summary chips
 const _origUpdateSummary = window.updateSummary;
 window.updateSummary = function() {
   if (typeof _origUpdateSummary === 'function') _origUpdateSummary.apply(this, arguments);
-  updateSummaryChipsUI();
+  refreshSummaryChips();
 };
 
 // Also call on load
-document.addEventListener('DOMContentLoaded', updateSummaryChipsUI);
+document.addEventListener('DOMContentLoaded', refreshSummaryChips);
 
 // Hide the shared-dock panel and persist that choice
 function hideSharedDock(){

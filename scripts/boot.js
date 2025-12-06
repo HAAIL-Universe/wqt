@@ -289,6 +289,7 @@ document.addEventListener('DOMContentLoaded', function () {
       updateEndPickingVisibility();
       updateCloseEarlyVisibility();
       updateElapsedChip();
+      if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync with state
 
       // Wire Shared Pick bottom bar (padUnits / padSubmit) once DOM is ready
       initSharedPad?.();

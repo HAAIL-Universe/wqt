@@ -212,6 +212,7 @@ function beginShift(){
 
   renderDone();
   updateSummary?.();
+  if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
   updateDelayBtn?.();
   updateEndShiftVisibility?.();
   updateCloseEarlyVisibility?.();
@@ -756,6 +757,7 @@ function logWrap() {
   setElapsedChipClickable?.(true);
   refreshCompleteButton();
   if (typeof updateProgressHeader === 'function') updateProgressHeader();
+  if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
 
   // Buttons/complete state
   updateHeaderActions?.();
@@ -1067,6 +1069,7 @@ function completeOrder() {
 
   // Update chips and gated actions for "no active order"
   if (typeof updateSummary === 'function') updateSummary();
+  if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
   if (typeof updateDelayBtn === 'function') updateDelayBtn();
   if (typeof updateEndShiftVisibility === 'function') updateEndShiftVisibility();
   if (typeof updateCloseEarlyVisibility === 'function') updateCloseEarlyVisibility();
@@ -2717,6 +2720,7 @@ function endShift(){
 
   updateEndShiftVisibility?.();
   updateExitShiftVisibility?.();
+  if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
 }
 
 // ====== Clear today (keep shift active, nuke orders + logs) ======

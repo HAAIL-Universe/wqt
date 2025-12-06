@@ -513,6 +513,9 @@ function openLiveModal(){
 
   renderLiveModalOnce();
 
+  // Ensure chips are in sync with modal values
+  if (typeof refreshSummaryChips === 'function') refreshSummaryChips();
+
   if (liveModalTick) clearInterval(liveModalTick);
   // keep the numbers live while the modal is open
   liveModalTick = setInterval(renderLiveModalOnce, 600);
