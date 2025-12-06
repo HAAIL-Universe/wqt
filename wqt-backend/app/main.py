@@ -1,12 +1,10 @@
-# app/main.py
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta 
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Ensure these modules exist in your project
 from .models import MainState
 from .storage import load_main, save_main
 from .db import (
@@ -18,10 +16,11 @@ from .db import (
     end_shift,
     get_recent_shifts,
     get_all_device_states,
-    send_admin_message,  # NEW
-    pop_admin_messages,  # NEW
-    create_user,         # NEW - Added for login system
-    verify_user,         # NEW - Added for login system
+    send_admin_message,
+    pop_admin_messages,
+    create_user,
+    verify_user,
+    get_user,  # NEW
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -36,6 +35,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # -------------------------------------------------------------------
 # Startup
@@ -54,19 +54,17 @@ async def health() -> Dict[str, str]:
 
 
 # -------------------------------------------------------------------
-# Main state API (now user/device-aware)
+# Main state API (user/device-aware)
 # -------------------------------------------------------------------
 @app.get("/api/state", response_model=MainState)
 async def get_state(
     device_id: Optional[str] = Query(default=None, alias="device-id"),
-    user_id: Optional[str] = Query(default=None, alias="user-id"), # NEW: For user-locked state
+    user_id: Optional[str] = Query(default=None, alias="user-id"),
 ) -> MainState:
     """
     Load MainState. Prefer user-locked state, then device-specific state.
     """
-    # PRIORITY: If a user is logged in, use their ID as the storage key (e.g., 'user:Urma')
     target_id = f"user:{user_id}" if user_id else device_id
-    
     return load_main(device_id=target_id)
 
 
@@ -75,61 +73,55 @@ async def set_state(
     state: MainState,
     device_id: Optional[str] = Query(default=None, alias="device-id"),
     operator_id: Optional[str] = Query(default=None, alias="operator-id"),
-    user_id: Optional[str] = Query(default=None, alias="user-id"), # NEW: For user-locked state
+    user_id: Optional[str] = Query(default=None, alias="user-id"),
 ) -> MainState:
     """
     Save MainState.
     Includes fixes for User ID persistence and Live Rate calculation.
     """
-    
-    # NEW: 1. Determine Storage Key (User > Device)
+
+    # 1) Determine storage key (User > Device)
     target_id = f"user:{user_id}" if user_id else device_id
 
-    # --- FIX 1: Ensure Operator ID is inside the state object ---
-    # If user is logged in, force operator_id to match username (User Identity)
+    # Ensure operator_id is inside the state object
     if user_id and state.current:
         state.current["operator_id"] = user_id
-    # Else, use the provided operator_id (Device Identity / Guest)
-    # PATCH: Check 'is not None' so we allow empty strings to clear the ID
     elif operator_id is not None and state.current:
         state.current["operator_id"] = operator_id
 
-    # --- FIX 2: Calculate Live Rate on Backend ---
-    # Since the phone might not be sending a live rate, we calculate it here
-    # Formula: Total Closed Units / Hours Elapsed since Start Time
+    # Calculate Live Rate on backend
     if state.current and state.startTime:
         try:
-            # 1. Sum up total units from completed picks
             total_units = sum(p.get("units", 0) for p in state.picks)
-            
-            # 2. Calculate elapsed hours
-            # Parse "HH:MM" (e.g. "06:30")
+
             now = datetime.now()
             start_parts = state.startTime.split(":")
             if len(start_parts) == 2:
-                start_dt = now.replace(hour=int(start_parts[0]), minute=int(start_parts[1]), second=0, microsecond=0)
-                
-                # Handle shift crossing midnight (if start time is in future, it meant yesterday)
+                start_dt = now.replace(
+                    hour=int(start_parts[0]),
+                    minute=int(start_parts[1]),
+                    second=0,
+                    microsecond=0,
+                )
+
+                # Handle crossing midnight
                 if start_dt > now:
                     start_dt -= timedelta(days=1)
-                    
+
                 elapsed_hours = (now - start_dt).total_seconds() / 3600.0
-                
-                # 3. Inject Rate if valid
-                if elapsed_hours > 0.05: # Avoid divide-by-zero or tiny intervals
+
+                if elapsed_hours > 0.05:
                     calculated_rate = int(total_units / elapsed_hours)
                     state.current["liveRate"] = calculated_rate
         except Exception:
             # If date parsing fails, just ignore rate calc
             pass
 
-    # Save to DB (using the determined target_id)
+    # Save to DB
     save_main(state, device_id=target_id)
 
-    # --- Logging Logic ---
+    # Logging
     detail: Dict[str, Any] = {"version": state.version}
-    
-    # Log the target key used for storage
     if target_id:
         detail["storage_key"] = target_id
 
@@ -137,16 +129,13 @@ async def set_state(
         detail["logged_in_user"] = user_id
     elif operator_id is not None:
         detail["operator_id"] = operator_id
-    
+
     if device_id:
         detail["device_id"] = device_id
 
-    # --- FIX 3: Fix Log "User" Display ---
-    # The Admin Panel looks for 'current_name'. 
-    # Prioritize logged in user, then operator_id, then state.current['name']
+    # The Admin Panel looks for 'current_name'
     if user_id:
         detail["current_name"] = user_id
-    # PATCH: Allow empty string to reflect cleared name
     elif operator_id is not None:
         detail["current_name"] = operator_id
     elif state.current and isinstance(state.current, dict):
@@ -172,10 +161,8 @@ async def api_usage_recent(
 async def api_usage_summary(
     days: int = Query(7, ge=1, le=30),
 ) -> Dict[str, Any]:
-    return {
-        "days": days,
-        "series": get_usage_summary(days=days),
-    }
+    return {"days": days, "series": get_usage_summary(days=days)}
+
 
 # -------------------------------------------------------------------
 # Admin / Dashboard API
@@ -190,11 +177,12 @@ async def api_admin_devices() -> List[Dict[str, Any]]:
 
 
 # -------------------------------------------------------------------
-# Admin Message API (NEW)
+# Admin Message API
 # -------------------------------------------------------------------
 class MessagePayload(BaseModel):
     device_id: str
     text: str
+
 
 @app.post("/api/admin/message")
 async def api_send_message(payload: MessagePayload) -> Dict[str, str]:
@@ -204,9 +192,10 @@ async def api_send_message(payload: MessagePayload) -> Dict[str, str]:
     send_admin_message(payload.device_id, payload.text)
     return {"status": "sent"}
 
+
 @app.get("/api/messages/check")
 async def api_check_messages(
-    device_id: str = Query(..., alias="device-id")
+    device_id: str = Query(..., alias="device-id"),
 ) -> List[str]:
     """
     Called by the WQT App (client) to poll for new admin messages.
@@ -289,90 +278,109 @@ async def api_shifts_recent(
 ) -> List[Dict[str, Any]]:
     return get_recent_shifts(limit=limit)
 
+
 # -------------------------------------------------------------------
-# Auth API (NEW)
+# Auth API
 # -------------------------------------------------------------------
 class AuthPayload(BaseModel):
     username: str
     pin: str
-    full_name: Optional[str] = None
+    full_name: Optional[str] = None  # comes from login.js register flow
     role: Optional[str] = None
+
 
 @app.post("/api/auth/register")
 async def api_register(payload: AuthPayload) -> Dict[str, Any]:
     # Basic validation
     if len(payload.pin) < 4:
         return {"success": False, "message": "PIN must be 4 digits"}
-    
+
     clean_user = payload.username.strip()
     # Prefer provided full_name, else fall back to username
     full_name = (payload.full_name or "").strip() or clean_user
-    # Normalise role, default to 'picker' for now
+    # Normalise role, default to 'picker'
     role = (payload.role or "picker").strip() or "picker"
 
-    # NOTE: DB currently only stores username + pin.
-    # Name/role are echoed back in the response for the frontend
-    # and can be wired into the DB once we patch the User model.
-    success = create_user(clean_user, payload.pin)
-    if success:
-        return {
-            "success": True,
-            "username": clean_user,
-            "display_name": full_name,
-            "role": role,
-        }
-    else:
+    created = create_user(
+        username=clean_user,
+        pin=payload.pin,
+        display_name=full_name,
+        role=role,
+    )
+    if not created:
         return {"success": False, "message": "Username taken"}
+
+    user = get_user(clean_user)
+    if not user:
+        return {"success": False, "message": "User created but not found"}
+
+    return {
+        "success": True,
+        "username": user.username,
+        "display_name": user.display_name,
+        "role": user.role,
+    }
+
 
 @app.post("/api/auth/login")
 async def api_login(payload: AuthPayload) -> Dict[str, Any]:
     clean_user = payload.username.strip()
     valid = verify_user(clean_user, payload.pin)
-    if valid:
-        # Until the DB stores name/role, we just mirror username and default role.
-        return {
-            "success": True,
-            "username": clean_user,
-            "display_name": clean_user,
-            "role": "picker",
-        }
-    else:
+    if not valid:
         return {"success": False, "message": "Invalid username or PIN"}
 
+    user = get_user(clean_user)
+    if not user:
+        return {"success": False, "message": "User record missing"}
+
+    return {
+        "success": True,
+        "username": user.username,
+        "display_name": user.display_name,
+        "role": user.role,
+    }
+
+
 # -------------------------------------------------------------------
-# Unified PIN Login  (NEW)
+# Unified PIN Login
 # -------------------------------------------------------------------
 class PinLoginPayload(BaseModel):
     pin_code: str
     device_id: Optional[str] = None
 
+
 @app.post("/auth/login_pin")
 async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
     """
-    Unified identity entrypoint.
+    Unified identity entrypoint for the app.
     - Uses PIN as username.
-    - DOES NOT auto-create users.
     - Only logs in existing users that match the PIN.
+    - Returns display_name and role from the DB.
     """
     pin = payload.pin_code.strip()
     if not pin:
         return {"success": False, "message": "PIN required"}
 
-    # Username = PIN
     username = pin
 
-    # Just verify – no auto-provisioning here
     valid = verify_user(username, pin)
     if not valid:
         return {
             "success": False,
-            "message": "Unknown or invalid code. Please create user first."
+            "message": "Unknown or invalid code. Please create user first.",
+        }
+
+    user = get_user(username)
+    if not user:
+        return {
+            "success": False,
+            "message": "User record missing",
         }
 
     return {
         "success": True,
-        "user_id": username,
-        "display_name": username,
-        "role": "picker",
-        "token": None
+        "user_id": user.username,
+        "display_name": user.display_name or user.username,
+        "role": user.role or "picker",
+        "token": None,
     }
