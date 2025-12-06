@@ -155,11 +155,66 @@
     window.location.href = 'index.html';
   }
 
+    // --------------------------
+  // Matrix-style background for login
+  // --------------------------
+  function initLoginMatrixBackground() {
+    const canvas = document.getElementById('login-matrix-bg');
+    if (!canvas || !canvas.getContext) return;
+
+    const ctx = canvas.getContext('2d');
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const glyphs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const dots = Array.from({ length: 50 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      speed: 0.4 + Math.random() * 0.6,
+      opacity: 0.12 + Math.random() * 0.18
+    }));
+
+    function draw() {
+      if (!canvas.width || !canvas.height) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.font = '12px monospace';
+
+      for (const d of dots) {
+        const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
+        // soft red with transparency
+        ctx.fillStyle = `rgba(248, 113, 113, ${d.opacity})`;
+        ctx.fillText(ch, d.x, d.y);
+
+        d.y += d.speed;
+        if (d.y > canvas.height + 10) {
+          d.y = -10;
+          d.x = Math.random() * canvas.width;
+        }
+      }
+    }
+
+    // Slow-ish tick so it’s gentle on devices
+    setInterval(draw, 120);
+  }
   // --------------------------
   // DOM wiring
   // --------------------------
   document.addEventListener('DOMContentLoaded', () => {
     const currentUser = readCurrentUser();
+
+    // NEW: kick off the matrix-style background behind the login modal
+    try {
+      if (typeof initLoginMatrixBackground === 'function') {
+        initLoginMatrixBackground();
+      }
+    } catch (err) {
+      console.warn('Matrix background failed to init:', err);
+    }
 
     const resumeBlock = document.getElementById('resume-block');
     const resumeBtn = document.getElementById('resume-btn');
@@ -334,6 +389,7 @@
       });
     }
   });
+
 
   // Expose a minimal API in case WQT needs it later
   window.WQTAuth = {

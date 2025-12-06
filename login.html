@@ -22,6 +22,8 @@
     }
 
     .login-wrap {
+      position: relative;          /* NEW: layer above canvas */
+      z-index: 1;                  /* NEW: ensure it’s on top */
       width: min(420px, 92vw);
       background: #0b1220;
       border-radius: 14px;
@@ -171,9 +173,22 @@
       cursor: pointer;
       text-decoration: underline;
     }
+    /* Matrix-like background just for the login screen */
+    #login-matrix-bg {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      border: none;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.25; /* dial this up/down if too strong */
+    }
   </style>
 </head>
 <body>
+  <!-- Matrix-style animated background -->
+  <canvas id="login-matrix-bg"></canvas>
   <div class="login-wrap">
     <div class="login-header">
       <div class="login-title">Sign in to WQT</div>
