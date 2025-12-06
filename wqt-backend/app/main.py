@@ -21,6 +21,7 @@ from .db import (
     create_user,
     verify_user,
     get_user,  # NEW
+    record_order_from_payload,  # NEW: orders table integration
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -83,13 +84,13 @@ async def set_state(
     # 1) Determine storage key (User > Device)
     target_id = f"user:{user_id}" if user_id else device_id
 
-    # Ensure operator_id is inside the state object
+    # Ensure operator_id is inside the state object (PIN as ID)
     if user_id and state.current:
         state.current["operator_id"] = user_id
     elif operator_id is not None and state.current:
         state.current["operator_id"] = operator_id
 
-    # Calculate Live Rate on backend
+    # Calculate Live Rate on backend (based on closed picks only)
     if state.current and state.startTime:
         try:
             total_units = sum(p.get("units", 0) for p in state.picks)
@@ -134,15 +135,31 @@ async def set_state(
         detail["device_id"] = device_id
 
     # The Admin Panel looks for 'current_name'
-    # Prefer human-friendly name from the state payload, then fall back to IDs.
-    if state.current and isinstance(state.current, dict) and "name" in state.current:
-        detail["current_name"] = state.current["name"]
-    elif user_id:
-        # user_id = PIN (ID)
-        detail["current_name"] = user_id
-    elif operator_id is not None:
-        detail["current_name"] = operator_id
+    # Prefer human-friendly operator_name, then IDs, then order name.
+    current_name: Optional[str] = None
 
+    if state.current and isinstance(state.current, dict):
+        # 1) Preferred: operator_name (display name)
+        if "operator_name" in state.current:
+            current_name = state.current["operator_name"]
+
+    # 2) Fallbacks: user_id (PIN) or operator_id
+    if current_name is None and user_id:
+        current_name = user_id
+    elif current_name is None and operator_id is not None:
+        current_name = operator_id
+
+    # 3) Last resort: order/customer name
+    if (
+        current_name is None
+        and state.current
+        and isinstance(state.current, dict)
+        and "name" in state.current
+    ):
+        current_name = state.current["name"]
+
+    if current_name is not None:
+        detail["current_name"] = current_name
 
     log_usage_event("STATE_SAVE", detail)
 
@@ -386,3 +403,43 @@ async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
         "role": user.role or "picker",
         "token": None,
     }
+
+
+# -------------------------------------------------------------------
+# Orders API – record closed-order summaries
+# -------------------------------------------------------------------
+class OrderRecordPayload(BaseModel):
+    operator_id: str
+    operator_name: Optional[str] = None
+    device_id: Optional[str] = None
+    order: Dict[str, Any]
+    notes: Optional[str] = None
+
+
+@app.post("/api/orders/record")
+async def api_orders_record(payload: OrderRecordPayload) -> Dict[str, Any]:
+    """
+    Record a CLOSED order into the orders summary table.
+
+    The frontend calls this once when an order is closed, passing the same
+    object it pushes into main.picks[] as `order`.
+    """
+    record_order_from_payload(
+        operator_id=payload.operator_id,
+        device_id=payload.device_id,
+        order_payload=payload.order,
+        operator_name=payload.operator_name,
+        notes=payload.notes,
+    )
+
+    # Optional: log a lightweight usage event for admin analytics
+    detail: Dict[str, Any] = {
+        "operator_id": payload.operator_id,
+        "operator_name": payload.operator_name,
+        "device_id": payload.device_id,
+        "order_name": payload.order.get("name"),
+        "units": payload.order.get("units"),
+    }
+    log_usage_event("ORDER_RECORDED", detail)
+
+    return {"status": "ok"}

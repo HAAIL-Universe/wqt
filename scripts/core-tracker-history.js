@@ -483,6 +483,20 @@ function startOrder() {
   ensureActionRowLayout?.();
   saveAll?.();
 }
+// --- Backend hook: record closed orders (normal + Close Early) ---
+function syncClosedOrderToBackend(archivedOrder) {
+  try {
+    if (window.WqtAPI && typeof WqtAPI.recordClosedOrder === 'function') {
+      // Fire-and-forget; backend will attach operator_id / device_id
+      WqtAPI.recordClosedOrder(archivedOrder).catch(err => {
+        console.warn('[WQT] recordClosedOrder failed', err);
+      });
+    }
+  } catch (e) {
+    console.warn('[WQT] syncClosedOrderToBackend error', e);
+  }
+}
+
 // --- minimal fade swap helper ---
 // Generic helper to crossfade two blocks using .fade / .show CSS classes
 function fadeSwap(hideEl, showEl, showDisplay = 'block') {
@@ -859,6 +873,14 @@ function completeOrder() {
   };
   picks.push(archived);
   lastClose = closeHHMM;
+
+  // NEW: push closed-order snapshot to backend (single-picker or shared)
+  try {
+    syncClosedOrderToBackend(archived);
+  } catch (e) {
+    console.warn('[WQT] failed to sync closed order', e);
+  }
+
 
   // Stop prediction & clear state
   predictiveStop();
@@ -1910,7 +1932,7 @@ function submitCloseEarly(){
   const exclMins = (current.breaks || [])
     .reduce((a,b)=> a + (b.minutes || 0), 0);
 
-  picks.push({
+  const archivedEarly = {
     name:        current.name,
     units:       unitsDone,
     pallets:     palletsCnt,
@@ -1924,8 +1946,18 @@ function submitCloseEarly(){
       wraps:  tempWraps.slice(0),
       breaks: (current.breaks || []).slice(0)
     }
-  });
+  };
+
+  picks.push(archivedEarly);
   lastClose = closeHHMM;
+
+  // NEW: sync Close-Early orders too (keeps DB in line with UI)
+  try {
+    syncClosedOrderToBackend(archivedEarly);
+  } catch (e) {
+    console.warn('[WQT] failed to sync early-closed order', e);
+  }
+
 
   // 4) reset state + UI (bring back new-order header form)
   predictiveStop?.();

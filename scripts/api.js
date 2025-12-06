@@ -24,7 +24,7 @@ function resolveApiBase() {
         if (typeof window !== 'undefined') {
             const host = window.location.hostname;
 
-            // Local dev: open index.html via localhost
+            // Local dev example:
             // if (host === 'localhost' || host === '127.0.0.1') {
             //   return 'http://127.0.0.1:8000';
             // }
@@ -94,7 +94,7 @@ function getLoggedInUser() {
 }
 
 /**
- * Returns { userId, displayName } if logged in, otherwise null.
+ * Returns { userId, displayName, role } if logged in, otherwise null.
  * userId = PIN (ID), displayName = human-friendly name for UI.
  */
 function getLoggedInUserIdentity() {
@@ -106,7 +106,8 @@ function getLoggedInUserIdentity() {
                 if (obj && obj.userId) {
                     return {
                         userId: obj.userId,
-                        displayName: obj.displayName || obj.userId
+                        displayName: obj.displayName || obj.userId,
+                        role: obj.role || null,
                     };
                 }
             } catch {}
@@ -115,7 +116,7 @@ function getLoggedInUserIdentity() {
         const id = getLoggedInUser();
         if (!id) return null;
 
-        return { userId: id, displayName: id };
+        return { userId: id, displayName: id, role: null };
     } catch (e) {
         console.warn('[WQT API] getLoggedInUserIdentity failed:', e);
         return null;
@@ -153,10 +154,10 @@ const WqtAPI = {
         try {
             const deviceId = getDeviceId();
             const userId = getLoggedInUser(); // NEW
-            
+
             // Build query string, prioritizing user-id
             let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
-            if (userId) qs += `${qs ? '&' : '?' }user-id=${encodeURIComponent(userId)}`; // Append with & or ?
+            if (userId) qs += `${qs ? '&' : '?'}user-id=${encodeURIComponent(userId)}`;
 
             main = await fetchJSON(`/api/state${qs}`);
             // mirror into localStorage for offline cache
@@ -176,7 +177,6 @@ const WqtAPI = {
 
     async saveState(state) {
         // 1) Always write to localStorage (offline-first)
-        // We save the raw state object provided by the app
         const main = state.main || {};
         const learnedUL = state.learnedUL || {};
         const customCodes = state.customCodes || [];
@@ -186,16 +186,21 @@ const WqtAPI = {
         Storage.saveCustomCodes(customCodes);
 
         // 2) Try to persist to backend
-                try {
+        try {
             const deviceId = getDeviceId();
 
-            // Identity: PIN as ID, displayName for humans
+            // Identity: PIN as ID, displayName / role for humans
             const identity = getLoggedInUserIdentity();
             const userId = identity ? identity.userId : null;
             const displayName = identity ? identity.displayName : null;
+            const role = identity ? identity.role : null;
 
-            const opId = window.localStorage.getItem('wqt_operator_id');
-            const breakDraftRaw = window.localStorage.getItem('breakDraft');
+            const opId = (typeof window !== 'undefined' && window.localStorage)
+                ? window.localStorage.getItem('wqt_operator_id')
+                : null;
+            const breakDraftRaw = (typeof window !== 'undefined' && window.localStorage)
+                ? window.localStorage.getItem('breakDraft')
+                : null;
 
             // --- DEEP COPY FIX (Backend expects a clean object) ---
             const payload = JSON.parse(JSON.stringify(main));
@@ -203,32 +208,89 @@ const WqtAPI = {
             // Ensure 'current' exists in our copy
             if (!payload.current) { payload.current = {}; }
 
-            // Inject Operator ID (PIN) and Name into the payload
+            // Inject Operator ID (PIN)
             if (userId) {
-                // PIN as ID
-                payload.current.operator_id = userId;
-
-                // Human-friendly display name
-                if (displayName) {
-                    payload.current.name = displayName;
-                }
+                payload.current.operator_id = userId; // PIN as ID
             } else if (opId) {
                 // Legacy path: only have a free-text operator ID
                 payload.current.operator_id = opId;
-                payload.current.name = opId;
             }
+
+            // Inject human-friendly name + role without overwriting order name
+            if (displayName) {
+                payload.current.operator_name = displayName;
+            }
+            if (role) {
+                payload.current.operator_role = role;
+            }
+
+            // Optionally include breakDraft info with state if needed later
+            if (breakDraftRaw && !payload.current.breakDraft) {
+                try {
+                    payload.current.breakDraft = JSON.parse(breakDraftRaw);
+                } catch {
+                    // ignore parse errors
+                }
+            }
+
+            // Build query string for POST just like GET
+            let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+            if (userId) qs += `${qs ? '&' : '?'}user-id=${encodeURIComponent(userId)}`;
 
             await fetchJSON(`/api/state${qs}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload), // Send the clean copy
+                body: JSON.stringify(payload),
             });
             console.log('[WQT API] Saved main state to backend (User/Device)');
         } catch (err) {
             console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
         }
     },
-    
+
+    // ------------------------------------------------------------------
+    // NEW: Orders – record closed orders into backend summary table
+    // ------------------------------------------------------------------
+
+    /**
+     * Record a closed order snapshot into the backend `/api/orders/record` endpoint.
+     * `order` should be the archived object you already push into `picks`.
+     */
+    async recordClosedOrder(order) {
+        try {
+            const deviceId = getDeviceId();
+            const identity = getLoggedInUserIdentity() || {};
+
+            const fallbackOpId = (typeof window !== 'undefined' && window.localStorage)
+                ? window.localStorage.getItem('wqt_operator_id')
+                : null;
+
+            const operator_id =
+                identity.userId ||
+                fallbackOpId ||
+                'unknown';
+
+            const payload = {
+                operator_id,
+                operator_name: identity.displayName || null,
+                device_id: deviceId || null,
+                order: order || {},
+                notes: null
+            };
+
+            await fetchJSON('/api/orders/record', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            console.log('[WQT API] recordClosedOrder → sent to backend');
+        } catch (e) {
+            // Non-fatal: do not block UI just because backend logging failed
+            console.warn('[WQT API] recordClosedOrder failed (non-fatal):', e);
+        }
+    },
+
     // NEW: Auth Methods
     async login(username, pin) {
         const res = await fetchJSON('/api/auth/login', {
@@ -236,11 +298,21 @@ const WqtAPI = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, pin })
         });
+
         if (res.success) {
+            // Core ID (still used in some legacy places)
             localStorage.setItem(USER_KEY, res.username);
-            // Also update the display name for compatibility with existing UI
-            localStorage.setItem('wqt_operator_id', res.username); 
+            localStorage.setItem('wqt_operator_id', res.username);
+
+            // Unified identity object for everything new
+            const identity = {
+                userId: res.username,
+                displayName: res.display_name || res.username,
+                role: res.role || null
+            };
+            localStorage.setItem('WQT_CURRENT_USER', JSON.stringify(identity));
         }
+
         return res;
     },
 
@@ -250,21 +322,31 @@ const WqtAPI = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, pin })
         });
+
         if (res.success) {
+            // Core ID (still used in some legacy places)
             localStorage.setItem(USER_KEY, res.username);
-            // Also update the display name for compatibility with existing UI
-            localStorage.setItem('wqt_operator_id', res.username); 
+            localStorage.setItem('wqt_operator_id', res.username);
+
+            // Unified identity object for everything new
+            const identity = {
+                userId: res.username,
+                displayName: res.display_name || res.username,
+                role: res.role || null
+            };
+            localStorage.setItem('WQT_CURRENT_USER', JSON.stringify(identity));
         }
+
         return res;
     },
 
     async logout() {
         localStorage.removeItem(USER_KEY);
-        // Clear operator ID too, forcing the login modal/guest name prompt
         localStorage.removeItem('wqt_operator_id');
-        window.location.reload(); 
+        localStorage.removeItem('WQT_CURRENT_USER');
+        window.location.reload();
     },
-    
+
     // ------------------------------------------------------------------
     // Shift/session-side data (outside main blob)
     // These stay in localStorage for now (no schema yet).
@@ -446,6 +528,7 @@ const WqtAPI = {
 // Expose to window for non-module scripts
 if (typeof window !== 'undefined') {
     window.WqtAPI = window.WqtAPI || WqtAPI;
-    window.WqtAPI.getLoggedInUser = getLoggedInUser; // Expose helper for use in bootstrap.js
-    window.WqtAPI.getDeviceId = getDeviceId; // Expose helper for use in bootstrap.js
+    window.WqtAPI.getLoggedInUser = getLoggedInUser;           // Expose helper for use in bootstrap.js
+    window.WqtAPI.getDeviceId = getDeviceId;                   // Expose helper for use in bootstrap.js
+    window.WqtAPI.getLoggedInUserIdentity = getLoggedInUserIdentity;
 }

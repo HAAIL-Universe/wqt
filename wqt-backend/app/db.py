@@ -72,6 +72,46 @@ class ShiftSession(Base):
     avg_rate = Column(Float, nullable=True)
 
 
+class OrderRecord(Base):
+    """
+    Per-order summary record.
+
+    This is designed primarily for CLOSED orders. Open order state (wraps,
+    in-progress metrics) still lives inside the device_states JSON blob.
+    """
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Identity
+    operator_id = Column(Text, nullable=False, index=True)   # PIN
+    operator_name = Column(Text, nullable=True)
+    device_id = Column(Text, nullable=True, index=True)
+
+    # Order info
+    order_name = Column(Text, nullable=True)                 # e.g. p["name"]
+    is_shared = Column(Boolean, nullable=False, default=False)
+    total_units = Column(Integer, nullable=True)             # e.g. p["units"]
+    pallets = Column(Integer, nullable=True)
+
+    # Timing
+    order_date = Column(DateTime(timezone=True), index=True, server_default=func.now())
+    start_hhmm = Column(Text, nullable=True)                 # 'HH:MM'
+    close_hhmm = Column(Text, nullable=True)                 # 'HH:MM'
+    duration_min = Column(Integer, nullable=True)
+    excl_min = Column(Integer, nullable=True)                # excluded mins (breaks)
+
+    # Status / notes
+    closed_early = Column(Boolean, nullable=False, default=False)
+    early_reason = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)                      # optional aggregated notes
+
+    # Optional raw log for debugging (wraps/breaks) – JSON string
+    log_json = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
 # --- User Authentication Table ---
 
 
@@ -107,7 +147,7 @@ def load_global_state() -> Optional[dict]:
     try:
         row = session.query(GlobalState).filter(GlobalState.id == 1).first()
         return json.loads(row.payload) if row else None
-    except:
+    except Exception:
         return None
     finally:
         session.close()
@@ -135,7 +175,7 @@ def load_device_state(device_id: str) -> Optional[dict]:
     try:
         row = session.query(DeviceState).filter(DeviceState.device_id == device_id).first()
         return json.loads(row.payload) if row else None
-    except:
+    except Exception:
         return None
     finally:
         session.close()
@@ -173,13 +213,13 @@ def get_recent_usage(limit: int = 100) -> List[Dict[str, Any]]:
     session = get_session()
     try:
         q = session.query(UsageEvent).order_by(UsageEvent.id.desc()).limit(limit)
-        results = []
+        results: List[Dict[str, Any]] = []
         for r in list(q):
             det: Dict[str, Any] = {}
             if r.detail:
                 try:
                     det = json.loads(r.detail)
-                except:
+                except Exception:
                     det = {}
             results.append(
                 {
@@ -364,8 +404,174 @@ def get_all_device_states() -> List[Dict[str, Any]]:
                 data = json.loads(row.payload)
                 data["device_id"] = row.device_id
                 results.append(data)
-            except:
+            except Exception:
                 continue
+        return results
+    finally:
+        session.close()
+
+
+# --- Order helpers ---
+
+
+def _compute_duration_min(start_hhmm: Optional[str], close_hhmm: Optional[str]) -> Optional[int]:
+    """
+    Compute duration in minutes from 'HH:MM' strings.
+    Returns None if parsing fails.
+    """
+    if not start_hhmm or not close_hhmm:
+        return None
+    try:
+        s_h, s_m = [int(x) for x in start_hhmm.split(":")]
+        c_h, c_m = [int(x) for x in close_hhmm.split(":")]
+        start_total = s_h * 60 + s_m
+        close_total = c_h * 60 + c_m
+        diff = close_total - start_total
+        if diff < 0:
+            return None
+        return diff
+    except Exception:
+        return None
+
+
+def record_order_from_payload(
+    operator_id: str,
+    device_id: Optional[str],
+    order_payload: Dict[str, Any],
+    operator_name: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> None:
+    """
+    Persist a closed-order summary into the orders table.
+
+    `order_payload` is expected to look like the objects pushed into `picks[]`
+    in the frontend (core-tracker-history.js), e.g.:
+
+        {
+          "name": "MORRISONS",
+          "units": 250,
+          "pallets": 3,
+          "start": "08:00",
+          "close": "08:45",
+          "excl": 5,
+          "closedEarly": false,
+          "earlyReason": "",
+          "log": {...}
+        }
+    """
+    if engine is None:
+        return
+
+    # Defensive copy so we don't accidentally mutate caller data
+    p = dict(order_payload or {})
+
+    order_name = p.get("name")
+    is_shared = bool(p.get("shared"))
+    total_units = p.get("units") or p.get("total_units") or p.get("total")
+    try:
+        if isinstance(total_units, str):
+            total_units = int(total_units)
+    except Exception:
+        total_units = None
+
+    pallets = p.get("pallets")
+    try:
+        if isinstance(pallets, str):
+            pallets = int(pallets)
+    except Exception:
+        pallets = None
+
+    start_hhmm = p.get("start")
+    close_hhmm = p.get("close") or p.get("closed")
+    duration_min = _compute_duration_min(start_hhmm, close_hhmm)
+
+    excl_min = p.get("excl")
+    try:
+        if isinstance(excl_min, str):
+            excl_min = int(excl_min)
+    except Exception:
+        excl_min = None
+
+    closed_early = bool(p.get("closedEarly"))
+    early_reason = p.get("earlyReason") or None
+
+    # Notes override any `notes` field in payload
+    combined_notes = notes or p.get("notes") or None
+
+    log_json = None
+    if "log" in p:
+        try:
+            log_json = json.dumps(p.get("log") or {})
+        except Exception:
+            log_json = None
+
+    session = get_session()
+    try:
+        rec = OrderRecord(
+            operator_id=operator_id,
+            operator_name=operator_name,
+            device_id=device_id,
+            order_name=order_name,
+            is_shared=is_shared,
+            total_units=total_units,
+            pallets=pallets,
+            start_hhmm=start_hhmm,
+            close_hhmm=close_hhmm,
+            duration_min=duration_min,
+            excl_min=excl_min,
+            closed_early=closed_early,
+            early_reason=early_reason,
+            notes=combined_notes,
+            log_json=log_json,
+        )
+        session.add(rec)
+        session.commit()
+    finally:
+        session.close()
+
+
+def get_recent_orders_for_operator(
+    operator_id: str,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """
+    Simple helper for future admin views / analytics.
+
+    Returns the most recent orders for a given operator_id (PIN).
+    """
+    if engine is None:
+        return []
+    session = get_session()
+    try:
+        q = (
+            session.query(OrderRecord)
+            .filter(OrderRecord.operator_id == operator_id)
+            .order_by(OrderRecord.created_at.desc())
+            .limit(limit)
+        )
+        results: List[Dict[str, Any]] = []
+        for o in q:
+            results.append(
+                {
+                    "id": o.id,
+                    "operator_id": o.operator_id,
+                    "operator_name": o.operator_name,
+                    "device_id": o.device_id,
+                    "order_name": o.order_name,
+                    "is_shared": o.is_shared,
+                    "total_units": o.total_units,
+                    "pallets": o.pallets,
+                    "order_date": o.order_date.isoformat() if o.order_date else None,
+                    "start_hhmm": o.start_hhmm,
+                    "close_hhmm": o.close_hhmm,
+                    "duration_min": o.duration_min,
+                    "excl_min": o.excl_min,
+                    "closed_early": o.closed_early,
+                    "early_reason": o.early_reason,
+                    "notes": o.notes,
+                    "created_at": o.created_at.isoformat() if o.created_at else None,
+                }
+            )
         return results
     finally:
         session.close()
