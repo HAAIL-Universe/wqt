@@ -399,9 +399,46 @@ class PinLoginPayload(BaseModel):
     pin_code: str
     device_id: Optional[str] = None
 
+# Role access payload for overlay modal
+class RoleAccessPayload(BaseModel):
+    role: str          # "operative" or "supervisor"
+    pin_code: str
+    pin_code: str
+    device_id: Optional[str] = None
 
 @app.post("/auth/login_pin")
 async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
+    @app.post("/auth/role_access")
+    async def auth_role_access(payload: RoleAccessPayload) -> Dict[str, Any]:
+        """
+        Secondary role overlay for the History tab 'Request role access' modal.
+
+        - Does NOT change the primary logged-in picker.
+        - Only checks that there is an existing Neon user whose role matches
+          the requested role and whose PIN matches the given PIN.
+        - Returns a small JSON blob the frontend can use to confirm access.
+        """
+
+        from fastapi import HTTPException
+
+        role = payload.role.strip().lower()
+        pin = payload.pin_code.strip()
+
+        # Only allow known overlay roles
+        if role not in {"operative", "supervisor"}:
+            raise HTTPException(status_code=400, detail="Invalid role")
+
+        user = get_user(pin)
+        if not user or user.role.strip().lower() != role:
+            # Don't leak which part was wrong
+            raise HTTPException(status_code=401, detail="Invalid PIN or role")
+
+        return {
+            "ok": True,
+            "user_id": str(user.id),
+            "display_name": user.display_name or user.username,
+            "role": user.role,
+        }
     """
     Unified identity entrypoint for the app.
     - Uses PIN as username.

@@ -28,7 +28,7 @@ function closeOverlayModal() {
 }
 
 async function submitOverlayLogin() {
-  const role = document.getElementById('overlayRoleSelect').value;
+  const role = document.getElementById('overlayRoleSelect').value.toLowerCase();
   const pin  = document.getElementById('overlayPinInput').value.trim();
   const status = document.getElementById('overlayStatus');
 
@@ -36,10 +36,34 @@ async function submitOverlayLogin() {
 
   try {
     status.textContent = "Checking…";
-    const res = await WqtAPI.loginOverlaySession(pin, role);
-    status.textContent = `${res.display_name} granted ${role} access.`;
-    renderRoleChips();
-    setTimeout(closeOverlayModal, 600);
+    const resp = await fetch('/auth/role_access', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, pin_code: pin })
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error('Role access failed', resp.status, text);
+      status.textContent = 'Role access failed. Check PIN / role.';
+      return;
+    }
+
+    const data = await resp.json();
+
+    if (data.ok) {
+      // Example: mark that a supervisor/operative overlay is active
+      WqtAPI.overlayRole = {
+        role: data.role,
+        displayName: data.display_name,
+        userId: data.user_id
+      };
+      status.textContent = `${data.role} access unlocked for ${data.display_name}`;
+      renderRoleChips();
+      setTimeout(closeOverlayModal, 600);
+    } else {
+      status.textContent = 'Role access denied.';
+    }
   } catch(err) {
     status.textContent = err.message || "Access denied.";
   }
