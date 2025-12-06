@@ -360,13 +360,7 @@
       </div>
       <div class="right">
         <button id="btnBreakMenu" class="btn" type="button" onclick="openBreakChoiceModal()" style="display:none;">☕ Break</button>
-        
-        <button class="btn ok" type="button" id="btnEndShift" onclick="endShift()" style="min-width:220px;">End Shift &amp; Archive →</button>
       </div>
-    </div>
-
-    <div class="safetybar">
-      <button class="btn ghost" type="button" onclick="logoutAndReset()">Log Out</button>
     </div>
 
     <div id="opChipBar" style="display:none; margin:10px 0 6px; align-items:center; gap:10px;">
@@ -484,6 +478,39 @@
           <button class="btn ghost" type="button" onclick="restartOnboarding()">Re-run onboarding</button>
         </div>
       </div>
+
+      <div class="row" style="margin-top:8px; gap:8px; flex-wrap:wrap;">
+        <h4 style="margin:0; font-size:0.9rem; opacity:0.8;">Shift tools</h4>
+      </div>
+
+      <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
+        <!-- Clear today’s data -->
+        <button
+          class="btn ghost"
+          type="button"
+          id="btnClearToday"
+          onclick="clearToday()">
+          Clear today’s data
+        </button>
+
+        <!-- End Shift & Archive -->
+        <button
+          class="btn ok"
+          type="button"
+          id="btnEndShift"
+          onclick="endShift()">
+          End Shift &amp; Archive →
+        </button>
+
+        <!-- Log Out -->
+        <button
+          class="btn bad"
+          type="button"
+          onclick="logoutAndReset()">
+          Log Out
+        </button>
+      </div>
+
       <div id="histList" style="margin-top:8px;"></div>
     </div>
 

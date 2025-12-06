@@ -449,13 +449,7 @@ function startOrder() {
     if (doneCard)   doneCard.style.display   = 'none';
   })();
 
-  // Reset the safety ghost button back to "Clear today's data"
-  (function resetSafetyButton(){
-    const btn = document.querySelector('.safetybar button.btn.ghost');
-    if (!btn) return;
-    btn.textContent = "Clear today's data";
-    btn.onclick = function(){ clearToday?.(); };
-  })();
+  
 
   // Paint seeded rate/ETA immediately (frozen until Log Wrap)
   const rEl = document.getElementById('progRate');
@@ -2381,15 +2375,16 @@ function renderHistory(){
   if (closeBtn) closeBtn.style.display = 'none';
 }
 
-// ====== End Shift button visibility (Tracker tab only) ======
+// ====== End Shift button visibility (History tab) ======
 function updateEndShiftVisibility(){
   const btn = document.getElementById('btnEndShift');
   if (!btn) return;
 
-  const trackerTab = document.getElementById('tabTracker');
-  const trackerVisible = trackerTab ? !trackerTab.classList.contains('hidden') : false;
+  // Show only when History tab is visible
+  const histTab = document.getElementById('tabHistory');
+  const historyVisible = histTab ? !histTab.classList.contains('hidden') : false;
 
-  const show = trackerVisible && !current && picks.length > 0;
+  const show = historyVisible && !current && picks.length > 0;
   btn.style.display = show ? 'inline-block' : 'none';
 }
 function updateEndPickingVisibility(){
