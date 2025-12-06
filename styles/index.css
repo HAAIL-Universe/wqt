@@ -1,3 +1,9 @@
+/* Performance Score subvalue styling for Live Rate chip */
+.summary-chip-subvalue {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-top: 2px;
+}
 :root {
   --bg:#0b0d10; --card:#141821; --ink:#e8eef7; --muted:#9fb3c8;
   --accent:#b4363a;            /* maroon focus/active */

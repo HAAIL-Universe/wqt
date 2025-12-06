@@ -1,3 +1,34 @@
+// --- Performance Score Calculation ---
+// Computes performance score for today/shift: (units + locations*2) / total minutes
+// Uses same completed orders as live rate (picks[])
+function computePerformanceScoreForToday() {
+  if (!Array.isArray(picks) || !picks.length) return null;
+  let dailyScore = 0;
+  let dailyMinutes = 0;
+  for (const o of picks) {
+    // Only count orders with both start and close times
+    if (!o.start || !o.close) continue;
+    const units = Number(o.units) || 0;
+    const locations = Number(o.locations) || 0;
+    // Accept both 'close' and 'closed' field for compatibility
+    const closeTime = o.close || o.closed;
+    const startTime = o.start;
+    // Compute order_score
+    const orderScore = units + (locations * 2);
+    // Compute order_minutes (difference in minutes)
+    const orderMinutes = Math.abs(hm(closeTime) - hm(startTime)) * 60;
+    if (!isFinite(orderMinutes) || orderMinutes <= 0) continue;
+    dailyScore += orderScore;
+    dailyMinutes += orderMinutes;
+  }
+  if (dailyMinutes <= 0) return null;
+  return dailyScore / dailyMinutes;
+}
+
+// Export for UI
+if (typeof window !== 'undefined') {
+  window.computePerformanceScoreForToday = computePerformanceScoreForToday;
+}
 // ================= Overlay Role UI =================
 function renderRoleChips() {
   const primaryChip  = document.getElementById('rolePrimaryChip');

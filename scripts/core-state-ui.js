@@ -15,6 +15,38 @@ function resetEtaSmoother(){
   lastETAmin = null;
   lastRenderedETAmin = null;
 }
+  // --- Patch: Update Live Rate and Performance Score in summary chip ---
+  function updateSummaryChipsUI() {
+    // Live Rate
+    let liveRate = null;
+    if (typeof getLiveRateUh === 'function') {
+      liveRate = getLiveRateUh();
+    }
+    const liveRateEl = document.getElementById('chipRateVal');
+    if (liveRateEl) {
+      liveRateEl.textContent = (liveRate && isFinite(liveRate) && liveRate > 0) ? `${Math.round(liveRate)} u/h` : '—';
+    }
+
+    // Performance Score
+    let perfScore = null;
+    if (typeof computePerformanceScoreForToday === 'function') {
+      perfScore = computePerformanceScoreForToday();
+    }
+    const perfEl = document.getElementById('perf-score-value');
+    if (perfEl) {
+      perfEl.textContent = (perfScore && isFinite(perfScore)) ? `Perf: ${perfScore.toFixed(2)} pts/min` : 'Perf: —';
+    }
+  }
+
+  // Patch updateSummary to call our UI updater
+  const _origUpdateSummary = window.updateSummary;
+  window.updateSummary = function() {
+    if (typeof _origUpdateSummary === 'function') _origUpdateSummary.apply(this, arguments);
+    updateSummaryChipsUI();
+  };
+
+  // Also call on load
+  document.addEventListener('DOMContentLoaded', updateSummaryChipsUI);
 
 // Hide the shared-dock panel and persist that choice
 function hideSharedDock(){
