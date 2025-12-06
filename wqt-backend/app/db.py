@@ -392,6 +392,10 @@ def get_all_device_states() -> List[Dict[str, Any]]:
     """
     Fetches the latest state (JSON payload) for ALL devices.
     Used for the Admin Dashboard to show live status (Picks/Current).
+
+    We now distinguish between:
+      - storage_key: internal key used for saving (may be 'user:<PIN>')
+      - device_id:  real client device id (UUID) for display, if present
     """
     if engine is None:
         return []
@@ -401,15 +405,28 @@ def get_all_device_states() -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
         for row in rows:
             try:
-                data = json.loads(row.payload)
-                data["device_id"] = row.device_id
-                results.append(data)
+                data = json.loads(row.payload) or {}
             except Exception:
                 continue
+
+            storage_key = row.device_id
+
+            # Try to read real device UUID from the payload's current block
+            real_device_id = None
+            if isinstance(data, dict):
+                current = data.get("current") or {}
+                if isinstance(current, dict):
+                    real_device_id = current.get("device_id")
+
+            # Fallback to storage_key if we don't have a better id
+            device_id = real_device_id or storage_key
+
+            data["device_id"] = device_id
+            data["storage_key"] = storage_key
+            results.append(data)
         return results
     finally:
         session.close()
-
 
 # --- Order helpers ---
 

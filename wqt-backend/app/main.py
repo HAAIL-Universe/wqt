@@ -81,13 +81,24 @@ async def set_state(
     Includes fixes for User ID persistence and Live Rate calculation.
     """
 
-    # 1) Determine storage key (User > Device)
+    # 1) Determine storage key (User > Device) and capture raw device for display
+    raw_device_id = device_id
     target_id = f"user:{user_id}" if user_id else device_id
 
-    # Ensure operator_id is inside the state object (PIN as ID)
-    if user_id and state.current:
+    # Ensure current dict exists
+    if state.current is None:
+        state.current = {}
+    elif not isinstance(state.current, dict):
+        state.current = dict(state.current)
+
+    # Store the real device id inside the state payload for admin display
+    if raw_device_id:
+        state.current["device_id"] = raw_device_id
+
+    # Ensure operator_id is inside the state object (PIN as ID, not for display)
+    if user_id is not None:
         state.current["operator_id"] = user_id
-    elif operator_id is not None and state.current:
+    elif operator_id is not None:
         state.current["operator_id"] = operator_id
 
     # Calculate Live Rate on backend (based on closed picks only)
@@ -135,36 +146,23 @@ async def set_state(
         detail["device_id"] = device_id
 
     # The Admin Panel looks for 'current_name'
-    # Prefer human-friendly operator_name, then IDs, then order name.
-    current_name: Optional[str] = None
-
+    # Prefer human-friendly operator name/role, then order name.
+    # Never show the raw PIN here.
     if state.current and isinstance(state.current, dict):
-        # 1) Preferred: operator_name (display name)
-        if "operator_name" in state.current:
-            current_name = state.current["operator_name"]
+        op_name = state.current.get("operator_name")
+        op_role = state.current.get("operator_role")
+        order_name = state.current.get("name")
 
-    # 2) Fallbacks: user_id (PIN) or operator_id
-    if current_name is None and user_id:
-        current_name = user_id
-    elif current_name is None and operator_id is not None:
-        current_name = operator_id
-
-    # 3) Last resort: order/customer name
-    if (
-        current_name is None
-        and state.current
-        and isinstance(state.current, dict)
-        and "name" in state.current
-    ):
-        current_name = state.current["name"]
-
-    if current_name is not None:
-        detail["current_name"] = current_name
+        if op_name:
+            detail["current_name"] = op_name
+        elif op_role:
+            detail["current_name"] = op_role
+        elif order_name:
+            detail["current_name"] = order_name
 
     log_usage_event("STATE_SAVE", detail)
 
     return state
-
 
 # -------------------------------------------------------------------
 # Usage analytics API
