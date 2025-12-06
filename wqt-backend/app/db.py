@@ -387,49 +387,86 @@ def get_recent_shifts(limit: int = 50) -> List[Dict[str, Any]]:
     finally:
         session.close()
 
-
 def get_all_device_states() -> List[Dict[str, Any]]:
     """
-    Fetches the latest state (JSON payload) for ALL devices.
-    Used for the Admin Dashboard to show live status (Picks/Current).
+    Fetches the latest state (JSON payload) for ALL *logical users*.
 
-    We now distinguish between:
-      - storage_key: internal key used for saving (may be 'user:<PIN>')
-      - device_id:  real client device id (UUID) for display, if present
+    We may have multiple DeviceState rows representing the same human:
+    - old rows keyed by raw device UUIDs
+    - new rows keyed as "user:<PIN>"
+
+    To avoid duplicate chips in the Admin dashboard, we:
+      1) Parse each payload.
+      2) Derive a logical key: operator_id -> operator_name -> device_id.
+      3) Keep only the MOST RECENT savedAt per logical key.
     """
     if engine is None:
         return []
+
     session = get_session()
     try:
         rows = session.query(DeviceState).all()
-        results: List[Dict[str, Any]] = []
+
+        # temp map: logical_key -> latest payload
+        latest_by_key: Dict[str, Dict[str, Any]] = {}
+
         for row in rows:
             try:
                 data = json.loads(row.payload) or {}
             except Exception:
                 continue
 
-            storage_key = row.device_id
+            # Attach the DB device_id for UI / messaging
+            data["device_id"] = row.device_id
 
-            # Try to read real device UUID from the payload's current block
-            real_device_id = None
-            if isinstance(data, dict):
-                current = data.get("current") or {}
-                if isinstance(current, dict):
-                    real_device_id = current.get("device_id")
+            current = data.get("current") or {}
 
-            # Fallback to storage_key if we don't have a better id
-            device_id = real_device_id or storage_key
+            operator_id = current.get("operator_id")
+            operator_name = current.get("operator_name")
 
-            data["device_id"] = device_id
-            data["storage_key"] = storage_key
-            results.append(data)
-        return results
+            # savedAt is ISO string from frontend; may be missing
+            saved_at_str = data.get("savedAt")
+            try:
+                saved_at = (
+                    datetime.fromisoformat(saved_at_str)
+                    if saved_at_str
+                    else None
+                )
+            except Exception:
+                saved_at = None
+
+            # Choose a stable logical key:
+            #  - Prefer operator_id (PIN / DB username)
+            #  - Else operator_name (Julius / Supervisor Acc)
+            #  - Else fall back to raw device_id
+            logical_key = operator_id or operator_name or row.device_id
+
+            existing = latest_by_key.get(logical_key)
+            if existing is not None:
+                # Compare timestamps; keep the newer one
+                prev_str = existing.get("savedAt")
+                try:
+                    prev_ts = (
+                        datetime.fromisoformat(prev_str)
+                        if prev_str
+                        else None
+                    )
+                except Exception:
+                    prev_ts = None
+
+                # If we don't have a timestamp or this one isn't newer, skip
+                if prev_ts and saved_at and saved_at <= prev_ts:
+                    continue
+
+            latest_by_key[logical_key] = data
+
+        # Strip any helper fields (none right now) and return list
+        return list(latest_by_key.values())
+
     finally:
         session.close()
 
 # --- Order helpers ---
-
 
 def _compute_duration_min(start_hhmm: Optional[str], close_hhmm: Optional[str]) -> Optional[int]:
     """
