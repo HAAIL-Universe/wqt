@@ -2272,6 +2272,7 @@ function renderWeeklySummary(){
   const floorToQuarter = (mins) => Math.max(0, Math.floor(mins / QUARTER) * QUARTER);
 
   let totalUnits = 0;
+  let totalLocations = 0;
   let totalWorkedFlooredMin = 0;  // all worked time, floored to 15m
   let daysCount  = 0;
 
@@ -2293,6 +2294,7 @@ function renderWeeklySummary(){
 
     totalWorkedFlooredMin += workedMinFloored;
     totalUnits += Number(d.totalUnits) || 0;
+    totalLocations += Number(d.totalLocations) || 0;
     daysCount  += 1;
   }
 
@@ -2300,17 +2302,18 @@ function renderWeeklySummary(){
   const paidOTMin = Math.max(0, totalWorkedFlooredMin - WEEK_OT_THRESHOLD_MIN);
   const nonOTMin  = totalWorkedFlooredMin - paidOTMin;
 
-  // Tiles
+  // Tiles - using correct scoring: units + 2*locations
   const totalHoursAll   = totalWorkedFlooredMin / 60;        // for weighted avg denominator
   const totalHoursTile  = (nonOTMin / 60).toFixed(2);        // non-OT hours only
   const overtimeTile    = (paidOTMin / 60).toFixed(2) + ' h';// paid OT only
-  const weighted        = (totalHoursAll > 0) ? Math.round(totalUnits / totalHoursAll) : 0;
+  const totalScore      = totalUnits + (totalLocations * 2);
+  const weighted        = (totalHoursAll > 0) ? Math.round(totalScore / totalHoursAll) : 0;
 
   document.getElementById('weekUnits')    ?.replaceChildren(document.createTextNode(String(totalUnits)));
   document.getElementById('weekDays')     ?.replaceChildren(document.createTextNode(String(daysCount)));
   document.getElementById('weekHours')    ?.replaceChildren(document.createTextNode(totalHoursTile));
   document.getElementById('weekOvertime') ?.replaceChildren(document.createTextNode(overtimeTile));
-  document.getElementById('weekWeighted') ?.replaceChildren(document.createTextNode(weighted + ' u/h'));
+  document.getElementById('weekWeighted') ?.replaceChildren(document.createTextNode(weighted + ' pts/h'));
 
   // Optional styling: OT red until threshold crossed, then green
   const otEl = document.getElementById('weekOvertime');
@@ -2357,14 +2360,14 @@ function renderHistory(){
     const floorToQuarter = (mins)=> Math.max(0, Math.floor(mins/15)*15);
     const otMin = floorToQuarter(Math.max(0, workedMin - scheduledMin));
 
-    // Day Avg based on ACTUAL worked hours (to the minute)
+    // Day Perf Score based on ACTUAL worked hours: (units + 2*locations) / worked_hours
     const workedHours   = workedMin / 60;
-    const dayAvgWorked  = (workedHours > 0)
-      ? Math.round(((Number(d.totalUnits) || 0) / workedHours))
+    const dayPerfScore = (workedHours > 0)
+      ? Math.round(((Number(d.totalUnits) || 0) + (Number(d.totalLocations) || 0) * 2) / workedHours * 10) / 10
       : 0;
-    const effectiveRate = (Number.isFinite(+d.dayRate) && +d.dayRate > 0)
-      ? +d.dayRate
-      : dayAvgWorked;
+    const effectiveRate = (Number.isFinite(+d.dayPerfScore) && +d.dayPerfScore > 0)
+      ? +d.dayPerfScore
+      : dayPerfScore;
 
     const boxState = effectiveRate >= 300 ? 'ok'
                     : (effectiveRate >= 249 ? 'warn' : 'bad');
@@ -2375,7 +2378,8 @@ function renderHistory(){
       `<span class="tag">${new Date(d.date+'T12:00:00').toDateString().slice(0,15)}</span>
       <div class="meta-row">
         <span>Units: <b>${d.totalUnits || 0}</b></span>
-        <span>Day Avg: <b>${dayAvgWorked}</b> u/h</span>
+        <span>Locations: <b>${d.totalLocations || 0}</b></span>
+        <span>Perf Score: <b>${dayPerfScore.toFixed(1)}</b> pts/h</span>
         <span>Worked: <b>${fmtElapsed(workedMin)}</b>` +
         `${otMin ? ` • OT: <b>${(otMin/60).toFixed(2)} h</b>` : ''}</span>
       </div>`;
@@ -2675,6 +2679,7 @@ function endShift(){
   const shiftLen = parseFloat(tLenEl?.value || '9');
 
   const totalUnits = picks.reduce((a,b)=> a + b.units, 0);
+  const totalLocations = picks.reduce((a,b)=> a + (b.locations || 0), 0);
   const downtimes  = computeDowntimes(picks, shiftBreaks);
   const endHHMM    = nowHHMM();
 
@@ -2699,7 +2704,9 @@ function endShift(){
     end:         endHHMM || '',
     shiftLen,
     totalUnits,
+    totalLocations,
     dayRate:     shiftLen > 0 ? Math.round(totalUnits / shiftLen) : 0, // keep day avg by full shift
+    dayPerfScore: (workedMin > 0) ? Math.round(((totalUnits + totalLocations * 2) / (workedMin / 60)) * 10) / 10 : 0, // correct perf score: (units + 2*locations) / worked_hours
     picks:       picks.slice(0),
     shiftBreaks: shiftBreaks.slice(0),
     downtimes,
