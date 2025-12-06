@@ -141,7 +141,44 @@ async function fetchJSON(path, options = {}) {
     return res.json();
 }
 
+
 const WqtAPI = {
+
+    /**
+     * Request role access (unlock) using the stable PIN-auth endpoint.
+     * @param {Object} opts
+     * @param {string} opts.role - The role to unlock ("operative" or "supervisor")
+     * @param {string} opts.pin - The PIN code entered by the user
+     * @returns {Promise<Object>} - { user_id, display_name, role, token }
+     */
+    async requestRoleAccess({ role, pin }) {
+        const body = { pin_code: pin, device_id: getDeviceIdSafe() || null };
+
+        const res = await fetch('/auth/login_pin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+            const txt = await res.text().catch(() => '');
+            console.warn('[WQT] role access failed', res.status, txt);
+            throw new Error('Role unlock failed. Check PIN.');
+        }
+
+        let data;
+        try {
+            data = await res.json();
+        } catch (e) {
+            const txt = await res.text().catch(() => '');
+            console.warn('[WQT] role access invalid JSON', e, txt);
+            throw new Error('Role unlock failed (invalid server response).');
+        }
+
+        // data should match the login_pin response shape:
+        // { user_id, display_name, role, token }
+        return data;
+    },
 
             // Overlay session login
     async loginOverlaySession(pin, requestedRole) {
