@@ -307,7 +307,12 @@
         const savedAt = d.savedAt ? new Date(d.savedAt).getTime() : 0;
         const current = d.current || {};
         
-        const opName = current.operator_id || `Dev: ${devId.substring(0,6)}`;
+        // Prefer human-friendly name, then fall back to PIN / ID
+        const opName =
+          current.name ||      // Display Name from state
+          current.operator_name || // future-proof if we ever add this
+          current.operator_id ||   // PIN / ID
+          `Dev: ${devId.substring(0,6)}`;
         const minsAgo = Math.floor((now - savedAt) / 60000);
         
         let status = "Active";

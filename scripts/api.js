@@ -93,6 +93,35 @@ function getLoggedInUser() {
     }
 }
 
+/**
+ * Returns { userId, displayName } if logged in, otherwise null.
+ * userId = PIN (ID), displayName = human-friendly name for UI.
+ */
+function getLoggedInUserIdentity() {
+    try {
+        const raw = localStorage.getItem('WQT_CURRENT_USER');
+        if (raw) {
+            try {
+                const obj = JSON.parse(raw);
+                if (obj && obj.userId) {
+                    return {
+                        userId: obj.userId,
+                        displayName: obj.displayName || obj.userId
+                    };
+                }
+            } catch {}
+        }
+
+        const id = getLoggedInUser();
+        if (!id) return null;
+
+        return { userId: id, displayName: id };
+    } catch (e) {
+        console.warn('[WQT API] getLoggedInUserIdentity failed:', e);
+        return null;
+    }
+}
+
 // Tiny helper: fetch JSON from backend with basic error handling.
 async function fetchJSON(path, options = {}) {
     const url = `${API_BASE}${path}`;
@@ -157,9 +186,14 @@ const WqtAPI = {
         Storage.saveCustomCodes(customCodes);
 
         // 2) Try to persist to backend
-        try {
+                try {
             const deviceId = getDeviceId();
-            const userId = getLoggedInUser(); // NEW: Get logged in user
+
+            // Identity: PIN as ID, displayName for humans
+            const identity = getLoggedInUserIdentity();
+            const userId = identity ? identity.userId : null;
+            const displayName = identity ? identity.displayName : null;
+
             const opId = window.localStorage.getItem('wqt_operator_id');
             const breakDraftRaw = window.localStorage.getItem('breakDraft');
 
@@ -169,43 +203,20 @@ const WqtAPI = {
             // Ensure 'current' exists in our copy
             if (!payload.current) { payload.current = {}; }
 
-            // Inject Operator ID / User ID (if backend needs the hint, though backend should prioritize the query param op_id)
+            // Inject Operator ID (PIN) and Name into the payload
             if (userId) {
-                payload.current.operator_id = userId; // Prioritize user-id in the payload
+                // PIN as ID
+                payload.current.operator_id = userId;
+
+                // Human-friendly display name
+                if (displayName) {
+                    payload.current.name = displayName;
+                }
             } else if (opId) {
+                // Legacy path: only have a free-text operator ID
                 payload.current.operator_id = opId;
+                payload.current.name = opId;
             }
-
-            // Handle Break Status based ONLY on LocalStorage
-            if (breakDraftRaw) {
-                try {
-                    // Valid break exists -> Attach tag
-                    payload.current.active_break = JSON.parse(breakDraftRaw);
-                } catch(e) {}
-            } else {
-                // No break exists -> FORCE DELETE tag from our copy
-                delete payload.current.active_break;
-            }
-
-            // FIX: Prevent remote save if primary identifier is missing.
-            if (!deviceId && !userId) { 
-              console.warn('[WQT API] Identity missing (Device ID and User ID). Skipping remote save.');
-              return;
-            }
-
-            // Build Query String
-            let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
-            
-            // Send user-id if available
-            if (userId) {
-                qs += (qs ? '&' : '?') + `user-id=${encodeURIComponent(userId)}`;
-            }
-
-            // FIX: Check for null/undefined opId, but allow empty string "" to be sent via query param
-            if (opId !== null && opId !== undefined) {
-                qs += (qs ? '&' : '?') + `operator-id=${encodeURIComponent(opId)}`;
-            }
-
 
             await fetchJSON(`/api/state${qs}`, {
                 method: 'POST',

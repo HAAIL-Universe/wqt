@@ -134,13 +134,15 @@ async def set_state(
         detail["device_id"] = device_id
 
     # The Admin Panel looks for 'current_name'
-    if user_id:
+    # Prefer human-friendly name from the state payload, then fall back to IDs.
+    if state.current and isinstance(state.current, dict) and "name" in state.current:
+        detail["current_name"] = state.current["name"]
+    elif user_id:
+        # user_id = PIN (ID)
         detail["current_name"] = user_id
     elif operator_id is not None:
         detail["current_name"] = operator_id
-    elif state.current and isinstance(state.current, dict):
-        if "name" in state.current:
-            detail["current_name"] = state.current["name"]
+
 
     log_usage_event("STATE_SAVE", detail)
 
