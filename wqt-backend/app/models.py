@@ -1,25 +1,44 @@
 # app/models.py
-from typing import List, Optional, Any
-from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
 
 
 class MainState(BaseModel):
+    """
+    Canonical shape of the main WQT state blob as used by the frontend.
+
+    This is intentionally:
+    - Very close to the JS DEFAULT_MAIN_STATE.
+    - Flexible: we allow extra fields so the backend doesn't drop new keys
+      if the frontend evolves (SaaS-safe).
+    """
+
+    # Core meta
     version: str
-    savedAt: Optional[str] = None
+    savedAt: Optional[str] = None  # ISO string from the frontend
 
-    picks: List[dict] = []
-    history: List[dict] = []
-    current: Optional[dict] = None
-    tempWraps: List[dict] = []
+    # Main collections
+    picks: List[Dict[str, Any]] = Field(default_factory=list)
+    history: List[Dict[str, Any]] = Field(default_factory=list)
+    current: Optional[Dict[str, Any]] = None
+    tempWraps: List[Dict[str, Any]] = Field(default_factory=list)
 
+    # Session timing
     startTime: str = ""
     lastClose: str = ""
     pickingCutoff: str = ""
 
-    undoStack: List[dict] = []
+    # UX / power user features
+    undoStack: List[Dict[str, Any]] = Field(default_factory=list)
     proUnlocked: bool = False
     snakeUnlocked: bool = False
 
-    shiftBreaks: List[dict] = []
-    operativeLog: List[dict] = []
-    operativeActive: Optional[dict] = None
+    # Shift + operative logging
+    shiftBreaks: List[Dict[str, Any]] = Field(default_factory=list)
+    operativeLog: List[Dict[str, Any]] = Field(default_factory=list)
+    operativeActive: Optional[Dict[str, Any]] = None
+
+    class Config:
+        # Important for forward-compat: don't explode or silently drop
+        # if the frontend adds extra fields – just round-trip them.
+        extra = "allow"

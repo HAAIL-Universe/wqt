@@ -68,7 +68,6 @@ function beginShift(){
   updateSummary?.();
   updateDelayBtn?.();
   updateEndShiftVisibility?.();
-  updateEndShiftVisibility?.();
   updateCloseEarlyVisibility?.();
 
   // Ensure live banner appears on Tracker now that a shift is active
@@ -1832,7 +1831,7 @@ function renderShiftPanel(){
 
   // Let the normal button updaters decide visibility instead of force-hiding.
   if (typeof updateDelayBtn === 'function') updateDelayBtn();
-  if (typeof updateCloseEarlyBtn === 'function') updateCloseEarlyBtn();
+  if (typeof updateCloseEarlyVisibility === 'function') updateCloseEarlyVisibility();
 }
 
 

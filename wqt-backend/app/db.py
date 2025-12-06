@@ -3,7 +3,17 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import create_engine, Column, Integer, Text, DateTime, Float, func, Boolean
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    Text,
+    DateTime,
+    Float,
+    func,
+    Boolean,
+    ForeignKey,
+)
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -14,6 +24,13 @@ SessionLocal: Optional[sessionmaker] = None
 
 
 def init_db() -> None:
+    """
+    Initialise the DB engine + session factory and create any missing tables.
+
+    NOTE:
+    - This will create any *new* tables such as `order_events`.
+    - It will NOT add new columns to existing tables; use ALTER TABLE in Neon for that.
+    """
     global engine, SessionLocal
     if not DATABASE_URL:
         # In production, you might want to raise an error here
@@ -22,8 +39,6 @@ def init_db() -> None:
         return
     engine = create_engine(DATABASE_URL)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    # NOTE: This will create missing tables, but will NOT add new columns
-    # to existing tables. Use ALTER TABLE in Neon to add new columns.
     Base.metadata.create_all(bind=engine)
 
 
@@ -37,12 +52,28 @@ def get_session() -> Session:
 
 
 class GlobalState(Base):
+    """
+    Legacy single row of global payload.
+    Only really used for global admin flags / feature toggles.
+    """
     __tablename__ = "global_state"
     id = Column(Integer, primary_key=True, index=True)
     payload = Column(Text, nullable=False)
 
 
 class DeviceState(Base):
+    """
+    Legacy state blob per device_id.
+
+    This currently stores the full MainState JSON, including:
+      - picks[]
+      - historyDays[]
+      - shift metadata
+
+    We will gradually move the *meaningful* historical data into
+    proper tables (ShiftSession, OrderRecord, OrderEvent), so this blob
+    can eventually be trimmed down or removed.
+    """
     __tablename__ = "device_states"
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Text, unique=True, index=True, nullable=False)
@@ -58,6 +89,10 @@ class UsageEvent(Base):
 
 
 class ShiftSession(Base):
+    """
+    Per-shift metadata, keyed by operator_id (PIN) and optionally device_id.
+    Represents a single continuous shift window.
+    """
     __tablename__ = "shift_sessions"
     id = Column(Integer, primary_key=True, index=True)
     operator_id = Column(Text, nullable=False, index=True)
@@ -78,6 +113,10 @@ class OrderRecord(Base):
 
     This is designed primarily for CLOSED orders. Open order state (wraps,
     in-progress metrics) still lives inside the device_states JSON blob.
+
+    Longer term, the day-by-day and event-by-event history will live
+    in ShiftSession + OrderRecord + OrderEvent so we don't rely on
+    a giant JSON blob for analytics.
     """
     __tablename__ = "orders"
 
@@ -108,6 +147,37 @@ class OrderRecord(Base):
 
     # Optional raw log for debugging (wraps/breaks) – JSON string
     log_json = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class OrderEvent(Base):
+    """
+    Per-event ledger row tied to an OrderRecord.
+
+    This is the foundation for "Layer 2: what actually happened" without
+    relying on a giant history blob.
+
+    Typical usage:
+      - Wrap logged       → event_type='wrap',   value_units=units_done, value_min=None
+      - Break/Lunch       → event_type='break',  value_units=None,       value_min=minutes
+      - Delay             → event_type='delay',  value_units=None,       value_min=minutes
+      - Shared submission → event_type='shared', value_units=units,      value_min=None
+      - Note              → event_type='note',   value_units=None,       value_min=None
+    Extra context (cause, customer, etc) goes in meta_json.
+    """
+    __tablename__ = "order_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
+    operator_id = Column(Text, nullable=True, index=True)
+    device_id = Column(Text, nullable=True, index=True)
+
+    event_type = Column(Text, nullable=False)       # 'wrap', 'break', 'delay', 'note', 'shared', ...
+    value_units = Column(Integer, nullable=True)    # units for wraps/shared
+    value_min = Column(Integer, nullable=True)      # minutes for breaks/delays
+    meta_json = Column(Text, nullable=True)         # JSON string with any extra detail
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
@@ -387,6 +457,7 @@ def get_recent_shifts(limit: int = 50) -> List[Dict[str, Any]]:
     finally:
         session.close()
 
+
 def get_all_device_states() -> List[Dict[str, Any]]:
     """
     Fetches the latest state (JSON payload) for ALL *logical users*.
@@ -466,7 +537,9 @@ def get_all_device_states() -> List[Dict[str, Any]]:
     finally:
         session.close()
 
+
 # --- Order helpers ---
+
 
 def _compute_duration_min(start_hhmm: Optional[str], close_hhmm: Optional[str]) -> Optional[int]:
     """
@@ -502,7 +575,7 @@ def record_order_from_payload(
     in the frontend (core-tracker-history.js), e.g.:
 
         {
-          "name": "MORRISONS",
+          "name": "MORWAK",
           "units": 250,
           "pallets": 3,
           "start": "08:00",
@@ -512,6 +585,12 @@ def record_order_from_payload(
           "earlyReason": "",
           "log": {...}
         }
+
+    NOTE:
+      - This writes a single summary row into `orders`.
+      - In Step 2 we can optionally parse `p["log"]` and emit a row-per-event
+        into `order_events` for deeper analytics, without changing the API
+        contract for the frontend.
     """
     if engine is None:
         return

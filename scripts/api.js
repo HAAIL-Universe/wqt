@@ -317,10 +317,17 @@ const WqtAPI = {
                     role,
                 })
             );
+
+            // 🔒 CRITICAL: hard cutover to this user's state.
+            // On reload, boot code will call WqtAPI.loadInitialState()
+            // and hydrate history/picks from THIS user, not the previous one.
+            window.location.reload();
         }
 
         return res;
     },
+
+
 
     async register(username, pin) {
         const res = await fetchJSON('/api/auth/register', {
@@ -348,11 +355,13 @@ const WqtAPI = {
                     role,
                 })
             );
+
+            // 🔒 Same as login: after first registration, reload into a clean state
+            window.location.reload();
         }
 
         return res;
     },
-
 
     async logout() {
         localStorage.removeItem(USER_KEY);
