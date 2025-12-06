@@ -1,3 +1,17 @@
+// Global helper: safe device-id getter used by overlay/role access
+function getDeviceIdSafe() {
+  try {
+    return (
+      localStorage.getItem('wqt_device_id') ||
+      localStorage.getItem('device_id') ||
+      null
+    );
+  } catch (e) {
+    console.warn('[WQT] getDeviceIdSafe failed', e);
+    return null;
+  }
+}
+
 function logoutAndReset() {
   // Identity
   localStorage.removeItem('WQT_CURRENT_USER');
