@@ -1,3 +1,17 @@
+/* Live Rate summary chip: side-by-side layout */
+.summary-chip-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.summary-chip-separator {
+  opacity: 0.7;
+  font-weight: 400;
+}
+.summary-chip-value {
+  font-size: 1.2rem;
+}
 /* Performance Score subvalue styling for Live Rate chip */
 .summary-chip-subvalue {
   font-size: 0.8rem;

@@ -1,3 +1,42 @@
+// --- Performance Points Per Hour Calculation ---
+// Computes (units + 2*locations) per hour for today/shift
+function computePerformancePointsPerHourToday() {
+  if (!Array.isArray(picks) || !picks.length) return null;
+  let totalScore = 0;
+  let totalMinutes = 0;
+  for (const o of picks) {
+    // Accept both 'start'/'startTime' and 'close'/'closeTime' fields
+    const startTime = o.startTime || o.start;
+    const closeTime = o.closeTime || o.close || o.closed;
+    if (!startTime || !closeTime) continue;
+    // Accept both 'units' and 'totalUnits' fields
+    const units = o.units ?? o.totalUnits ?? 0;
+    const locations = o.locations ?? 0;
+    // Try to parse as date/time if possible
+    let start = null, end = null;
+    if (startTime.length === 5 && closeTime.length === 5) {
+      // Assume HH:MM format
+      start = hm(startTime) * 60;
+      end = hm(closeTime) * 60;
+    } else {
+      // Try Date parse (ms)
+      start = new Date(startTime).getTime() / 60000;
+      end = new Date(closeTime).getTime() / 60000;
+    }
+    if (!isFinite(start) || !isFinite(end) || end <= start) continue;
+    const minutes = end - start;
+    if (minutes <= 0) continue;
+    const orderScore = units + (locations * 2);
+    totalScore += orderScore;
+    totalMinutes += minutes;
+  }
+  if (totalMinutes <= 0 || totalScore <= 0) return null;
+  return (totalScore / totalMinutes) * 60;
+}
+
+if (typeof window !== 'undefined') {
+  window.computePerformancePointsPerHourToday = computePerformancePointsPerHourToday;
+}
 // --- Performance Score Calculation ---
 // Computes performance score for today/shift: (units + locations*2) / total minutes
 // Uses same completed orders as live rate (picks[])
