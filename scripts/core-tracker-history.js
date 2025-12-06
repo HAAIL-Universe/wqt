@@ -69,6 +69,7 @@ function beginShift(){
   updateDelayBtn?.();
   updateEndShiftVisibility?.();
   updateCloseEarlyVisibility?.();
+  updateExitShiftVisibility?.();
 
   // Ensure live banner appears on Tracker now that a shift is active
   if (typeof showTab === 'function') showTab('tracker');
@@ -918,6 +919,7 @@ function completeOrder() {
   if (typeof updateDelayBtn === 'function') updateDelayBtn();
   if (typeof updateEndShiftVisibility === 'function') updateEndShiftVisibility();
   if (typeof updateCloseEarlyVisibility === 'function') updateCloseEarlyVisibility();
+  if (typeof updateExitShiftVisibility === 'function') updateExitShiftVisibility();
 
   showToast('Order closed at ' + closeHHMM);
 
@@ -2387,6 +2389,23 @@ function updateEndShiftVisibility(){
   const show = historyVisible && !current && picks.length > 0;
   btn.style.display = show ? 'inline-block' : 'none';
 }
+// ====== Exit Shift button visibility (History tab; no-archive path) ======
+function updateExitShiftVisibility(){
+  const btn = document.getElementById('btnExitShift');
+  if (!btn) return;
+
+  const histTab = document.getElementById('tabHistory');
+  const historyVisible = histTab ? !histTab.classList.contains('hidden') : false;
+
+  // "Active shift" if we either have a start time or the durable flag is on
+  const hasShiftFlag = !!startTime || localStorage.getItem('shiftActive') === '1';
+
+  // Only allow Exit Shift when there are no completed orders to archive
+  const hasOrders = Array.isArray(picks) && picks.length > 0;
+
+  const show = historyVisible && hasShiftFlag && !hasOrders;
+  btn.style.display = show ? 'inline-block' : 'none';
+}
 function updateEndPickingVisibility(){
   const btn = document.getElementById('btnEndPicking');
   if (!btn) return;
@@ -2531,6 +2550,9 @@ function endShift(){
   exitShiftNoArchive?.();  // reuse your existing full reset
   showTab?.('tracker');    // land back on the Tracker start screen
   showToast?.('Shift archived to History');
+
+  updateEndShiftVisibility?.();
+  updateExitShiftVisibility?.();
 }
 
 // ====== Clear today (keep shift active, nuke orders + logs) ======
@@ -2639,8 +2661,49 @@ function clearToday(){
   refreshOperativeChip?.();    // removes the chip bar
   ensureActionRowLayout?.();
 
+  if (typeof updateEndShiftVisibility === 'function') updateEndShiftVisibility();
+  if (typeof updateExitShiftVisibility === 'function') updateExitShiftVisibility();
+
   // land on Tracker
   if (typeof showTab === 'function') showTab('tracker');
+}
+
+// ====== Exit Shift (no archive) from History tab ======
+function exitShiftFromHistory(){
+  // If there is no active shift at all, nothing to do
+  const hasShiftFlag = !!startTime || localStorage.getItem('shiftActive') === '1';
+  if (!hasShiftFlag) {
+    if (typeof showToast === 'function') {
+      showToast('No active shift to exit.');
+    } else {
+      alert('No active shift to exit.');
+    }
+    updateExitShiftVisibility?.();
+    return;
+  }
+
+  // If we still have completed orders, force the user to either archive or clear first
+  if (Array.isArray(picks) && picks.length > 0) {
+    if (typeof showToast === 'function') {
+      showToast('You still have completed orders. Use "End Shift & Archive" or "Clear today\'s data" first.');
+    } else {
+      alert('You still have completed orders. Use "End Shift & Archive" or "Clear today\'s data" first.');
+    }
+    updateExitShiftVisibility?.();
+    return;
+  }
+
+  // At this point, shift is active but clean (no picks) → safe to exit without archive
+  if (typeof exitShiftNoArchive === 'function') {
+    exitShiftNoArchive();
+  } else {
+    // Defensive: keep behaviour similar if the helper is optional
+    exitShiftNoArchive?.();
+  }
+
+  // After exiting, re-evaluate buttons
+  updateEndShiftVisibility?.();
+  updateExitShiftVisibility?.();
 }
 
 // ====== Export / Import (gated) ======
