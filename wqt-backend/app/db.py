@@ -46,6 +46,7 @@ def init_db() -> None:
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS locations INTEGER DEFAULT 0;"))
+            conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_rate_uh FLOAT;"))
     except Exception:
         # If ALTER fails (e.g., non-Postgres or permission issues), ignore —
         # admins can run the migration manually in the DB.
@@ -150,6 +151,7 @@ class OrderRecord(Base):
     close_hhmm = Column(Text, nullable=True)                 # 'HH:MM'
     duration_min = Column(Integer, nullable=True)
     excl_min = Column(Integer, nullable=True)                # excluded mins (breaks)
+    order_rate_uh = Column(Float, nullable=True)             # units/hour, computed from total_units / (duration_min / 60)
 
     # Status / notes
     closed_early = Column(Boolean, nullable=False, default=False)
@@ -694,6 +696,14 @@ def record_order_from_payload(
     # Notes override any `notes` field in payload
     combined_notes = notes or p.get("notes") or None
 
+    # Compute order_rate_uh (units per hour)
+    order_rate_uh = None
+    if total_units is not None and isinstance(total_units, (int, float)) and duration_min and duration_min > 0:
+        try:
+            order_rate_uh = float(total_units) / (float(duration_min) / 60.0)
+        except Exception:
+            order_rate_uh = None
+
     log_json = None
     if "log" in p:
         try:
@@ -716,6 +726,7 @@ def record_order_from_payload(
             close_hhmm=close_hhmm,
             duration_min=duration_min,
             excl_min=excl_min,
+            order_rate_uh=order_rate_uh,
             closed_early=closed_early,
             early_reason=early_reason,
             notes=combined_notes,
@@ -764,10 +775,83 @@ def get_recent_orders_for_operator(
                     "close_hhmm": o.close_hhmm,
                     "duration_min": o.duration_min,
                     "excl_min": o.excl_min,
+                    "order_rate_uh": o.order_rate_uh,
                     "closed_early": o.closed_early,
                     "early_reason": o.early_reason,
                     "notes": o.notes,
                     "created_at": o.created_at.isoformat() if o.created_at else None,
+                }
+            )
+        return results
+    finally:
+        session.close()
+
+
+def get_history_for_operator(
+    operator_id: str,
+    limit: int = 100,
+) -> List[Dict[str, Any]]:
+    """
+    Fetch archived/completed orders for a given operator, formatted for frontend History rendering.
+
+    Returns list of orders with fields:
+      - id: order record ID
+      - customer: order name
+      - units: total units completed
+      - locations: number of locations
+      - pallets: number of pallets (if applicable)
+      - startTime: ISO datetime string or None
+      - closeTime: ISO datetime string or None
+      - orderRate: units/hour (float) or None
+
+    This matches the shape expected by the frontend's History table rendering code.
+    """
+    if engine is None:
+        return []
+    session = get_session()
+    try:
+        q = (
+            session.query(OrderRecord)
+            .filter(OrderRecord.operator_id == operator_id)
+            .order_by(OrderRecord.order_date.desc())
+            .limit(limit)
+        )
+        results: List[Dict[str, Any]] = []
+        for o in q:
+            # Convert HH:MM format to full datetime if possible
+            start_time_iso = None
+            close_time_iso = None
+            
+            if o.start_hhmm and o.order_date:
+                try:
+                    # Parse HH:MM and combine with order date
+                    parts = o.start_hhmm.split(":")
+                    h, m = int(parts[0]), int(parts[1])
+                    start_dt = o.order_date.replace(hour=h, minute=m, second=0, microsecond=0)
+                    start_time_iso = start_dt.isoformat()
+                except Exception:
+                    pass
+
+            if o.close_hhmm and o.order_date:
+                try:
+                    # Parse HH:MM and combine with order date
+                    parts = o.close_hhmm.split(":")
+                    h, m = int(parts[0]), int(parts[1])
+                    close_dt = o.order_date.replace(hour=h, minute=m, second=0, microsecond=0)
+                    close_time_iso = close_dt.isoformat()
+                except Exception:
+                    pass
+
+            results.append(
+                {
+                    "id": o.id,
+                    "customer": o.order_name,
+                    "units": o.total_units or 0,
+                    "locations": o.locations or 0,
+                    "pallets": o.pallets,
+                    "startTime": start_time_iso,
+                    "closeTime": close_time_iso,
+                    "orderRate": o.order_rate_uh,
                 }
             )
         return results

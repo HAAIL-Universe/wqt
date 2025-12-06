@@ -636,3 +636,41 @@ function ensureActionRowLayout(){
   right.style.display = 'flex';
   right.style.gap     = '10px';
 }
+
+// Return score for a single order
+function computeOrderScore(order) {
+  const units = order.units ?? order.totalUnits ?? 0;
+  const locations = order.locations ?? order.totalLocations ?? 0;
+  return units + locations * 2; // 2 pts per location
+}
+
+// Return per-order perf rate (pts/h) based on start/close
+function computeOrderPerfRate(order) {
+  if (!order.startTime || !order.closeTime) return null;
+
+  const startMs = new Date(order.startTime).getTime();
+  const endMs = new Date(order.closeTime).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+
+  const minutes = (endMs - startMs) / 60000;
+  if (minutes <= 0) return null;
+
+  const score = computeOrderScore(order);
+  return (score / minutes) * 60; // pts/h
+}
+
+// Return day-level perf score (pts/h) from archived orders + worked minutes
+function computeDayPerfScore(orders, workedMinutes) {
+  if (!Array.isArray(orders) || !orders.length) return null;
+  if (!workedMinutes || workedMinutes <= 0) return null;
+
+  let totalScore = 0;
+  for (const o of orders) {
+    totalScore += computeOrderScore(o);
+  }
+
+  const workedHours = workedMinutes / 60;
+  if (workedHours <= 0) return null;
+
+  return totalScore / workedHours; // pts/h
+}

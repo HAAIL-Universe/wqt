@@ -22,6 +22,7 @@ from .db import (
     verify_user,
     get_user,  # NEW
     record_order_from_payload,  # NEW: orders table integration
+    get_history_for_operator,   # NEW: fetch archived orders for frontend
     load_device_state,          # NEW: legacy fallback
     save_device_state,          # NEW: migrate to user key
 )
@@ -532,3 +533,32 @@ async def api_orders_record(payload: OrderRecordPayload) -> Dict[str, Any]:
     log_usage_event("ORDER_RECORDED", detail)
 
     return {"status": "ok"}
+
+
+@app.get("/api/history/operator/{operator_id}")
+async def api_history_operator(
+    operator_id: str,
+    limit: int = Query(100, ge=1, le=500)
+) -> Dict[str, Any]:
+    """
+    Fetch archived/completed orders for a given operator (PIN).
+
+    Returns a list of orders with fields matching the frontend's History table expectations:
+      - id: order record ID
+      - customer: order name
+      - units: total units completed
+      - locations: number of locations
+      - pallets: number of pallets (if applicable)
+      - startTime: ISO datetime string
+      - closeTime: ISO datetime string
+      - orderRate: units/hour (float)
+
+    This allows the frontend to render the History (daily archives) table
+    using the same order structure as the live Completed Orders table.
+    """
+    orders = get_history_for_operator(operator_id, limit=limit)
+    return {
+        "status": "ok",
+        "orders": orders,
+        "count": len(orders),
+    }
