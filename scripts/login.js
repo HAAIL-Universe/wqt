@@ -172,28 +172,36 @@
     window.addEventListener('resize', resize);
 
     const glyphs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    // More dots = more visible, still not crazy
-    const dots = Array.from({ length: 180 }, () => ({
+
+    // MORE dots = denser field
+    const dots = Array.from({ length: 260 }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      speed: 0.6 + Math.random() * 0.9,
-      opacity: 0.28 + Math.random() * 0.32
+      // SLOWER vertical movement
+      speed: 0.18 + Math.random() * 0.25,
+      opacity: 0.25 + Math.random() * 0.3,
+      char: glyphs[Math.floor(Math.random() * glyphs.length)],
+      // how often this dot changes character (higher = more flicker)
+      changeRate: 0.45 + Math.random() * 0.25
     }));
 
     function draw() {
       if (!canvas.width || !canvas.height) return;
 
-      // very subtle dark wash, then draw chars over it
-      ctx.fillStyle = 'rgba(2, 6, 23, 0.75)';
+      // subtle dark wash to soften trails
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.82)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.font = '16px monospace';
 
       for (const d of dots) {
-        const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
-        // brighter soft red
+        // chance to change character each frame → quicker flicker
+        if (Math.random() < d.changeRate) {
+          d.char = glyphs[Math.floor(Math.random() * glyphs.length)];
+        }
+
         ctx.fillStyle = `rgba(248, 113, 113, ${d.opacity})`;
-        ctx.fillText(ch, d.x, d.y);
+        ctx.fillText(d.char, d.x, d.y);
 
         d.y += d.speed;
         if (d.y > canvas.height + 16) {
@@ -203,9 +211,8 @@
       }
     }
 
-    // Still not full 60fps – gentle but clearly animated
-    setInterval(draw, 90);
-  }
+    // Faster tick → characters update more often, but fall speed stays low
+    setInte
 
   // --------------------------
   // DOM wiring
