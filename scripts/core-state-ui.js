@@ -1573,10 +1573,29 @@ function tryBeep(){
 function loadAll(){
   // 1. Attempt to load data
   try {
-    const raw = localStorage.getItem(KEY);
 
-    if (raw) {
-      const p = JSON.parse(raw);
+    // Prefer the centralized Storage wrappers which implement per-user namespacing
+    // (Storage.loadMain will read the namespaced key that WqtAPI.saveState writes to).
+    let p = null;
+    if (typeof window !== 'undefined' && window.Storage && typeof Storage.loadMain === 'function') {
+      try {
+        p = Storage.loadMain();
+      } catch (e) {
+        p = null;
+      }
+    }
+
+    // If Storage.loadMain didn't return a usable object, fall back to legacy global key
+    if (!p) {
+      try {
+        const raw = localStorage.getItem(KEY);
+        p = raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        p = null;
+      }
+    }
+
+    if (p) {
       picks       = Array.isArray(p.picks) ? p.picks : [];
       historyDays = Array.isArray(p.history) ? p.history : [];
       current     = p.current || null;
@@ -1598,8 +1617,17 @@ function loadAll(){
       operativeLog = []; operativeActive = null;
     }
 
-    const lraw = localStorage.getItem(KEY_LEARN);
-    learnedUL = lraw ? (JSON.parse(lraw) || {}) : {};
+    // Load learned units: prefer Storage wrapper (namespaced) then fall back to legacy key
+    try {
+      if (typeof window !== 'undefined' && window.Storage && typeof Storage.loadLearnedUL === 'function') {
+        learnedUL = Storage.loadLearnedUL() || {};
+      } else {
+        const lraw = localStorage.getItem(KEY_LEARN);
+        learnedUL = lraw ? (JSON.parse(lraw) || {}) : {};
+      }
+    } catch (e) {
+      learnedUL = {};
+    }
 
     try {
       const braw = localStorage.getItem('breakDraft');
