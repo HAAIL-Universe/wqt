@@ -412,8 +412,10 @@ async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
     if not pin:
         return {"success": False, "message": "PIN required"}
 
-    username = pin
+    mode = getattr(payload, "mode", None) or "primary"
+    requested_role = getattr(payload, "requested_role", None)
 
+    username = pin
     valid = verify_user(username, pin)
     if not valid:
         return {
@@ -428,6 +430,28 @@ async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
             "message": "User record missing",
         }
 
+    # Overlay mode logic
+    if mode == "overlay":
+        # Only allow certain roles to activate overlays
+        from fastapi import HTTPException
+        if requested_role == "operative":
+            if user.role not in ["operative", "supervisor"]:
+                raise HTTPException(status_code=403, detail="PIN not allowed for operative overlay")
+        elif requested_role == "supervisor":
+            if user.role != "supervisor":
+                raise HTTPException(status_code=403, detail="PIN not allowed for supervisor overlay")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid overlay role requested")
+
+        # Do NOT switch primary session, just return overlay info
+        return {
+            "user_id": user.username,
+            "display_name": user.display_name or user.username,
+            "role": requested_role,
+            "mode": "overlay"
+        }
+
+    # Primary mode (default) stays as-is
     return {
         "success": True,
         "user_id": user.username,

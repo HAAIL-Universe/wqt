@@ -1,3 +1,55 @@
+// ================= Overlay Role UI =================
+function renderRoleChips() {
+  const primaryChip  = document.getElementById('rolePrimaryChip');
+  const overlayChip  = document.getElementById('roleOverlayChip');
+  const reqBtn       = document.getElementById('btnRequestOverlay');
+
+  // Primary role always "Picker" for now
+  if (primaryChip) primaryChip.textContent = "Role: Picker";
+
+  const overlay = WqtAPI.loadOverlaySession?.();
+
+  if (overlay && overlay.role) {
+    overlayChip.classList.remove('hidden');
+    overlayChip.textContent = `Overlay: ${overlay.role}`;
+  } else {
+    overlayChip.classList.add('hidden');
+  }
+}
+
+function openOverlayModal() {
+  document.getElementById('overlayRoleModal').style.display = 'flex';
+  document.getElementById('overlayPinInput').value = '';
+  document.getElementById('overlayStatus').textContent = '';
+}
+
+function closeOverlayModal() {
+  document.getElementById('overlayRoleModal').style.display = 'none';
+}
+
+async function submitOverlayLogin() {
+  const role = document.getElementById('overlayRoleSelect').value;
+  const pin  = document.getElementById('overlayPinInput').value.trim();
+  const status = document.getElementById('overlayStatus');
+
+  if (!pin) { status.textContent = "Enter a PIN."; return; }
+
+  try {
+    status.textContent = "Checking…";
+    const res = await WqtAPI.loginOverlaySession(pin, role);
+    status.textContent = `${res.display_name} granted ${role} access.`;
+    renderRoleChips();
+    setTimeout(closeOverlayModal, 600);
+  } catch(err) {
+    status.textContent = err.message || "Access denied.";
+  }
+}
+
+function endOverlaySessionUI() {
+  WqtAPI.clearOverlaySession?.();
+  renderRoleChips();
+  showToast?.("Overlay ended");
+}
 // ====== Tracker core ======
 
 // Round current time to nearest hour (for quick baseline start)

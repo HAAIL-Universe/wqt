@@ -142,6 +142,52 @@ async function fetchJSON(path, options = {}) {
 }
 
 const WqtAPI = {
+
+            // Overlay session login
+            async loginOverlaySession(pin, requestedRole) {
+                    const deviceId = getDeviceId?.() || null;
+
+                    const resp = await fetch('/auth/login_pin', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            pin_code: String(pin).trim(),
+                            device_id: deviceId,
+                            mode: "overlay",
+                            requested_role: requestedRole
+                        })
+                    });
+
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(()=>({detail:"Error"}));
+                        throw new Error(err.detail || "Overlay role denied");
+                    }
+
+                    const data = await resp.json();
+
+                    const overlay = {
+                        user_id: data.user_id,
+                        display_name: data.display_name,
+                        role: data.role,          // "operative" or "supervisor"
+                        mode: "overlay"
+                    };
+
+                    localStorage.setItem('wqt_overlay_session', JSON.stringify(overlay));
+                    return overlay;
+            },
+
+            loadOverlaySession() {
+                    try {
+                        const raw = localStorage.getItem('wqt_overlay_session');
+                        return raw ? JSON.parse(raw) : null;
+                    } catch {
+                        return null;
+                    }
+            },
+
+            clearOverlaySession() {
+                    try { localStorage.removeItem('wqt_overlay_session'); } catch {}
+            },
     // ------------------------------------------------------------------
     // Core state – mirrors loadAll/saveAll in bootstrap.js
     // Now prefers backend, with local fallback.

@@ -490,29 +490,49 @@
         </div>
         <div class="card-body">
           <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
-            <button
-              class="btn ghost"
-              type="button"
-              id="btnClearToday"
-              onclick="clearToday()">
-              Clear today’s data
-            </button>
+            <!-- Role chips and overlay access row -->
+            <div class="row" style="margin-bottom:6px; gap:8px;">
+              <span id="rolePrimaryChip" class="tag">
+                Role: Picker
+              </span>
 
-            <button
-              class="btn ghost"
-              type="button"
-              id="btnExitShift"
-              onclick="exitShiftFromHistory()">
-              Exit shift (no archive)
-            </button>
+              <span id="roleOverlayChip" class="tag ghost hidden"
+                    onclick="endOverlaySessionUI()">
+                Overlay active — tap to end
+              </span>
 
-            <button
-              class="btn bad"
-              type="button"
-              onclick="logoutAndReset()">
-              Log Out
-            </button>
-          </div>
+              <button type="button"
+                      class="btn slim ghost"
+                      id="btnRequestOverlay"
+                      onclick="openOverlayModal()">
+                Request role access
+              </button>
+            </div>
+
+            <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
+              <button
+                class="btn ghost"
+                type="button"
+                id="btnClearToday"
+                onclick="clearToday()">
+                Clear today’s data
+              </button>
+
+              <button
+                class="btn ghost"
+                type="button"
+                id="btnExitShift"
+                onclick="exitShiftFromHistory()">
+                Exit shift (no archive)
+              </button>
+
+              <button
+                class="btn bad"
+                type="button"
+                onclick="logoutAndReset()">
+                Log Out
+              </button>
+            </div>
         </div>
       </div>
 
@@ -526,6 +546,29 @@
       <div style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
         <button class="btn ghost" type="button" onclick="reloadDropdowns()">Reload dropdowns</button>
         <button class="btn bad" type="button" onclick="clearAllCustom()">Clear ALL custom customers</button>
+      </div>
+    </div>
+    
+    <!-- Overlay role modal -->
+    <div id="overlayRoleModal" class="modal" style="display:none;">
+      <div class="modal-content slim">
+        <h3>Request role access</h3>
+        <p class="hint">A supervisor/operative must enter their PIN.</p>
+
+        <select id="overlayRoleSelect">
+          <option value="operative">Operative</option>
+          <option value="supervisor">Supervisor</option>
+        </select>
+
+        <input id="overlayPinInput" type="password" inputmode="numeric"
+               maxlength="6" placeholder="PIN">
+
+        <div class="row" style="margin-top:10px; gap:8px;">
+          <button class="btn ok" onclick="submitOverlayLogin()">Unlock</button>
+          <button class="btn ghost" onclick="closeOverlayModal()">Cancel</button>
+        </div>
+
+        <div id="overlayStatus" class="hint" style="margin-top:6px;"></div>
       </div>
     </div>
   </section>
