@@ -34,7 +34,7 @@ function updateSummaryChipsUI() {
   }
   const perfEl = document.getElementById('perf-score-value');
   if (perfEl) {
-    perfEl.textContent = (perfScore && isFinite(perfScore)) ? `Perf Score: ${perfScore.toFixed(1)} pts/h` : 'Perf Score: —';
+    perfEl.textContent = (perfScore && isFinite(perfScore)) ? `${perfScore.toFixed(1)} pts/h` : '—';
   }
 }
 

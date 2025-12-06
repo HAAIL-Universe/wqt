@@ -1,4 +1,43 @@
-/* Live Rate summary chip: side-by-side layout */
+/* Live Rate summary chip: dual-side layout */
+.summary-chip-dual {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.summary-chip-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1 1 0;
+}
+
+.summary-chip-side-left {
+  align-items: flex-start;
+}
+
+.summary-chip-side-right {
+  align-items: flex-end;
+}
+
+.summary-chip-divider {
+  width: 1px;
+  margin: 0 12px;
+  background: rgba(248, 250, 252, 0.12); /* subtle line */
+}
+
+.summary-chip-label {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.summary-chip-value {
+  font-size: 1.2rem;
+  margin-top: 2px;
+}
+
+/* Legacy row-based layout (kept for compatibility) */
 .summary-chip-row {
   display: flex;
   align-items: baseline;

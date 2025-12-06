@@ -1,30 +1,37 @@
 // --- Performance Points Per Hour Calculation ---
 // Computes (units + 2*locations) per hour for today/shift
-// Uses same completed orders source as Live Rate (picks array)
+// Uses same shift-time window as Live Rate (shift start → now)
 function computePerformancePointsPerHourToday() {
   if (!Array.isArray(picks) || !picks.length) return null;
+  
+  // 1) Sum score over all completed orders today / this shift
   let totalScore = 0;
-  let totalMinutes = 0;
   for (const o of picks) {
-    // Use exact same field names as Completed Orders table and Live Rate
     const units = o.units ?? o.totalUnits ?? o.qty ?? 0;
     const locations = o.locations ?? o.totalLocations ?? 0;
-    // Accept both 'start' and 'close' fields (HH:MM format used by this app)
-    const startTime = o.start;
-    const closeTime = o.close;
-    if (!startTime || !closeTime) continue;
-    // HH:MM format - use existing hm() helper that returns hours as float
-    const startH = hm(startTime);
-    const endH = hm(closeTime);
-    if (!isFinite(startH) || !isFinite(endH)) continue;
-    const minutes = (endH - startH) * 60;
-    if (minutes <= 0) continue;
-    const orderScore = units + (locations * 2);
+    const orderScore = units + locations * 2;
     totalScore += orderScore;
-    totalMinutes += minutes;
   }
-  if (totalMinutes <= 0 || totalScore <= 0) return null;
-  return (totalScore / totalMinutes) * 60;
+  
+  if (totalScore <= 0) return null;
+  
+  // 2) Use the SAME time window as Live Rate
+  // Reuse the same shift-start field Live Rate uses
+  const shiftStartStr = (typeof getSnappedStartHHMM === 'function') 
+    ? getSnappedStartHHMM() 
+    : (startTime || null);
+  if (!shiftStartStr) return null;
+  
+  const shiftStartH = hm(shiftStartStr);
+  const nowH = hm((typeof getEffectiveLiveEndHHMM === 'function') ? getEffectiveLiveEndHHMM() : nowHHMM());
+  
+  if (!Number.isFinite(shiftStartH) || !Number.isFinite(nowH) || nowH <= shiftStartH) return null;
+  
+  const shiftHours = nowH - shiftStartH;
+  if (shiftHours <= 0) return null;
+  
+  // 3) Convert to points per hour
+  return totalScore / shiftHours;
 }
 
 if (typeof window !== 'undefined') {
@@ -2170,6 +2177,23 @@ function renderDone(){
     var net  = (e > s) ? (e - s) - (excl)/60 : 0.01;
     var rate = Math.round(o.units / Math.max(0.01, net));
 
+    // Calculate per-order Perf Rate
+    var perfRate = '—';
+    if (o.start && o.close) {
+      const startH = hm(o.start);
+      const endH = hm(o.close);
+      if (isFinite(startH) && isFinite(endH)) {
+        const minutes = (endH - startH) * 60;
+        if (minutes > 0) {
+          const units = o.units ?? o.totalUnits ?? o.qty ?? 0;
+          const locations = o.locations ?? o.totalLocations ?? 0;
+          const orderScore = units + (locations * 2);
+          const perfRateVal = (orderScore / minutes) * 60;
+          perfRate = perfRateVal.toFixed(1) + ' pts/h';
+        }
+      }
+    }
+
     var tr = document.createElement('tr');
     tr.className = 'clickable';
     tr.dataset.idx = i;
@@ -2181,7 +2205,8 @@ function renderDone(){
       '<td>'+ (o.pallets || 0) +'</td>'+
       '<td>'+ (o.start || '') +'</td>'+
       '<td>'+ (o.close || '') +'</td>'+
-      '<td>'+rate+' u/h</td>';
+      '<td>'+rate+' u/h</td>'+
+      '<td>'+perfRate+'</td>';
     tb.appendChild(tr);
 
     // Expandable log row
@@ -2190,7 +2215,7 @@ function renderDone(){
     logTr.id = 'logrow_'+i;
 
     var logTd = document.createElement('td');
-    logTd.colSpan = 8;
+    logTd.colSpan = 9;
 
     var html = '<div class="logwrap"><div class="hint">Order log</div>';
 
