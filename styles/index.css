@@ -1,16 +1,25 @@
 /* Live Rate summary chip: side-by-side layout */
 .summary-chip-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 16px;
+  gap: 8px;
 }
 .summary-chip-separator {
+  margin: 0 12px;
   opacity: 0.7;
-  font-weight: 400;
 }
-.summary-chip-value {
-  font-size: 1.2rem;
+.summary-chip-value-left,
+.summary-chip-value-right {
+  font-size: 1.1rem;
+}
+.summary-chip-value-left {
+  text-align: left;
+}
+.summary-chip-value-right {
+  text-align: right;
+  white-space: nowrap;
 }
 /* Performance Score subvalue styling for Live Rate chip */
 .summary-chip-subvalue {

@@ -1,30 +1,23 @@
 // --- Performance Points Per Hour Calculation ---
 // Computes (units + 2*locations) per hour for today/shift
+// Uses same completed orders source as Live Rate (picks array)
 function computePerformancePointsPerHourToday() {
   if (!Array.isArray(picks) || !picks.length) return null;
   let totalScore = 0;
   let totalMinutes = 0;
   for (const o of picks) {
-    // Accept both 'start'/'startTime' and 'close'/'closeTime' fields
-    const startTime = o.startTime || o.start;
-    const closeTime = o.closeTime || o.close || o.closed;
+    // Use exact same field names as Completed Orders table and Live Rate
+    const units = o.units ?? o.totalUnits ?? o.qty ?? 0;
+    const locations = o.locations ?? o.totalLocations ?? 0;
+    // Accept both 'start' and 'close' fields (HH:MM format used by this app)
+    const startTime = o.start;
+    const closeTime = o.close;
     if (!startTime || !closeTime) continue;
-    // Accept both 'units' and 'totalUnits' fields
-    const units = o.units ?? o.totalUnits ?? 0;
-    const locations = o.locations ?? 0;
-    // Try to parse as date/time if possible
-    let start = null, end = null;
-    if (startTime.length === 5 && closeTime.length === 5) {
-      // Assume HH:MM format
-      start = hm(startTime) * 60;
-      end = hm(closeTime) * 60;
-    } else {
-      // Try Date parse (ms)
-      start = new Date(startTime).getTime() / 60000;
-      end = new Date(closeTime).getTime() / 60000;
-    }
-    if (!isFinite(start) || !isFinite(end) || end <= start) continue;
-    const minutes = end - start;
+    // HH:MM format - use existing hm() helper that returns hours as float
+    const startH = hm(startTime);
+    const endH = hm(closeTime);
+    if (!isFinite(startH) || !isFinite(endH)) continue;
+    const minutes = (endH - startH) * 60;
     if (minutes <= 0) continue;
     const orderScore = units + (locations * 2);
     totalScore += orderScore;
