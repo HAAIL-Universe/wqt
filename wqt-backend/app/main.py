@@ -425,25 +425,21 @@ async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
 
     user = get_user(username)
     if not user:
-        return {
-            "success": False,
-            "message": "User record missing",
-        }
-
-    # Overlay mode logic
-    if mode == "overlay":
-        # Only allow certain roles to activate overlays
         from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if mode == "overlay":
+        from fastapi import HTTPException
+        # Permission rules
         if requested_role == "operative":
             if user.role not in ["operative", "supervisor"]:
-                raise HTTPException(status_code=403, detail="PIN not allowed for operative overlay")
+                raise HTTPException(status_code=403, detail="Access denied")
         elif requested_role == "supervisor":
             if user.role != "supervisor":
-                raise HTTPException(status_code=403, detail="PIN not allowed for supervisor overlay")
+                raise HTTPException(status_code=403, detail="Access denied")
         else:
-            raise HTTPException(status_code=400, detail="Invalid overlay role requested")
-
-        # Do NOT switch primary session, just return overlay info
+            raise HTTPException(status_code=403, detail="Access denied")
+        # Do NOT log in primary user, do NOT create session
         return {
             "user_id": user.username,
             "display_name": user.display_name or user.username,
