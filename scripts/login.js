@@ -5,7 +5,7 @@
 
 (function () {
   const CURRENT_USER_KEY = 'WQT_CURRENT_USER';
-  const DEVICE_ID_KEY = 'WQT_DEVICE_ID';
+  const DEVICE_ID_KEY   = 'WQT_DEVICE_ID';
 
   // --------------------------
   // Local storage helpers
@@ -268,7 +268,6 @@
           return;
         }
 
-        // You can enforce length === 5 here if you want to be strict
         loginBtn.disabled = true;
         setStatus('Logging in…', false);
 

@@ -9,6 +9,9 @@ const STORAGE_KEY_MAIN  = 'wqt_v2722_data';   // == KEY
 const STORAGE_KEY_LEARN = 'wqt_learn_ul';     // == KEY_LEARN
 const STORAGE_KEY_CODES = 'wqt_codes';        // == KEY_CODES
 
+// Identity key shared with login.js
+const CURRENT_USER_KEY  = 'WQT_CURRENT_USER';
+
 // Side-channel keys used directly in bootstrap.js
 // (delays, notes, shared pick, snake, etc.)
 const StorageKeys = {
@@ -38,12 +41,67 @@ function safeParse(json, fallback) {
   }
 }
 
+// ---- Identity helpers for per-user namespaces ----
+
+function getCurrentUserId() {
+  try {
+    const raw = window.localStorage.getItem(CURRENT_USER_KEY);
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u && (u.userId || u.username || u.id)) {
+        return String(u.userId || u.username || u.id);
+      }
+    }
+  } catch (_) {
+    // ignore JSON errors
+  }
+
+  // Legacy compatibility: fall back to older keys if present
+  try {
+    const legacy =
+      window.localStorage.getItem('wqt_operator_id') ||
+      window.localStorage.getItem('wqt_username');
+    if (legacy) return String(legacy);
+  } catch (_) {
+    // ignore
+  }
+
+  return null;
+}
+
+function buildNamespacedKey(baseKey) {
+  const userId = getCurrentUserId();
+  if (!userId) {
+    // No user identified on this device – preserve legacy behaviour
+    return baseKey;
+  }
+  return baseKey + '__u_' + userId;
+}
+
 const Storage = {
   // ---- Core state blob (picks, history, current, etc.) ----
   // This mirrors loadAll/saveAll in bootstrap.js.
   loadMain() {
-    const raw = window.localStorage.getItem(STORAGE_KEY_MAIN);
-    const parsed = safeParse(raw, null);
+    const mainKey = buildNamespacedKey(STORAGE_KEY_MAIN);
+    let raw = null;
+    let parsed = null;
+    let migratedFromLegacy = false;
+
+    try {
+      raw = window.localStorage.getItem(mainKey);
+      if (!raw && mainKey !== STORAGE_KEY_MAIN) {
+        // No user-specific blob yet – fall back to legacy global key
+        const legacyRaw = window.localStorage.getItem(STORAGE_KEY_MAIN);
+        if (legacyRaw) {
+          raw = legacyRaw;
+          migratedFromLegacy = true;
+        }
+      }
+      parsed = safeParse(raw, null);
+    } catch (e) {
+      console.error('Storage.loadMain failed', e);
+      parsed = null;
+    }
 
     if (!parsed) {
       // Sane defaults (same as bootstrap.js loadAll)
@@ -64,6 +122,15 @@ const Storage = {
         operativeLog: [],
         operativeActive: null
       };
+    }
+
+    // If we migrated from the legacy global key, re-save under the user key
+    if (migratedFromLegacy && mainKey !== STORAGE_KEY_MAIN) {
+      try {
+        window.localStorage.setItem(mainKey, JSON.stringify(parsed));
+      } catch (e) {
+        console.warn('Failed to migrate legacy main storage to user key', e);
+      }
     }
 
     // Normalise shape so callers get stable fields
@@ -108,10 +175,8 @@ const Storage = {
         operativeActive: s.operativeActive || null
       };
 
-      window.localStorage.setItem(
-        STORAGE_KEY_MAIN,
-        JSON.stringify(payload)
-      );
+      const mainKey = buildNamespacedKey(STORAGE_KEY_MAIN);
+      window.localStorage.setItem(mainKey, JSON.stringify(payload));
     } catch (e) {
       console.error('Storage.saveMain failed', e);
     }
@@ -119,14 +184,28 @@ const Storage = {
 
   // ---- Learned UL ----
   loadLearnedUL() {
-    const raw = window.localStorage.getItem(STORAGE_KEY_LEARN);
-    return safeParse(raw, {}) || {};
+    try {
+      const learnKey = buildNamespacedKey(STORAGE_KEY_LEARN);
+      const raw = window.localStorage.getItem(learnKey);
+      const parsed = safeParse(raw, null);
+      if (parsed) return parsed;
+
+      // Fallback to legacy global key if no per-user data
+      if (learnKey !== STORAGE_KEY_LEARN) {
+        const legacyRaw = window.localStorage.getItem(STORAGE_KEY_LEARN);
+        return safeParse(legacyRaw, {}) || {};
+      }
+    } catch (e) {
+      console.error('Storage.loadLearnedUL failed', e);
+    }
+    return {};
   },
 
   saveLearnedUL(learned) {
     try {
+      const learnKey = buildNamespacedKey(STORAGE_KEY_LEARN);
       window.localStorage.setItem(
-        STORAGE_KEY_LEARN,
+        learnKey,
         JSON.stringify(learned || {})
       );
     } catch (e) {
@@ -136,14 +215,28 @@ const Storage = {
 
   // ---- Custom store codes ----
   loadCustomCodes() {
-    const raw = window.localStorage.getItem(STORAGE_KEY_CODES);
-    return safeParse(raw, []) || [];
+    try {
+      const codesKey = buildNamespacedKey(STORAGE_KEY_CODES);
+      const raw = window.localStorage.getItem(codesKey);
+      const parsed = safeParse(raw, null);
+      if (parsed) return parsed;
+
+      // Fallback to legacy global key if no per-user data
+      if (codesKey !== STORAGE_KEY_CODES) {
+        const legacyRaw = window.localStorage.getItem(STORAGE_KEY_CODES);
+        return safeParse(legacyRaw, []) || [];
+      }
+    } catch (e) {
+      console.error('Storage.loadCustomCodes failed', e);
+    }
+    return [];
   },
 
   saveCustomCodes(codes) {
     try {
+      const codesKey = buildNamespacedKey(STORAGE_KEY_CODES);
       window.localStorage.setItem(
-        STORAGE_KEY_CODES,
+        codesKey,
         JSON.stringify(codes || [])
       );
     } catch (e) {
