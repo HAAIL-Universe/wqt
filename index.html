@@ -477,66 +477,72 @@
         <!-- ...existing code... -->
       </div>
 
-      <!-- NEW: Shift & account tools card -->
-      <div class="card" id="shiftToolsCard">
-        <div class="card-header">
-          <h3>Shift &amp; account tools</h3>
+      <!-- NEW: Shift & account tools card (accordion) -->
+      <div class="card" id="shift-tools-card">
+        <div class="card-header accordion-header"
+             id="shift-tools-toggle"
+             role="button"
+             tabindex="0"
+             aria-expanded="false"
+             aria-controls="shift-tools-body"
+             onclick="toggleShiftTools()">
+          <span>Shift &amp; account tools</span>
+          <span class="chevron" id="shift-tools-chevron">▾</span>
         </div>
-        <div class="card-body">
+
+        <div class="card-body hidden" id="shift-tools-body">
+          <div class="row" style="margin-bottom:6px; gap:8px;">
+            <span id="rolePrimaryChip" class="tag">
+              Role: Picker
+            </span>
+
+            <span id="roleOverlayChip" class="tag ghost hidden"
+                  onclick="endOverlaySessionUI()">
+              Overlay active — tap to end
+            </span>
+
+            <button type="button"
+                    class="btn slim ghost"
+                    id="btnRequestOverlay"
+                    onclick="openOverlayModal()">
+              Request role access
+            </button>
+          </div>
+
+          <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button class="btn ghost" id="btnEndPicking" onclick="markPickingComplete()">
+              Picking finished
+            </button>
+
+            <button class="btn" id="btnEndShift" onclick="endShift()">
+              End shift &amp; archive
+            </button>
+          </div>
+
           <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
-            <!-- Role chips and overlay access row -->
-            <div class="row" style="margin-bottom:6px; gap:8px;">
-              <span id="rolePrimaryChip" class="tag">
-                Role: Picker
-              </span>
+            <button
+              class="btn ghost"
+              type="button"
+              id="btnClearToday"
+              onclick="clearToday()">
+              Clear today’s data
+            </button>
 
-              <span id="roleOverlayChip" class="tag ghost hidden"
-                    onclick="endOverlaySessionUI()">
-                Overlay active — tap to end
-              </span>
+            <button
+              class="btn ghost"
+              type="button"
+              id="btnExitShift"
+              onclick="exitShiftFromHistory()">
+              Exit shift (no archive)
+            </button>
 
-              <button type="button"
-                      class="btn slim ghost"
-                      id="btnRequestOverlay"
-                      onclick="openOverlayModal()">
-                Request role access
-              </button>
-            </div>
-            <!-- NEW ROW: Picking controls (moved from Tracker) -->
-            <div class="row" style="margin-top:6px; gap:8px; flex-wrap:wrap; align-items:center;">
-              <button class="btn ghost" id="btnEndPicking" onclick="markPickingComplete()">
-                Picking finished
-              </button>
-
-              <button class="btn" id="btnEndShift" onclick="endShift()">
-                End shift & archive
-              </button>
-            </div>
-
-            <div class="row" style="margin-top:4px; gap:8px; flex-wrap:wrap;">
-              <button
-                class="btn ghost"
-                type="button"
-                id="btnClearToday"
-                onclick="clearToday()">
-                Clear today’s data
-              </button>
-
-              <button
-                class="btn ghost"
-                type="button"
-                id="btnExitShift"
-                onclick="exitShiftFromHistory()">
-                Exit shift (no archive)
-              </button>
-
-              <button
-                class="btn bad"
-                type="button"
-                onclick="logoutAndReset()">
-                Log Out
-              </button>
-            </div>
+            <button
+              class="btn bad"
+              type="button"
+              onclick="logoutAndReset()">
+              Log Out
+            </button>
+          </div>
         </div>
       </div>
 

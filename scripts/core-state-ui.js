@@ -2060,6 +2060,7 @@ function showTab(which){
   if (which === 'history') {
     renderWeeklySummary();
     initWeekCardToggle();
+    try { if (typeof initShiftToolsToggle === 'function') initShiftToolsToggle(); } catch(e){}
     // hide order-area when on history
     if (area) area.style.display = 'none';
     return;

@@ -552,6 +552,45 @@ function initWeekCardToggle(){
   card.dataset.bound = '1';
 }
 
+// ====== Shift tools accordion ======
+function toggleShiftTools() {
+  const body = document.getElementById('shift-tools-body');
+  const chev = document.getElementById('shift-tools-chevron');
+  if (!body) return;
+
+  const nowHidden = body.classList.toggle('hidden');
+  if (chev) chev.textContent = nowHidden ? '▸' : '▾';
+
+  const hdr = document.getElementById('shift-tools-toggle');
+  if (hdr) hdr.setAttribute('aria-expanded', String(!nowHidden));
+}
+
+function initShiftToolsToggle(){
+  const card = document.getElementById('shift-tools-card');
+  const header = document.getElementById('shift-tools-toggle');
+  const body = document.getElementById('shift-tools-body');
+  const chev = document.getElementById('shift-tools-chevron');
+  if (!card || !header || !body) return;
+
+  function apply(collapsed){
+    if (collapsed) body.classList.add('hidden'); else body.classList.remove('hidden');
+    if (chev) chev.textContent = collapsed ? '▸' : '▾';
+    header.setAttribute('aria-expanded', String(!collapsed));
+    try { localStorage.setItem('shiftToolsCollapsed', collapsed ? '1' : '0'); } catch(e){}
+  }
+
+  let saved = null;
+  try { saved = localStorage.getItem('shiftToolsCollapsed'); } catch(e){}
+  if (saved !== null) apply(saved === '1');
+  else apply(!startTime); // collapsed if no active shift
+
+  if (card.dataset.bound === '1') return;
+  const toggle = ()=> apply(body.classList.contains('hidden'));
+  header.addEventListener('click', toggle);
+  header.addEventListener('keydown', (e)=>{ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  card.dataset.bound = '1';
+}
+
 // ====== Action row layout (delay / breaks / undo / CE) ======
 function ensureActionRowLayout(){
   const delayBtn = document.getElementById('btnDelay');
