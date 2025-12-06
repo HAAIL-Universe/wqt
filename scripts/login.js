@@ -172,35 +172,41 @@
     window.addEventListener('resize', resize);
 
     const glyphs = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    const dots = Array.from({ length: 50 }, () => ({
+    // More dots = more visible, still not crazy
+    const dots = Array.from({ length: 180 }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      speed: 0.4 + Math.random() * 0.6,
-      opacity: 0.12 + Math.random() * 0.18
+      speed: 0.6 + Math.random() * 0.9,
+      opacity: 0.28 + Math.random() * 0.32
     }));
 
     function draw() {
       if (!canvas.width || !canvas.height) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.font = '12px monospace';
+
+      // very subtle dark wash, then draw chars over it
+      ctx.fillStyle = 'rgba(2, 6, 23, 0.75)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.font = '16px monospace';
 
       for (const d of dots) {
         const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
-        // soft red with transparency
+        // brighter soft red
         ctx.fillStyle = `rgba(248, 113, 113, ${d.opacity})`;
         ctx.fillText(ch, d.x, d.y);
 
         d.y += d.speed;
-        if (d.y > canvas.height + 10) {
-          d.y = -10;
+        if (d.y > canvas.height + 16) {
+          d.y = -16;
           d.x = Math.random() * canvas.width;
         }
       }
     }
 
-    // Slow-ish tick so it’s gentle on devices
-    setInterval(draw, 120);
+    // Still not full 60fps – gentle but clearly animated
+    setInterval(draw, 90);
   }
+
   // --------------------------
   // DOM wiring
   // --------------------------
