@@ -381,7 +381,17 @@
         if (!d) return;
 
         const current = d.current || {};
-        const opId = current.operator_id || "Unknown User";
+
+        // Raw ID (PIN) stays internal
+        const opId = current.operator_id || null;
+
+        // What we actually show to humans
+        const displayName =
+            current.operator_name ||      // e.g. "Supervisor Acc", "Julius"
+            current.operator_role ||      // e.g. "picker", "supervisor"
+            current.name ||               // order/customer name as last resort
+            "Unknown User";
+
         const devIdSafe = d.device_id || ""; // Needed for messaging
         
         // --- 1. BUILD THE TIMELINE DATA ---
@@ -562,7 +572,7 @@
         if (timeline.length === 0) logHtml = '<div style="padding:10px; color:#64748b;">No activity recorded for this session.</div>';
 
         // --- RENDER MODAL ---
-        document.getElementById('modalTitle').textContent = opId;
+        document.getElementById('modalTitle').textContent = displayName;
         
         // Stats
         const rate = current.liveRate || 0;
@@ -616,8 +626,8 @@
             <div style="margin-top:20px; padding-top:15px; border-top:1px solid var(--border);">
                 <label style="display:block; color:var(--text-soft); font-size:0.8rem; margin-bottom:6px; font-weight:bold;">SEND NOTIFICATION</label>
                 <div style="display:flex; gap:8px;">
-                    <input type="text" id="adminMsgInput" placeholder="Message for ${opId}..." 
-                           style="flex:1; padding:10px; border-radius:6px; border:1px solid var(--border); background:#0f172a; color:#fff;">
+                    <input type="text" id="adminMsgInput" placeholder="Message for ${displayName}..." 
+                        style="flex:1; padding:10px; border-radius:6px; border:1px solid var(--border); background:#0f172a; color:#fff;">
                     <button class="refresh-btn" onclick="sendAdminMessage('${devIdSafe}')">Send</button>
                 </div>
             </div>

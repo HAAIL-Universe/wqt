@@ -291,7 +291,6 @@ const WqtAPI = {
         }
     },
 
-    // NEW: Auth Methods
     async login(username, pin) {
         const res = await fetchJSON('/api/auth/login', {
             method: 'POST',
@@ -300,17 +299,24 @@ const WqtAPI = {
         });
 
         if (res.success) {
-            // Core ID (still used in some legacy places)
+            // Username/PIN stays as the internal ID
             localStorage.setItem(USER_KEY, res.username);
-            localStorage.setItem('wqt_operator_id', res.username);
 
-            // Unified identity object for everything new
-            const identity = {
-                userId: res.username,
-                displayName: res.display_name || res.username,
-                role: res.role || null
-            };
-            localStorage.setItem('WQT_CURRENT_USER', JSON.stringify(identity));
+            const displayName = res.display_name || res.username;
+            const role = res.role || null;
+
+            // What the UI shows in the top-left etc.
+            localStorage.setItem('wqt_operator_id', displayName);
+
+            // Unified identity blob used by getLoggedInUserIdentity()
+            localStorage.setItem(
+                'WQT_CURRENT_USER',
+                JSON.stringify({
+                    userId: res.username,
+                    displayName,
+                    role,
+                })
+            );
         }
 
         return res;
@@ -324,21 +330,29 @@ const WqtAPI = {
         });
 
         if (res.success) {
-            // Core ID (still used in some legacy places)
+            // Username/PIN stays as the internal ID
             localStorage.setItem(USER_KEY, res.username);
-            localStorage.setItem('wqt_operator_id', res.username);
 
-            // Unified identity object for everything new
-            const identity = {
-                userId: res.username,
-                displayName: res.display_name || res.username,
-                role: res.role || null
-            };
-            localStorage.setItem('WQT_CURRENT_USER', JSON.stringify(identity));
+            const displayName = res.display_name || res.username;
+            const role = res.role || null;
+
+            // What the UI shows in the top-left etc.
+            localStorage.setItem('wqt_operator_id', displayName);
+
+            // Unified identity blob used by getLoggedInUserIdentity()
+            localStorage.setItem(
+                'WQT_CURRENT_USER',
+                JSON.stringify({
+                    userId: res.username,
+                    displayName,
+                    role,
+                })
+            );
         }
 
         return res;
     },
+
 
     async logout() {
         localStorage.removeItem(USER_KEY);
