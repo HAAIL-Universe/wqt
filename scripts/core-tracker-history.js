@@ -2176,7 +2176,8 @@ function renderDone(){
     tr.innerHTML =
       '<td>'+(i+1)+'</td>'+
       '<td>'+ (o.name || '') +'</td>'+
-      '<td>Units: <b>' + (o.units || 0) + '</b>' + (o.locations ? ' • Locations: <b>'+ (o.locations || 0) + '</b>' : '') + '</td>'+
+      '<td>'+ (o.units || 0) +'</td>'+
+      '<td>'+ (o.locations || 0) +'</td>'+
       '<td>'+ (o.pallets || 0) +'</td>'+
       '<td>'+ (o.start || '') +'</td>'+
       '<td>'+ (o.close || '') +'</td>'+
@@ -2189,7 +2190,7 @@ function renderDone(){
     logTr.id = 'logrow_'+i;
 
     var logTd = document.createElement('td');
-    logTd.colSpan = 7;
+    logTd.colSpan = 8;
 
     var html = '<div class="logwrap"><div class="hint">Order log</div>';
 
