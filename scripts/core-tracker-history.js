@@ -1,67 +1,87 @@
 // --- Performance Points Per Hour Calculation ---
 // Computes (units + 2*locations) per hour for today/shift
-// Uses same shift-time window as Live Rate (shift start → now)
+// Uses ACTIVE time only (excludes all logged downtime: breaks, wraps, delays)
 function computePerformancePointsPerHourToday() {
   if (!Array.isArray(picks) || !picks.length) return null;
   
-  // 1) Sum score over all completed orders today / this shift
+  // 1) Sum score AND active hours over all completed orders
   let totalScore = 0;
+  let totalActiveHours = 0;
+  
   for (const o of picks) {
+    if (!o.start || !o.close) continue;
+    
     const units = o.units ?? o.totalUnits ?? o.qty ?? 0;
     const locations = o.locations ?? o.totalLocations ?? 0;
     const orderScore = units + locations * 2;
-    totalScore += orderScore;
+    
+    // Calculate active hours for this order (excluding breaks AND wraps)
+    const s = hm(o.start);
+    const e = hm(o.close);
+    const excl = (o.log && Array.isArray(o.log.breaks))
+      ? o.log.breaks.reduce((a,b)=>a+(b.minutes||0),0)
+      : (o.excl || 0);
+    
+    // Add wrap downtime
+    const wrapMins = (o.log && Array.isArray(o.log.wraps))
+      ? o.log.wraps.reduce((acc, w) => acc + ((w.durationMs || 0) / 60000), 0)
+      : 0;
+    
+    const activeHours = (e > s) ? (e - s) - (excl + wrapMins)/60 : 0;
+    
+    if (activeHours > 0) {
+      totalScore += orderScore;
+      totalActiveHours += activeHours;
+    }
   }
   
-  if (totalScore <= 0) return null;
+  if (totalActiveHours <= 0) return null;
   
-  // 2) Use the SAME time window as Live Rate
-  // Reuse the same shift-start field Live Rate uses
-  const shiftStartStr = (typeof getSnappedStartHHMM === 'function') 
-    ? getSnappedStartHHMM() 
-    : (startTime || null);
-  if (!shiftStartStr) return null;
-  
-  const shiftStartH = hm(shiftStartStr);
-  const nowH = hm((typeof getEffectiveLiveEndHHMM === 'function') ? getEffectiveLiveEndHHMM() : nowHHMM());
-  
-  if (!Number.isFinite(shiftStartH) || !Number.isFinite(nowH) || nowH <= shiftStartH) return null;
-  
-  const shiftHours = nowH - shiftStartH;
-  if (shiftHours <= 0) return null;
-  
-  // 3) Convert to points per hour
-  return totalScore / shiftHours;
+  // 2) Convert to points per active hour
+  return totalScore / totalActiveHours;
 }
 
 if (typeof window !== 'undefined') {
   window.computePerformancePointsPerHourToday = computePerformancePointsPerHourToday;
 }
 // --- Performance Score Calculation ---
-// Computes performance score for today/shift: (units + locations*2) / total minutes
-// Uses same completed orders as live rate (picks[])
+// Computes performance score for today/shift: (units + locations*2) / active minutes
+// Uses ACTIVE time only (excludes all logged downtime: breaks, wraps, delays)
 function computePerformanceScoreForToday() {
   if (!Array.isArray(picks) || !picks.length) return null;
   let dailyScore = 0;
-  let dailyMinutes = 0;
+  let dailyActiveMinutes = 0;
+  
   for (const o of picks) {
     // Only count orders with both start and close times
     if (!o.start || !o.close) continue;
+    
     const units = Number(o.units) || 0;
     const locations = Number(o.locations) || 0;
-    // Accept both 'close' and 'closed' field for compatibility
-    const closeTime = o.close || o.closed;
-    const startTime = o.start;
-    // Compute order_score
     const orderScore = units + (locations * 2);
-    // Compute order_minutes (difference in minutes)
-    const orderMinutes = Math.abs(hm(closeTime) - hm(startTime)) * 60;
-    if (!isFinite(orderMinutes) || orderMinutes <= 0) continue;
-    dailyScore += orderScore;
-    dailyMinutes += orderMinutes;
+    
+    // Compute ACTIVE minutes (excluding breaks AND wraps)
+    const s = hm(o.start);
+    const e = hm(o.close);
+    const excl = (o.log && Array.isArray(o.log.breaks))
+      ? o.log.breaks.reduce((a,b)=>a+(b.minutes||0),0)
+      : (o.excl || 0);
+    
+    // Add wrap downtime
+    const wrapMins = (o.log && Array.isArray(o.log.wraps))
+      ? o.log.wraps.reduce((acc, w) => acc + ((w.durationMs || 0) / 60000), 0)
+      : 0;
+    
+    const activeMinutes = ((e > s) ? (e - s) * 60 : 0) - excl - wrapMins;
+    
+    if (activeMinutes > 0) {
+      dailyScore += orderScore;
+      dailyActiveMinutes += activeMinutes;
+    }
   }
-  if (dailyMinutes <= 0) return null;
-  return dailyScore / dailyMinutes;
+  
+  if (dailyActiveMinutes <= 0) return null;
+  return dailyScore / dailyActiveMinutes;
 }
 
 // Export for UI
@@ -695,8 +715,31 @@ function logWrap() {
   // -------------------------
 
   const t = nowHHMM();
-  tempWraps.push({ left, done, t });
+  const endTs = Date.now();
+  
+  // Calculate wrap duration if we have a start time
+  let wrapDurationMs = 0;
+  let wrapStartTime = null;
+  if (current.wrapActive) {
+    wrapStartTime = current.wrapActive.startTime;
+    const startTs = current.wrapActive.startTs || endTs;
+    wrapDurationMs = Math.max(0, endTs - startTs);
+  }
+  
+  tempWraps.push({ 
+    left, 
+    done, 
+    t,
+    startTime: wrapStartTime,
+    endTime: t,
+    durationMs: wrapDurationMs
+  });
   undoStack.push({ type: 'wrap' });
+  
+  // Clear wrap active state
+  if (current.wrapActive) {
+    delete current.wrapActive;
+  }
 
   inp.value = '';
   refreshWrapButton();
@@ -762,10 +805,10 @@ function logWrap() {
   // Buttons/complete state
   updateHeaderActions?.();
 
-  // ✅ Auto-close when 0 left
+  // ✅ Auto-close when 0 left - open modal instead of direct completion
   if (left === 0) {
-    showToast?.('Order complete — closing...');
-    setTimeout(() => completeOrder(), 300);
+    showToast?.('Order complete — ready to finish');
+    setTimeout(() => openFinishOrderModal(), 300);
     return;
   }
 
@@ -999,7 +1042,25 @@ function completeOrder() {
   const total    = current.total || 0;
   const lastLeft = tempWraps.length ? tempWraps[tempWraps.length - 1].left : total;
   if (lastLeft > 0) {
-    tempWraps.push({ left: 0, done: lastLeft, t: closeHHMM });
+    // Add final wrap with timing if wrap was active
+    const endTs = Date.now();
+    let wrapDurationMs = 0;
+    let wrapStartTime = null;
+    
+    if (current.wrapActive) {
+      wrapStartTime = current.wrapActive.startTime;
+      const startTs = current.wrapActive.startTs || endTs;
+      wrapDurationMs = Math.max(0, endTs - startTs);
+    }
+    
+    tempWraps.push({ 
+      left: 0, 
+      done: lastLeft, 
+      t: closeHHMM,
+      startTime: wrapStartTime,
+      endTime: closeHHMM,
+      durationMs: wrapDurationMs
+    });
     undoStack.push({ type: 'wrap' });
   }
 
@@ -1083,6 +1144,32 @@ function completeOrder() {
   if (pct)  pct.textContent = '0%';
   if (fill) fill.style.width = '0%';
   saveAll();
+}
+
+// Open finish order modal
+function openFinishOrderModal() {
+  const modal = document.getElementById('finishOrderModal');
+  const input = document.getElementById('finishDowntime');
+  if (modal) modal.style.display = 'flex';
+  if (input) input.value = '0';
+}
+
+// Close finish order modal
+function closeFinishOrderModal() {
+  const modal = document.getElementById('finishOrderModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Submit finish order with downtime
+function submitFinishOrder() {
+  const input = document.getElementById('finishDowntime');
+  let downtime = parseInt(input?.value || '0', 10);
+  
+  // Clamp to 0-60 range
+  downtime = Math.max(0, Math.min(60, downtime));
+  
+  closeFinishOrderModal();
+  completeOrder(downtime);
 }
 
 // Show/hide Delay button based on active shift
@@ -2049,7 +2136,25 @@ function submitCloseEarly(){
   let addedWrap = false;
   if (wrapped) {
     if (remaining < prevLeft) {
-      tempWraps.push({ left: remaining, done: prevLeft - remaining, t: nowHHMM() });
+      // Track wrap timing for close early scenario
+      const endTs = Date.now();
+      let wrapDurationMs = 0;
+      let wrapStartTime = null;
+      
+      if (current.wrapActive) {
+        wrapStartTime = current.wrapActive.startTime;
+        const startTs = current.wrapActive.startTs || endTs;
+        wrapDurationMs = Math.max(0, endTs - startTs);
+      }
+      
+      tempWraps.push({ 
+        left: remaining, 
+        done: prevLeft - remaining, 
+        t: nowHHMM(),
+        startTime: wrapStartTime,
+        endTime: nowHHMM(),
+        durationMs: wrapDurationMs
+      });
       addedWrap = true;
     } else {
       return alert('No progress since last wrap. Uncheck “Wrapped last pallet” or adjust Remaining.');
@@ -2174,86 +2279,121 @@ function renderDone(){
 
   picks.forEach(function(o,i){
     var s = hm(o.start), e = hm(o.close);
+    
+    // Calculate total break time
     var excl = (o.log && Array.isArray(o.log.breaks))
       ? o.log.breaks.reduce((a,b)=>a+(b.minutes||0),0)
       : (o.excl || 0);
-    var net  = (e > s) ? (e - s) - (excl)/60 : 0.01;
+    
+    // Calculate total wrap downtime (in minutes)
+    var wrapMins = 0;
+    if (o.log && Array.isArray(o.log.wraps)) {
+      wrapMins = o.log.wraps.reduce((acc, w) => {
+        const durationMs = w.durationMs || 0;
+        return acc + (durationMs / 60000);
+      }, 0);
+    }
+    
+    // Net active hours: exclude both breaks AND wrap downtime
+    var net  = (e > s) ? (e - s) - (excl + wrapMins)/60 : 0.01;
     var rate = Math.round(o.units / Math.max(0.01, net));
 
-    // Calculate per-order Perf Rate
+    // Calculate per-order Perf Rate using ACTIVE time (same as Order Rate)
     var perfRate = '—';
-    if (o.start && o.close) {
-      const startH = hm(o.start);
-      const endH = hm(o.close);
-      if (isFinite(startH) && isFinite(endH)) {
-        const minutes = (endH - startH) * 60;
-        if (minutes > 0) {
-          const units = o.units ?? o.totalUnits ?? o.qty ?? 0;
-          const locations = o.locations ?? o.totalLocations ?? 0;
-          const orderScore = units + (locations * 2);
-          const perfRateVal = (orderScore / minutes) * 60;
-          perfRate = perfRateVal.toFixed(1) + ' pts/h';
-        }
-      }
+    if (Number.isFinite(o.perfPerHour)) {
+      perfRate = Math.round(o.perfPerHour) + ' pts/h';
+    } else if (net > 0) {
+      // Use net hours (active time excluding breaks) instead of raw elapsed time
+      const units = o.units ?? o.totalUnits ?? o.qty ?? 0;
+      const locations = o.locations ?? o.totalLocations ?? 0;
+      const orderScore = units + (locations * 2);
+      const perfRateVal = orderScore / net;  // pts/h using active hours
+      perfRate = Math.round(perfRateVal) + ' pts/h';
     }
 
+    // Main row - only 7 columns now
     var tr = document.createElement('tr');
-    tr.className = 'clickable';
-    tr.dataset.idx = i;
+    tr.className = 'completed-row';
+    tr.dataset.index = i;
     tr.innerHTML =
       '<td>'+(i+1)+'</td>'+
       '<td>'+ (o.name || '') +'</td>'+
       '<td>'+ (o.units || 0) +'</td>'+
       '<td>'+ (o.locations || 0) +'</td>'+
       '<td>'+ (o.pallets || 0) +'</td>'+
-      '<td>'+ (o.start || '') +'</td>'+
-      '<td>'+ (o.close || '') +'</td>'+
       '<td>'+rate+' u/h</td>'+
       '<td>'+perfRate+'</td>';
     tb.appendChild(tr);
 
-    // Expandable log row
+    // Expandable order log row
     var logTr = document.createElement('tr');
-    logTr.className = 'logrow';
-    logTr.id = 'logrow_'+i;
+    logTr.className = 'order-log-row';
+    logTr.dataset.index = i;
 
     var logTd = document.createElement('td');
-    logTd.colSpan = 9;
+    logTd.colSpan = 7;
 
-    var html = '<div class="logwrap"><div class="hint">Order log</div>';
+    // Build order log timeline
+    var html = '<div class="order-log-header">Order log</div>';
 
+    // Order started
+    if (o.start) {
+      html += '<div class="order-log-line"><span class="log-label">Order started</span><span class="log-time">'+o.start+'</span></div>';
+    }
+
+    // Wraps
+    (o.log?.wraps || []).forEach(function(w,wi){
+      var timeStr = w.t || '—';
+      
+      // If we have start and end times, show range
+      if (w.startTime && w.endTime) {
+        timeStr = w.startTime + ' → ' + w.endTime;
+        
+        // Add duration if available
+        if (w.durationMs) {
+          var durationMin = Math.round(w.durationMs / 60000);
+          timeStr += ' (' + durationMin + 'm)';
+        }
+      }
+      
+      html += '<div class="order-log-line"><span class="log-label">📦 Wrap '+(wi+1)+'</span><span class="log-time">'+timeStr+'</span></div>';
+    });
+
+    // Breaks/Delays (optional detail)
     (o.log?.breaks || []).forEach(function(b){
       if (b.type === 'D'){
-        html += '<div class="tick"><span>⏱️ Delay' +
-          (b.cause ? ': '+b.cause.replace(/</g,'&lt;') : '') +
-          '</span><span class="meta">'+b.start+' → '+b.end+' • '+b.minutes+'m</span></div>';
+        html += '<div class="order-log-line"><span class="log-label">⏱️ Delay'+ (b.cause ? ': '+b.cause.replace(/</g,'&lt;') : '') +
+          '</span><span class="log-time">'+b.start+' → '+b.end+'</span></div>';
       } else {
-        html += '<div class="tick"><span>☕ '+(b.type==='B'?'Break':'Lunch')+
-          '</span><span class="meta">'+b.start+' → '+b.end+' • '+b.minutes+'m</span></div>';
+        html += '<div class="order-log-line"><span class="log-label">☕ '+(b.type==='B'?'Break':'Lunch')+
+          '</span><span class="log-time">'+b.start+' → '+b.end+'</span></div>';
       }
     });
 
-    (o.log?.wraps || []).forEach(function(w,wi){
-      html += '<div class="tick"><span>📦 Wrap '+(wi+1)+': <b>'+w.done+
-        '</b> done, <b>'+w.left+'</b> left</span><span class="meta">'+w.t+'</span></div>';
-    });
-
-    if (o.earlyReason && o.earlyReason.trim().length > 0) {
-      html += `<div class="tick"><span>📝 Early Close Reason:</span>` +
-              `<span class="meta">${o.earlyReason.replace(/</g,'&lt;')}</span></div>`;
+    // Order ended
+    if (o.close) {
+      html += '<div class="order-log-line"><span class="log-label">Order ended</span><span class="log-time">'+o.close+'</span></div>';
     }
 
-    html += '</div>';
+    // Early close reason if applicable
+    if (o.earlyReason && o.earlyReason.trim().length > 0) {
+      html += `<div class="order-log-line"><span class="log-label">📝 Early close reason</span>` +
+              `<span class="log-time">${o.earlyReason.replace(/</g,'&lt;')}</span></div>`;
+    }
+
     logTd.innerHTML = html;
     logTr.appendChild(logTd);
     tb.appendChild(logTr);
+  });
 
-    // Row toggle
-    tr.addEventListener('click', function(){
-      var row = document.getElementById('logrow_'+i);
-      if (!row) return;
-      row.style.display = (row.style.display === 'table-row') ? 'none' : 'table-row';
-    });
+  // Add click handler to toggle order logs
+  tb.addEventListener('click', function(e){
+    const row = e.target.closest('.completed-row');
+    if (!row) return;
+    const idx = row.dataset.index;
+    const detail = tb.querySelector(`.order-log-row[data-index="${idx}"]`);
+    if (!detail) return;
+    detail.classList.toggle('is-open');
   });
 
   const completedCard = document.getElementById('completedCard');
@@ -2275,6 +2415,8 @@ function renderWeeklySummary(){
   let totalLocations = 0;
   let totalWorkedFlooredMin = 0;  // all worked time, floored to 15m
   let daysCount  = 0;
+  let dailyPerfSum = 0;  // sum of dailyPerf for averaging
+  let dailyPerfCount = 0;  // count of days with valid dailyPerf
 
   for (const d of historyDays) {
     if (!inRange(d.date, startISO, endISO)) continue;
@@ -2296,6 +2438,12 @@ function renderWeeklySummary(){
     totalUnits += Number(d.totalUnits) || 0;
     totalLocations += Number(d.totalLocations) || 0;
     daysCount  += 1;
+
+    // Accumulate dailyPerf for weekly average
+    if (Number.isFinite(d.dailyPerf) && d.dailyPerf > 0) {
+      dailyPerfSum += d.dailyPerf;
+      dailyPerfCount += 1;
+    }
   }
 
   // Weekly split: only minutes beyond 45h count as 'paid overtime'
@@ -2309,11 +2457,20 @@ function renderWeeklySummary(){
   const totalScore      = totalUnits + (totalLocations * 2);
   const weighted        = (totalHoursAll > 0) ? Math.round(totalScore / totalHoursAll) : 0;
 
+  // weeklyPerf: average of dailyPerf values
+  const weeklyPerf = (dailyPerfCount > 0) ? Math.round((dailyPerfSum / dailyPerfCount) * 10) / 10 : 0;
+
   document.getElementById('weekUnits')    ?.replaceChildren(document.createTextNode(String(totalUnits)));
   document.getElementById('weekDays')     ?.replaceChildren(document.createTextNode(String(daysCount)));
   document.getElementById('weekHours')    ?.replaceChildren(document.createTextNode(totalHoursTile));
   document.getElementById('weekOvertime') ?.replaceChildren(document.createTextNode(overtimeTile));
   document.getElementById('weekWeighted') ?.replaceChildren(document.createTextNode(weighted + ' pts/h'));
+  
+  // Add weeklyPerf display
+  const weeklyPerfEl = document.getElementById('weeklyPerf');
+  if (weeklyPerfEl) {
+    weeklyPerfEl.replaceChildren(document.createTextNode(weeklyPerf > 0 ? weeklyPerf.toFixed(1) + ' pts/h' : '—'));
+  }
 
   // Optional styling: OT red until threshold crossed, then green
   const otEl = document.getElementById('weekOvertime');
@@ -2369,6 +2526,14 @@ function renderHistory(){
       ? +d.dayPerfScore
       : dayPerfScore;
 
+    // Pick Rate: total units / (shift hours - 1 hour break), clamped to min 0.1 hours
+    const shiftHours = ((d.start && d.end) ? (toMin(d.end) - toMin(d.start)) / 60 : (num(d.shiftLen) || 9));
+    const pickRateHours = Math.max(0.1, shiftHours - 1);  // Subtract 1 hour for break, min 0.1
+    const pickRate = Math.round((d.totalUnits || 0) / pickRateHours);
+
+    // Daily Perf: average of perfPerHour from orders (if available)
+    const dailyPerf = Number.isFinite(d.dailyPerf) && d.dailyPerf > 0 ? d.dailyPerf : 0;
+
     const boxState = effectiveRate >= 300 ? 'ok'
                     : (effectiveRate >= 249 ? 'warn' : 'bad');
     head.className = 'accHead ' + boxState;
@@ -2379,7 +2544,8 @@ function renderHistory(){
       <div class="meta-row">
         <span>Units: <b>${d.totalUnits || 0}</b></span>
         <span>Locations: <b>${d.totalLocations || 0}</b></span>
-        <span>Perf Score: <b>${dayPerfScore.toFixed(1)}</b> pts/h</span>
+        <span>Pick Rate: <b>${pickRate}</b> u/h</span>
+        ${dailyPerf > 0 ? `<span>Daily Perf: <b>${dailyPerf.toFixed(1)}</b> pts/h</span>` : ''}
         <span>Worked: <b>${fmtElapsed(workedMin)}</b>` +
         `${otMin ? ` • OT: <b>${(otMin/60).toFixed(2)} h</b>` : ''}</span>
       </div>`;
@@ -2422,7 +2588,7 @@ function renderHistory(){
     // Per-day orders table
     var table = document.createElement('table');
     table.innerHTML =
-      '<thead><tr><th>#</th><th>Customer</th><th>Units</th><th>Pallets</th><th>Start</th><th>Closed</th><th>Order Rate</th></tr></thead>';
+      '<thead><tr><th>#</th><th>Customer</th><th>Units</th><th>Pallets</th><th>Start</th><th>Closed</th><th>Active Min</th><th>Perf/h</th></tr></thead>';
     var tbody = document.createElement('tbody');
 
     (d.picks || []).forEach(function(o,i){
@@ -2432,6 +2598,10 @@ function renderHistory(){
         : (o.excl || 0);
       var net  = (e > s) ? (e - s) - (excl)/60 : 0.01;
       var rate = Math.round(o.units / Math.max(0.01, net));
+
+      // Get new metrics if available
+      const activeMin = Number.isFinite(o.activeMinutes) ? o.activeMinutes : Math.round(net * 60);
+      const perfPerHour = Number.isFinite(o.perfPerHour) ? o.perfPerHour.toFixed(1) : '—';
 
       var tr = document.createElement('tr');
       tr.className = 'clickable';
@@ -2443,14 +2613,15 @@ function renderHistory(){
         '<td>'+ (o.pallets || 0) +'</td>'+
         '<td>'+ (o.start || '') +'</td>'+
         '<td>'+ (o.close || '') +'</td>'+
-        '<td>'+rate+' u/h</td>';
+        '<td>'+ activeMin +' min</td>'+
+        '<td>'+ perfPerHour +'</td>';
 
       var logTr = document.createElement('tr');
       logTr.className = 'logrow';
       logTr.id = 'hlog_'+di+'_'+i;
 
       var td = document.createElement('td');
-      td.colSpan = 7;
+      td.colSpan = 8;
 
       var html = '<div class="logwrap"><div class="hint">Order log</div>';
       (o.log?.breaks || []).forEach(function(b){
@@ -2698,6 +2869,16 @@ function endShift(){
   const workedMin   = (startTime && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(startTime)) : 0;
   const scheduledMin= Math.round((shiftLen || 9) * 60);
 
+  // Compute dailyPerf as average of perfPerHour from all orders
+  let dailyPerf = 0;
+  if (picks.length > 0) {
+    const validPerfOrders = picks.filter(p => Number.isFinite(p.perfPerHour));
+    if (validPerfOrders.length > 0) {
+      const sumPerf = validPerfOrders.reduce((sum, p) => sum + p.perfPerHour, 0);
+      dailyPerf = Math.round((sumPerf / validPerfOrders.length) * 10) / 10;
+    }
+  }
+
   const snapshot = {
     date:        dateStr,
     start:       startTime || '',
@@ -2707,6 +2888,7 @@ function endShift(){
     totalLocations,
     dayRate:     shiftLen > 0 ? Math.round(totalUnits / shiftLen) : 0, // keep day avg by full shift
     dayPerfScore: (workedMin > 0) ? Math.round(((totalUnits + totalLocations * 2) / (workedMin / 60)) * 10) / 10 : 0, // correct perf score: (units + 2*locations) / worked_hours
+    dailyPerf:   dailyPerf, // NEW: average perfPerHour from all orders
     picks:       picks.slice(0),
     shiftBreaks: shiftBreaks.slice(0),
     downtimes,
@@ -2720,6 +2902,31 @@ function endShift(){
   saveAll();
   renderHistory();
   renderWeeklySummary();
+
+  // ====== OFFLINE RECOVERY: Enqueue shift archive operation ======
+  // Build an END_SHIFT_ARCHIVE operation for the pending queue
+  if (window.Storage && typeof Storage.enqueuePendingOp === 'function' && 
+      window.WqtAPI && typeof WqtAPI.uuidv4 === 'function') {
+    try {
+      const archiveOp = {
+        id: WqtAPI.uuidv4(),
+        type: 'END_SHIFT_ARCHIVE',
+        payload: snapshot,
+        created_at: new Date().toISOString()
+      };
+      Storage.enqueuePendingOp(archiveOp);
+      console.log('[endShift] Enqueued END_SHIFT_ARCHIVE operation');
+      
+      // Attempt immediate sync (will fail silently if offline)
+      if (typeof WqtAPI.syncPendingOps === 'function') {
+        WqtAPI.syncPendingOps().catch(err => {
+          console.warn('[endShift] Immediate sync failed (will retry when online):', err);
+        });
+      }
+    } catch (err) {
+      console.warn('[endShift] Failed to enqueue archive operation:', err);
+    }
+  }
 
   exitShiftNoArchive?.();  // reuse your existing full reset
   showTab?.('tracker');    // land back on the Tracker start screen

@@ -272,6 +272,52 @@ const Storage = {
     } catch (e) {
       console.error('Storage.setJSON failed', e);
     }
+  },
+
+  // ---- Pending Operations Queue (Offline Recovery) ----
+  // Used to store operations that need to sync to backend when online
+  
+  loadPendingOps() {
+    try {
+      const key = buildNamespacedKey('wqt_pending_ops');
+      const raw = window.localStorage.getItem(key);
+      const parsed = safeParse(raw, null);
+      if (Array.isArray(parsed)) return parsed;
+    } catch (e) {
+      console.error('Storage.loadPendingOps failed', e);
+    }
+    return [];
+  },
+
+  savePendingOps(list) {
+    try {
+      const key = buildNamespacedKey('wqt_pending_ops');
+      window.localStorage.setItem(key, JSON.stringify(list || []));
+    } catch (e) {
+      console.error('Storage.savePendingOps failed', e);
+    }
+  },
+
+  enqueuePendingOp(op) {
+    try {
+      const list = this.loadPendingOps();
+      list.push(op);
+      this.savePendingOps(list);
+      console.log('[Storage] Enqueued pending op:', op.type, op.id);
+    } catch (e) {
+      console.error('Storage.enqueuePendingOp failed', e);
+    }
+  },
+
+  removePendingOp(id) {
+    try {
+      const list = this.loadPendingOps();
+      const filtered = list.filter(op => op.id !== id);
+      this.savePendingOps(filtered);
+      console.log('[Storage] Removed pending op:', id);
+    } catch (e) {
+      console.error('Storage.removePendingOp failed', e);
+    }
   }
 };
 

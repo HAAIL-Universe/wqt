@@ -47,7 +47,7 @@ function refreshSummaryChips(main) {
   
   psEl.textContent =
     perfScore != null && isFinite(perfScore)
-      ? `${perfScore.toFixed(1)} pts/h`
+      ? `${Math.round(perfScore)} pts/h`
       : '—';
 }
 

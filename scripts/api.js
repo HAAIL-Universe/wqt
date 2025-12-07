@@ -40,6 +40,22 @@ function resolveApiBase() {
 const API_BASE = resolveApiBase();
 
 // ------------------------------------------------------------------
+// UUID helper for generating operation IDs
+// ------------------------------------------------------------------
+
+function uuidv4() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+    // Fallback for older browsers
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+// ------------------------------------------------------------------
 // Device ID helper (per-browser identity, no login needed)
 // ------------------------------------------------------------------
 
@@ -648,6 +664,69 @@ const WqtAPI = {
         };
         await this.saveState({ main: merged, learnedUL, customCodes });
         return merged;
+    },
+
+    // ------------------------------------------------------------------
+    // Offline Recovery: Pending Operations Queue
+    // ------------------------------------------------------------------
+
+    /**
+     * Sync pending operations to backend (archives, etc.)
+     * Called on app startup and when device comes back online.
+     */
+    async syncPendingOps() {
+        if (!window.Storage || typeof Storage.loadPendingOps !== 'function') {
+            console.warn('[WQT API] Storage.loadPendingOps not available');
+            return;
+        }
+
+        const pendingOps = Storage.loadPendingOps();
+        if (!pendingOps || pendingOps.length === 0) {
+            console.log('[WQT API] No pending ops to sync');
+            return;
+        }
+
+        console.log(`[WQT API] Syncing ${pendingOps.length} pending operation(s)...`);
+
+        for (const op of pendingOps) {
+            try {
+                if (op.type === 'END_SHIFT_ARCHIVE') {
+                    await this.archiveShift(op.payload);
+                    // Success: remove from queue
+                    Storage.removePendingOp(op.id);
+                    console.log(`[WQT API] ✓ Synced ${op.type} (${op.id})`);
+                } else {
+                    console.warn(`[WQT API] Unknown pending op type: ${op.type}`);
+                }
+            } catch (err) {
+                // Keep op in queue for next retry
+                console.warn(`[WQT API] Failed to sync ${op.type} (${op.id}), will retry:`, err);
+            }
+        }
+    },
+
+    /**
+     * Archive a shift summary to backend.
+     * Called by syncPendingOps when processing END_SHIFT_ARCHIVE operations.
+     */
+    async archiveShift(shiftSummary) {
+        const deviceId = getDeviceId();
+        const identity = getLoggedInUserIdentity() || {};
+
+        const payload = {
+            operator_id: identity.userId || 'unknown',
+            operator_name: identity.displayName || null,
+            device_id: deviceId || null,
+            shift: shiftSummary || {}
+        };
+
+        await fetchJSON('/api/archive_shift', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        console.log('[WQT API] archiveShift → sent to backend');
     }
 };
 
@@ -657,4 +736,5 @@ if (typeof window !== 'undefined') {
     window.WqtAPI.getLoggedInUser = getLoggedInUser;           // Expose helper for use in bootstrap.js
     window.WqtAPI.getDeviceId = getDeviceId;                   // Expose helper for use in bootstrap.js
     window.WqtAPI.getLoggedInUserIdentity = getLoggedInUserIdentity;
+    window.WqtAPI.uuidv4 = uuidv4;                             // Expose UUID generator
 }

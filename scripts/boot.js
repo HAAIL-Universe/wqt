@@ -81,7 +81,17 @@ document.addEventListener('DOMContentLoaded', function () {
       // Login now handled by front-door (login.html + WQT_CURRENT_USER).
       // If this script is running, gateWqtByLogin has already ensured a user.
 
-      // ── 0) Try to hydrate from backend first (then localStorage) ───
+      // ── 0) OFFLINE RECOVERY: Sync pending operations first ────────
+      if (window.WqtAPI && typeof WqtAPI.syncPendingOps === 'function') {
+        try {
+          console.log('[Boot] Attempting to sync pending operations...');
+          await WqtAPI.syncPendingOps();
+        } catch (e) {
+          console.warn('[Boot] Pending ops sync failed (will retry when online):', e);
+        }
+      }
+
+      // ── 1) Try to hydrate from backend (then localStorage) ────────
       if (window.WqtAPI && typeof WqtAPI.loadInitialState === 'function') {
         try {
           // This will:
@@ -94,7 +104,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       }
 
-      // ── 1) Restore persisted state from localStorage ──────────────
+      // ── 2) Restore persisted state from localStorage ──────────────
       loadCustomCodes();
       loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
 
@@ -297,24 +307,25 @@ document.addEventListener('DOMContentLoaded', function () {
       // Persist to localStorage via legacy path
       saveAll?.();
 
-      // ── 11) Push snapshot to backend (seed DB on first run) ───────
-      if (window.WqtAPI && typeof WqtAPI.saveState === 'function' && window.Storage) {
-        try {
-          const payload = {
-            main:        Storage.loadMain(),
-            learnedUL:   Storage.loadLearnedUL(),
-            customCodes: Storage.loadCustomCodes()
-          };
-          await WqtAPI.saveState(payload);
-        } catch (e) {
-          console.warn('[Boot] Backend save failed, staying local-only', e);
-        }
-      }
+      // NOTE: We do NOT auto-save to backend on load per offline recovery design.
+      // MainState is only POSTed for explicit actions (start order, log wrap, etc.).
+      // Archives are handled separately via the pending ops queue.
     } catch (err) {
       console.error(err);
       showToast('Error on load: ' + (err.message || err));
     }
   })();
+});
+
+// ====== Global Network Listener (Offline Recovery) ======
+// Automatically sync pending operations when device comes back online
+window.addEventListener('online', function() {
+  console.log('[WQT] Device is back online, syncing pending operations...');
+  if (window.WqtAPI && typeof WqtAPI.syncPendingOps === 'function') {
+    WqtAPI.syncPendingOps().catch(err => {
+      console.warn('[WQT] Auto-sync on reconnect failed:', err);
+    });
+  }
 });
 
 // Shared pad: wire up bar input + Add button → sharedSubmitUnits + visual confirm
@@ -369,6 +380,14 @@ function openWrapModal(){
   const total    = current.total || 0;
   const lastLeft = tempWraps.length ? tempWraps[tempWraps.length - 1].left : total;
 
+  // Track wrap start time for duration calculation
+  if (!current.wrapActive) {
+    current.wrapActive = {
+      startTime: nowHHMM(),
+      startTs: Date.now()
+    };
+  }
+
   if (inp) {
     if (current?.shared) {
       const total  = current.total || 0;
@@ -411,6 +430,11 @@ function closeWrapModal(){
   if (m) m.style.display = 'none';
   inp?.removeEventListener('input', refreshWrapModalBtn);
   inp?.removeAttribute('disabled');
+  
+  // Clear wrap active state if canceling
+  if (current && current.wrapActive) {
+    delete current.wrapActive;
+  }
 }
 
 function submitWrapLeft(){
