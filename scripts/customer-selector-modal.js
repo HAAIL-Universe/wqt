@@ -48,13 +48,6 @@ function openCustomerModal() {
   
   // Render customer groups
   renderCustomerGroups();
-  
-  // Clear and focus search
-  const searchInput = document.getElementById('customer-search');
-  if (searchInput) {
-    searchInput.value = '';
-    setTimeout(() => searchInput.focus(), 100);
-  }
 }
 
 // Close the modal
@@ -85,37 +78,21 @@ function renderCustomerGroups() {
   
   container.innerHTML = '';
   
-  // Get search term
-  const searchInput = document.getElementById('customer-search');
-  const searchTerm = (searchInput?.value || '').toLowerCase();
-  
   // Get sorted customer prefixes
   const sortedPrefixes = Object.keys(customerLocationMap).sort();
   
-  let hasResults = false;
+  if (sortedPrefixes.length === 0) {
+    const noResults = document.createElement('div');
+    noResults.className = 'hint';
+    noResults.style.textAlign = 'center';
+    noResults.style.padding = '20px';
+    noResults.textContent = 'No customers available';
+    container.appendChild(noResults);
+    return;
+  }
   
   sortedPrefixes.forEach(prefix => {
-    // Filter by search
-    if (searchTerm && !prefix.toLowerCase().includes(searchTerm)) {
-      return;
-    }
-    
-    hasResults = true;
-    
     const locations = customerLocationMap[prefix];
-    
-    // Create group
-    const groupDiv = document.createElement('div');
-    groupDiv.className = 'customer-group';
-    
-    // Group header
-    const headerDiv = document.createElement('div');
-    headerDiv.className = 'customer-group-header';
-    headerDiv.textContent = prefix.toUpperCase();
-    
-    // Group items
-    const itemsDiv = document.createElement('div');
-    itemsDiv.className = 'customer-group-items';
     
     // Single item to click (shows locations for this prefix)
     const itemDiv = document.createElement('div');
@@ -128,7 +105,7 @@ function renderCustomerGroups() {
     
     const countSpan = document.createElement('span');
     countSpan.className = 'customer-item-count';
-    countSpan.textContent = `${locations.length} location${locations.length !== 1 ? 's' : ''}`;
+    countSpan.textContent = locations.length.toString();
     
     const arrowSpan = document.createElement('span');
     arrowSpan.className = 'customer-item-arrow';
@@ -141,21 +118,8 @@ function renderCustomerGroups() {
     itemDiv.appendChild(leftDiv);
     itemDiv.appendChild(arrowSpan);
     
-    itemsDiv.appendChild(itemDiv);
-    groupDiv.appendChild(headerDiv);
-    groupDiv.appendChild(itemsDiv);
-    container.appendChild(groupDiv);
+    container.appendChild(itemDiv);
   });
-  
-  // Show "no results" if needed
-  if (!hasResults) {
-    const noResults = document.createElement('div');
-    noResults.className = 'hint';
-    noResults.style.textAlign = 'center';
-    noResults.style.padding = '20px';
-    noResults.textContent = searchTerm ? 'No customers found' : 'No customers available';
-    container.appendChild(noResults);
-  }
 }
 
 // Show locations for a customer prefix
@@ -194,7 +158,7 @@ function showLocationSelection(prefix) {
       
       const labelDiv = document.createElement('div');
       labelDiv.className = 'location-item-label';
-      labelDiv.textContent = `${prefix.toUpperCase()} - ${loc.suffix.toUpperCase()}`;
+      labelDiv.textContent = `${prefix.toUpperCase()} – ${loc.suffix.toUpperCase()}`;
       
       itemDiv.appendChild(codeDiv);
       itemDiv.appendChild(labelDiv);
@@ -253,11 +217,6 @@ function selectCustomerLocation(fullCode) {
     const unitsInput = document.getElementById('oTotal');
     if (unitsInput) unitsInput.focus();
   }, 100);
-}
-
-// Filter customers based on search
-function filterCustomers() {
-  renderCustomerGroups();
 }
 
 // Show add customer form
@@ -409,12 +368,6 @@ document.addEventListener('DOMContentLoaded', () => {
         closeCustomerModal();
       }
     });
-  }
-  
-  // Search input
-  const searchInput = document.getElementById('customer-search');
-  if (searchInput) {
-    searchInput.addEventListener('input', filterCustomers);
   }
   
   // Back to customers button

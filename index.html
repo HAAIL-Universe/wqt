@@ -231,14 +231,12 @@
   </div>
 
   <!-- Customer Selector Modal -->
-  <div id="customerSelectorModal" class="modal-overlay" style="display:none;">
-    <div class="modal-panel">
-      <div class="modal-header">
-        <h2>Select Customer</h2>
+  <div id="customerSelectorModal" class="modal" style="display:none;">
+    <div class="box">
+      <div class="hdr">
+        <h3>Select Customer</h3>
         <button id="customer-modal-close" class="btn ghost slim" type="button">✖</button>
       </div>
-      
-      <input id="customer-search" type="text" placeholder="Search customers..." class="modal-search-input" />
       
       <!-- Customer Groups List -->
       <div id="customer-groups" class="customer-groups-container"></div>
@@ -246,15 +244,15 @@
       <!-- Location Selection Panel (shown when customer clicked) -->
       <div id="customer-locations" class="customer-locations-container" style="display:none;">
         <div class="location-header">
-          <h3 id="location-customer-name">Select Location</h3>
           <button id="back-to-customers" class="btn ghost slim" type="button">← Back</button>
+          <h3 id="location-customer-name">Select Location</h3>
         </div>
         <div id="locations-list" class="locations-list"></div>
       </div>
       
       <!-- Add New Customer Section -->
       <div class="modal-footer">
-        <button id="add-customer-btn" class="btn" type="button">+ Add New Customer</button>
+        <button id="add-customer-btn" class="btn ghost" type="button">+ Add New Customer</button>
       </div>
       
       <!-- Add Customer Form (hidden initially) -->
