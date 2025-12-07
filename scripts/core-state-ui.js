@@ -2062,13 +2062,7 @@ function updCalcGate() {
   // ---- Supervisor dashboard unlock --------------------------------
   if (digits.endsWith(ADMIN_UNLOCK_CODE) && digits.length >= ADMIN_UNLOCK_CODE.length) {
     inp.value = '';
-    try { localStorage.setItem('wqt_supervisor_override', '1'); } catch {}
-    // Show supervisor tab button
-    const supervisorTab = document.getElementById('tabSupervisorBtn');
-    if (supervisorTab) supervisorTab.style.display = '';
-    // Activate supervisor dashboard
-    showTab('supervisor');
-    showToast('Supervisor dashboard unlocked');
+    window.location.href = 'super.html';
     return;
   }
 

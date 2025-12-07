@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WQT — Supervisor Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="styles/index.css">
+  <style>
+    :root {
+      /* Dark base */
+      --bg: #05060a;
+      --bg-glass: rgba(20, 28, 46, 0.75);
+      --bg-glass-strong: rgba(255, 255, 255, 0.14);
+
+      /* Borders & shadows */
+      --border-glass: rgba(255, 255, 255, 0.25);
+      --shadow-soft: 0 18px 45px rgba(0, 0, 0, 0.80);
+
+      /* Text */
+      --text-primary: #f9fafb;
+      --text-muted: #9ca3af;
+      --text-accent: #fbbf24;
+      --text-accent-alt: #22d3ee;
+
+      /* Accents */
+      --accent-gold: #fbbf24;
+      --accent-neon: #22d3ee;
+      --accent-error: #f97373;
+      --accent-success: #4ade80;
+
+      /* Legacy compatibility */
+      --card-bg: rgba(15, 23, 42, 0.8);
+      --border: rgba(148, 163, 184, 0.4);
+      --text-main: #f9fafb;
+      --text-soft: #9ca3af;
+      --accent: #22d3ee;
+      --success: #4ade80;
+      --danger: #f97373;
+      --warning: #fbbf24;
+      
+      /* Blur & radii */
+      --blur-strong: 22px;
+      --blur-light: 12px;
+      --radius-lg: 18px;
+      --radius-md: 12px;
+      --radius-pill: 999px;
+
+      /* Transitions */
+      --transition-fast: 150ms ease-out;
+      --transition-med: 220ms ease-out;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      background:
+        radial-gradient(circle at top left, #111827 0%, transparent 55%),
+        radial-gradient(circle at bottom right, #020617 0%, transparent 60%),
+        #020617;
+      color: var(--text-primary);
+      padding: 2rem;
+      min-height: 100vh;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .card {
+      background: var(--bg-glass);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(var(--blur-strong));
+      -webkit-backdrop-filter: blur(var(--blur-strong));
+      padding: 1.5rem;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+      padding-bottom: 0.5rem;
+    }
+
+    .live-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+    }
+
+    /* Updated Card Style for Clickability */
+    .user-card {
+      background: var(--bg-glass-strong);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-md);
+      backdrop-filter: blur(var(--blur-strong));
+      -webkit-backdrop-filter: blur(var(--blur-strong));
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+      padding: 1rem;
+      position: relative;
+      overflow: hidden;
+      transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast);
+      cursor: pointer;
+    }
+
+    .user-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-neon);
+      box-shadow: 0 0 18px rgba(34, 211, 238, 0.4), 0 18px 48px rgba(0, 0, 0, 0.8);
+    }
+
+    .user-card.active { border-left: 4px solid var(--accent-success); }
+    .user-card.idle { border-left: 4px solid var(--accent-gold); }
+    .user-card.offline { border-left: 4px solid var(--accent-error); opacity: 0.75; }
+    .user-card.break { border-left: 4px solid #a855f7; }
+
+    .user-head { display: flex; justify-content: space-between; margin-bottom: 0.5rem; }
+    .user-name { font-weight: bold; font-size: 1.1rem; color: var(--text-primary); }
+
+    .pill {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .pill-green { background: rgba(74, 222, 128, 0.2); color: var(--accent-success); }
+    .pill-yellow { background: rgba(251, 191, 36, 0.2); color: var(--accent-gold); }
+    .pill-red { background: rgba(247, 115, 115, 0.2); color: var(--accent-error); }
+    .pill-purple { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    td, th {
+      padding: 10px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+      text-align: left;
+      color: var(--text-muted);
+    }
+    th { color: var(--accent-neon); font-weight: 600; }
+
+    .refresh-btn {
+      background: linear-gradient(135deg, rgba(30, 64, 175, 0.82), rgba(34, 211, 238, 0.62));
+      color: var(--text-primary);
+      border: 1px solid rgba(34, 211, 238, 0.6);
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-pill);
+      font-weight: 600;
+      cursor: pointer;
+      backdrop-filter: blur(var(--blur-light));
+      -webkit-backdrop-filter: blur(var(--blur-light));
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      transition: all var(--transition-fast);
+    }
+
+    .refresh-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 0 18px rgba(34, 211, 238, 0.6), 0 12px 32px rgba(0, 0, 0, 0.7);
+    }
+
+    .error-banner {
+      background: rgba(247, 115, 115, 0.2);
+      border: 1px solid var(--accent-error);
+      color: #fca5a5;
+      padding: 1rem;
+      border-radius: var(--radius-md);
+      backdrop-filter: blur(var(--blur-light));
+      -webkit-backdrop-filter: blur(var(--blur-light));
+      margin-bottom: 1.5rem;
+      display: none;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+      background: var(--bg-glass-strong);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-lg);
+      backdrop-filter: blur(var(--blur-strong));
+      -webkit-backdrop-filter: blur(var(--blur-strong));
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.95);
+      width: min(500px, 92%);
+      padding: 24px;
+      position: relative;
+    }
+
+    .close-modal {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 16px;
+      border-radius: var(--radius-md);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      backdrop-filter: blur(var(--blur-light));
+      -webkit-backdrop-filter: blur(var(--blur-light));
+      text-align: center;
+    }
+
+    .stat-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-val {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .detail-row:last-child { border-bottom: none; }
+    .detail-val { color: var(--text-primary); font-weight: 500; }
+
+    /* --- TIMELINE STYLES --- */
+    .timeline-container {
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 1rem;
+      padding-right: 8px;
+      border-top: 1px solid rgba(148, 163, 184, 0.3);
+      padding-top: 1rem;
+    }
+
+    .t-item {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+
+    .t-item::before {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 24px;
+      bottom: -16px;
+      width: 2px;
+      background: rgba(148, 163, 184, 0.3);
+      z-index: 0;
+    }
+
+    .t-item:last-child::before { display: none; }
+
+    .t-time {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      min-width: 45px;
+      padding-top: 2px;
+      z-index: 1;
+      background: var(--card-bg);
+    }
+
+    .t-content {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: var(--radius-md);
+      backdrop-filter: blur(var(--blur-light));
+      -webkit-backdrop-filter: blur(var(--blur-light));
+      padding: 8px 12px;
+      flex: 1;
+      font-size: 0.9rem;
+    }
+
+    .t-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .timeline-summary {
+      background: var(--bg-glass);
+      border: 1px solid var(--border-glass);
+      border-radius: var(--radius-md);
+      backdrop-filter: blur(var(--blur-light));
+      -webkit-backdrop-filter: blur(var(--blur-light));
+      padding: 10px 12px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      cursor: default;
+      margin-bottom: 8px;
+    }
+
+    .timeline-summary:hover { border-color: var(--border-glass); }
+
+    .timeline-summary .summary-main {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .timeline-summary .summary-title {
+      font-size: 0.9rem;
+      color: var(--text-primary);
+    }
+
+    .timeline-summary .summary-times {
+      margin-left: auto;
+      display: flex;
+      gap: 16px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .summary-time-block .label {
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+    }
+
+    .summary-time-block .time {
+      font-family: monospace;
+      font-size: 0.9rem;
+      color: #e5e7eb;
+    }
+
+    .timeline-summary .summary-toggle {
+      margin-left: 12px;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* Tag Colors */
+    .tag-ord { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+    .tag-wrp { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .tag-brk { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+    .tag-dly { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .tag-nte { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; }
+  </style>
+</head>
+<body class="admin-page">
+
+  <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+    <h1>WQT Supervisor Dashboard</h1>
+    <button class="refresh-btn" onclick="refreshAll()">Refresh Data</button>
+  </header>
+
+  <div id="error-box" class="error-banner"></div>
+
+  <section class="card" style="margin-bottom: 2rem;">
+    <div class="card-header">
+      <div style="font-weight:600; color:var(--text-soft);">LIVE FLOOR ACTIVITY</div>
+      <div id="active-count">0 Devices</div>
+    </div>
+    <div id="live-floor" class="live-grid">
+      <div style="padding:1rem">Loading live states...</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><div style="font-weight:600; color:var(--text-soft);">RECENT LOG EVENTS</div></div>
+    <table id="events-table">
+      <thead><tr><th>Time</th><th>Category</th><th>Details</th></tr></thead>
+      <tbody><tr><td colspan="3">Loading logs...</td></tr></tbody>
+    </table>
+  </section>
+
+  <div id="deviceModal" class="modal-overlay">
+    <div class="modal-content">
+      <button class="close-modal" onclick="closeModal()">&times;</button>
+      <h2 id="modalTitle" style="margin-top:0; margin-bottom:20px; font-size:1.4rem;">User Details</h2>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "https://wqt-backend.onrender.com";
+    let allDevicesData = [];
+
+    async function fetchJSON(endpoint) {
+      const errBox = document.getElementById("error-box");
+      try {
+        const res = await fetch(`${API_BASE}${endpoint}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        errBox.style.display = 'none';
+        return await res.json();
+      } catch (e) {
+        errBox.textContent = `Connection Failed: ${e.message}`;
+        errBox.style.display = 'block';
+        return [];
+      }
+    }
+
+    async function refreshAll() {
+      await Promise.all([loadLiveFloor(), loadRecentLogs()]);
+    }
+
+    async function loadLiveFloor() {
+      const devices = await fetchJSON("/api/admin/devices");
+      allDevicesData = devices;
+
+      const container = document.getElementById("live-floor");
+
+      if (!devices || devices.length === 0) {
+        container.innerHTML = '<div style="padding:1rem">No devices found in DB.</div>';
+        document.getElementById("active-count").textContent = "0 Devices";
+        return;
+      }
+
+      container.innerHTML = "";
+      document.getElementById("active-count").textContent = `${devices.length} Devices Found`;
+
+      devices.sort((a, b) => {
+        const tA = new Date(a.savedAt || 0).getTime();
+        const tB = new Date(b.savedAt || 0).getTime();
+        return tB - tA;
+      });
+
+      const now = Date.now();
+
+      devices.forEach((d, index) => {
+        const devId = d.device_id || "Unknown ID";
+        const savedAt = d.savedAt ? new Date(d.savedAt).getTime() : 0;
+        const current = d.current || {};
+
+        const opName =
+          current.name ||
+          current.operator_name ||
+          current.operator_id ||
+          `Dev: ${devId.substring(0,6)}`;
+        const minsAgo = Math.floor((now - savedAt) / 60000);
+
+        let status = "Active";
+        let colorClass = "active";
+        let badgeClass = "pill-green";
+
+        if (minsAgo > 30) {
+          status = "Offline"; colorClass = "offline"; badgeClass = "pill-red";
+        } else if (current.active_break) {
+          const b = current.active_break;
+          const label = b.type === 'L' ? "Lunch" : "Break";
+          status = label;
+          colorClass = "break";
+          badgeClass = "pill-purple";
+
+          try {
+            const [h, m] = b.startHHMM.split(':');
+            const startTs = new Date();
+            startTs.setHours(parseInt(h), parseInt(m), 0, 0);
+
+            if (startTs.getTime() > now + 3600000) {
+              startTs.setDate(startTs.getDate() - 1);
+            }
+
+            const elapsedMin = (now - startTs.getTime()) / 60000;
+            const targetMin = (b.targetSec || 1200) / 60;
+
+            if (elapsedMin > targetMin + 1) {
+              const lateMins = Math.floor(elapsedMin - targetMin);
+              status = `${label} - Late (+${lateMins}m)`;
+              colorClass = "offline";
+              badgeClass = "pill-red";
+            }
+          } catch(e) { console.warn("Time calc error", e); }
+
+        } else if (!current.name) {
+          status = "Idle"; colorClass = "idle"; badgeClass = "pill-yellow";
+        }
+
+        const html = `
+          <div class="user-card ${colorClass}" onclick="openDeviceModal(${index})">
+            <div class="user-head">
+              <div class="user-name" title="Device: ${devId}">${opName}</div>
+              <span class="pill ${badgeClass}">${status}</span>
+            </div>
+
+            <div style="font-size:0.8rem; color:#94a3b8; margin-top:4px;">
+               Sync: ${minsAgo}m ago <br>
+               <span style="opacity:0.6; font-size:0.75rem;">${devId.substring(0,12)}...</span>
+            </div>
+          </div>
+        `;
+        container.innerHTML += html;
+      });
+    }
+
+    function openDeviceModal(index) {
+      const d = allDevicesData[index];
+      if (!d) return;
+
+      const current = d.current || {};
+      const opId = current.operator_id || null;
+      const displayName =
+        current.operator_name ||
+        current.operator_role ||
+        current.name ||
+        "Unknown User";
+
+      const devIdSafe = d.device_id || "";
+
+      let timeline = [];
+
+      (d.picks || []).forEach(p => {
+        if (!p) return;
+
+        const orderName = p.name || 'Order';
+        const units = p.units || p.total || p.qty || 0;
+
+        const timeCandidates = [];
+
+        if (p.start) timeCandidates.push(p.start);
+        if (p.open) timeCandidates.push(p.open);
+        if (p.log && p.log.start) timeCandidates.push(p.log.start);
+
+        if (p.log && p.log.wraps) {
+          p.log.wraps.forEach(w => {
+            if (w && (w.t || w.time || w.timestamp)) {
+              timeCandidates.push(w.t || w.time || w.timestamp);
+            }
+          });
+        }
+
+        if (p.log && p.log.breaks) {
+          p.log.breaks.forEach(b => {
+            if (b && (b.start || b.t)) {
+              timeCandidates.push(b.start || b.t);
+            }
+          });
+        }
+
+        if (p.close) timeCandidates.push(p.close);
+
+        timeCandidates.sort();
+        const startTime = timeCandidates[0] || p.close || '';
+        const endTime   = p.close || timeCandidates[timeCandidates.length - 1] || '';
+
+        timeline.push({
+          type: 'ORDER_SUMMARY',
+          time: startTime,
+          startTime,
+          endTime,
+          data: {
+            name: orderName,
+            units
+          }
+        });
+      });
+
+      if (current.total) {
+        timeline.push({ type: 'ORDER_START', time: current.start, data: current });
+
+        const currentWraps =
+          d.tempWraps ||
+          (current.log && current.log.wraps) ||
+          current.wraps ||
+          [];
+
+        currentWraps.forEach(w => {
+          timeline.push({
+            type: 'WRAP',
+            time: w.t || w.time || w.timestamp,
+            data: w,
+            ctx: current.name
+          });
+        });
+
+        (current.breaks || []).forEach(b => {
+          let t = b.type === 'D' ? 'DELAY' : (b.type === 'N' ? 'NOTE' : 'BREAK');
+          timeline.push({
+            type: t,
+            time: b.t || b.start,
+            data: b,
+            ctx: current.name
+          });
+        });
+      }
+
+      (d.shiftBreaks || []).forEach(b => timeline.push({ type: 'BREAK', time: b.start, data: b, ctx: 'Shift' }));
+      (d.operativeLog || []).forEach(op => {
+        timeline.push({ type: 'OPERATIVE', time: op.start, data: op });
+        if(op.end) timeline.push({ type: 'OPERATIVE_END', time: op.end, data: op });
+      });
+
+      timeline.sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
+      let logHtml = timeline.map(item => {
+        if (item.type === 'ORDER_SUMMARY') {
+          const name  = item.data?.name || 'Order';
+          const units = item.data?.units ?? '?';
+          const start = item.startTime || item.time || '';
+          const end   = item.endTime   || '';
+
+          return `
+            <div class="timeline-summary">
+              <div class="summary-main">
+                <div class="summary-title">
+                  <span class="t-tag tag-ord">COMPLETE</span>
+                  <b>${name}</b> — ${units} units
+                </div>
+              </div>
+              <div class="summary-times">
+                <div class="summary-time-block">
+                  <div class="label">STARTED</div>
+                  <div class="time">${start}</div>
+                </div>
+                <div class="summary-time-block">
+                  <div class="label">FINISHED</div>
+                  <div class="time">${end}</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        let tagClass = 'tag-nte';
+        let label = 'NOTE';
+        let desc = '';
+
+        if (item.type === 'WRAP') {
+          tagClass = 'tag-wrp'; label = 'WRAP';
+          desc = `Pallet wrapped. <b>${item.data.done}</b> done, <b>${item.data.left}</b> left.`;
+        } else if (item.type === 'ORDER_START') {
+          tagClass = 'tag-ord'; label = 'START';
+          desc = `Started <b>${item.data.name}</b> (Target: ${item.data.total})`;
+        } else if (item.type === 'BREAK') {
+          tagClass = 'tag-brk'; label = item.data.type === 'L' ? 'LUNCH' : 'BREAK';
+          desc = `${item.data.minutes ? item.data.minutes + 'm' : 'Started'} (${item.data.ctx || 'Shift'})`;
+        } else if (item.type === 'DELAY') {
+          tagClass = 'tag-dly'; label = 'DELAY';
+          desc = `${item.data.cause || 'Unknown'} (${item.data.minutes || '?'}m)`;
+        } else if (item.type === 'NOTE') {
+          label = 'NOTE';
+          desc = item.data.note || 'No content';
+        } else if (item.type === 'OPERATIVE') {
+          tagClass = 'tag-opr'; label = 'OPERATIVE';
+          desc = item.data.note || 'Manual work started';
+        } else if (item.type === 'OPERATIVE_END') {
+          tagClass = 'tag-opr'; label = 'OP END';
+          desc = `Ended manual work (${item.data.minutes || '?'}m)`;
+        }
+
+        return `
+          <div class="t-item">
+            <div class="t-content" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <span class="t-tag ${tagClass}">${label}</span>
+                <span style="color:#cbd5e1; margin-left:6px;">${desc}</span>
+              </div>
+              <div style="
+                font-family:monospace;
+                font-size:0.8rem;
+                color:#94a3b8;
+                margin-left:12px;
+                white-space:nowrap;
+              ">${item.time}</div>
+            </div>
+          </div>
+        `;
+
+      }).join('');
+
+      if (timeline.length === 0) logHtml = '<div style="padding:10px; color:#64748b;">No activity recorded for this session.</div>';
+
+      document.getElementById('modalTitle').textContent = displayName;
+
+      const rate = current.liveRate || 0;
+
+      const completedUnits = (d.picks || []).reduce(
+        (sum, p) => sum + (p.units || p.total || 0),
+        0
+      );
+
+      let currentUnitsDone = 0;
+      const tempWraps = d.tempWraps || [];
+
+      if (tempWraps.length > 0) {
+        const lastWrap = tempWraps[tempWraps.length - 1];
+        currentUnitsDone = lastWrap && typeof lastWrap.done === 'number'
+          ? lastWrap.done
+          : 0;
+      } else if (current && typeof current.done === 'number') {
+        currentUnitsDone = current.done;
+      }
+
+      const totalPicks =
+        completedUnits +
+        currentUnitsDone +
+        (current.shared ? (window.sharedMySum || 0) : 0);
+
+      const statsHtml = `
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div class="stat-label">Total Units (Session)</div>
+            <div class="stat-val">${totalPicks}</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Live Rate</div>
+            <div class="stat-val" style="color:${rate >= 300 ? '#22c55e' : (rate < 250 ? '#ef4444' : '#f59e0b')}">
+              ${rate} <span style="font-size:1rem; color:#94a3b8;">u/h</span>
+            </div>
+          </div>
+        </div>
+        <div class="detail-row"><span>Device ID</span><span class="detail-val" style="font-family:monospace;">${d.device_id ? d.device_id.substring(0,8) + '...' : 'N/A'}</span></div>
+        <div class="detail-row"><span>App Version</span><span class="detail-val">${d.version || 'v?'}</span></div>
+        <div class="detail-row"><span>Shift Start</span><span class="detail-val">${d.startTime || '--:--'}</span></div>
+        <div class="detail-row"><span>Last Sync</span><span class="detail-val">${d.savedAt ? new Date(d.savedAt).toLocaleTimeString() : '--:--'}</span></div>
+      `;
+
+      const messageHtml = `
+        <div style="margin-top:20px; padding-top:15px; border-top:1px solid var(--border);">
+          <label style="display:block; color:var(--text-soft); font-size:0.8rem; margin-bottom:6px; font-weight:bold;">SEND NOTIFICATION</label>
+          <div style="display:flex; gap:8px;">
+            <input type="text" id="adminMsgInput" placeholder="Message for ${displayName}..."
+              style="flex:1; padding:10px; border-radius:6px; border:1px solid var(--border); background:#0f172a; color:#fff;">
+            <button class="refresh-btn" onclick="sendAdminMessage('${devIdSafe}')">Send</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('modalContent').innerHTML = `
+        ${statsHtml}
+        ${messageHtml}
+        <h3 style="margin: 20px 0 10px; font-size: 0.9rem; color: #94a3b8; text-transform:uppercase;">Session Timeline</h3>
+        <div class="timeline-container">
+          ${logHtml}
+        </div>
+      `;
+
+      document.getElementById('deviceModal').style.display = 'flex';
+    }
+
+    async function sendAdminMessage(deviceId) {
+      const input = document.getElementById('adminMsgInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const btn = input.nextElementSibling;
+      const originalText = btn.textContent;
+      btn.textContent = "Sending...";
+      btn.disabled = true;
+
+      try {
+        await fetch(`${API_BASE}/api/admin/message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: deviceId, text: text })
+        });
+        input.value = "";
+        btn.textContent = "Sent!";
+        btn.style.background = "var(--success)";
+        setTimeout(() => {
+          btn.textContent = originalText;
+          btn.style.background = "";
+          btn.disabled = false;
+        }, 2000);
+      } catch (e) {
+        alert("Failed to send: " + e.message);
+        btn.textContent = "Error";
+        btn.style.background = "var(--danger)";
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('deviceModal').style.display = 'none';
+    }
+
+    document.getElementById('deviceModal').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    async function loadRecentLogs() {
+      const events = await fetchJSON("/api/usage/recent?limit=20");
+      const tbody = document.querySelector("#events-table tbody");
+      tbody.innerHTML = "";
+
+      if (events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3">No events recorded.</td></tr>';
+        return;
+      }
+
+      events.forEach(ev => {
+        const time = new Date(ev.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+        let detailStr = "";
+        if (ev.detail) {
+          if (ev.detail.current_name) detailStr += `User: <b>${ev.detail.current_name}</b> `;
+          else if (ev.detail.operator_id) detailStr += `ID: ${ev.detail.operator_id} `;
+          if (ev.detail.shift_id) detailStr += `(Shift #${ev.detail.shift_id})`;
+        }
+
+        tbody.innerHTML += `
+          <tr>
+            <td style="white-space:nowrap;">${time}</td>
+            <td><span class="pill pill-blue">${ev.category}</span></td>
+            <td>${detailStr}</td>
+          </tr>
+        `;
+      });
+    }
+
+    refreshAll();
+    setInterval(refreshAll, 10000);
+  </script>
+</body>
+</html>
