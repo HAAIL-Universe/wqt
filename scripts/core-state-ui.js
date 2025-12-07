@@ -1897,84 +1897,11 @@ function groupedMap(all){
 }
 
 // Build the custom grouped dropdown component (main + Other…)
+// NOTE: This function is now a stub - the modal handles customer selection
 function buildDropdown(ddId, selectId, otherInputId, prefix){
-  const sel = document.getElementById(selectId);
-  const dd  = document.getElementById(ddId);
-  const menu = dd.querySelector('.dd-menu');
-  const btn = dd.querySelector('.dd-toggle');
-  const otherInput = document.getElementById(otherInputId);
-
-  function setValue(val){
-    sel.value = val;
-    btn.textContent = val==='__OTHER__' ? 'Other…' : val;
-    onCustomerChange(prefix);
-    if(prefix==='o') refreshStartButton();
-    saveAll();
-    dd.classList.remove('open');
-  }
-
-  btn.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    document.querySelectorAll('.dd.open').forEach(x=>{ if(x!==dd) x.classList.remove('open'); });
-    dd.classList.toggle('open');
-    if(dd.classList.contains('open')) { menu.scrollTop = 0; }
-  });
-
-  document.addEventListener('click', (e)=>{
-    if(!dd.contains(e.target)) dd.classList.remove('open');
-  });
-
-  function render(){
-    const uniq = Array.from(new Set([...(DEFAULT_CODES||[]), ...(customCodes||[])]));
-    const groups = groupedMap(uniq);
-
-    menu.innerHTML = '';
-
-    Object.entries(groups).forEach(([pref, codes])=>{
-      const group = document.createElement('div');
-      group.className = 'dd-group';
-
-      const h = document.createElement('h4');
-      h.innerHTML = `${pref}<span>▾</span>`;
-      const items = document.createElement('div');
-      items.className = 'dd-items';
-
-      codes.forEach(code=>{
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.textContent = code;
-        b.addEventListener('click', ()=> setValue(code));
-        items.appendChild(b);
-      });
-
-      h.addEventListener('click', ()=> {
-        items.style.display = (items.style.display === 'block') ? 'none' : 'block';
-      });
-
-      group.appendChild(h);
-      group.appendChild(items);
-      menu.appendChild(group);
-    });
-
-    const other = document.createElement('div');
-    other.className = 'dd-other';
-    const btnOther = document.createElement('button');
-    btnOther.type = 'button';
-    btnOther.textContent = 'Other…';
-    btnOther.addEventListener('click', ()=>{
-      setValue('__OTHER__');
-      otherInput?.classList.remove('hidden');
-      otherInput?.focus();
-    });
-    other.appendChild(btnOther);
-    menu.appendChild(other);
-  }
-
-  render();
-  btn.textContent = sel.value
-    ? (sel.value==='__OTHER__' ? 'Other…' : sel.value)
-    : 'Select customer…';
-  dd.__reload = render;
+  // Modal-based customer selector is now used instead
+  // This function is kept for compatibility with existing code that calls it
+  console.log('[buildDropdown] Using modal-based customer selector');
 }
 // Rebuild <select> and custom dropdown after codes change
 function reloadDropdowns(){

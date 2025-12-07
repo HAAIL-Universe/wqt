@@ -229,6 +229,69 @@
       </div>
     </div>
   </div>
+
+  <!-- Customer Selector Modal -->
+  <div id="customerSelectorModal" class="modal-overlay" style="display:none;">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <h2>Select Customer</h2>
+        <button id="customer-modal-close" class="btn ghost slim" type="button">✖</button>
+      </div>
+      
+      <input id="customer-search" type="text" placeholder="Search customers..." class="modal-search-input" />
+      
+      <!-- Customer Groups List -->
+      <div id="customer-groups" class="customer-groups-container"></div>
+      
+      <!-- Location Selection Panel (shown when customer clicked) -->
+      <div id="customer-locations" class="customer-locations-container" style="display:none;">
+        <div class="location-header">
+          <h3 id="location-customer-name">Select Location</h3>
+          <button id="back-to-customers" class="btn ghost slim" type="button">← Back</button>
+        </div>
+        <div id="locations-list" class="locations-list"></div>
+      </div>
+      
+      <!-- Add New Customer Section -->
+      <div class="modal-footer">
+        <button id="add-customer-btn" class="btn" type="button">+ Add New Customer</button>
+      </div>
+      
+      <!-- Add Customer Form (hidden initially) -->
+      <div id="add-customer-form" class="add-customer-form-container" style="display:none;">
+        <h3>Add New Customer</h3>
+        
+        <div class="form-group">
+          <label>Customer Name</label>
+          <input id="new-customer-name" type="text" placeholder="e.g. Co-op, Asda, Tesco" />
+        </div>
+        
+        <div class="form-group">
+          <label>3-Letter Prefix</label>
+          <input id="new-customer-prefix" type="text" maxlength="3" placeholder="e.g. COO" style="text-transform:uppercase;" />
+          <div class="hint">First 3 letters of customer code</div>
+        </div>
+        
+        <div class="form-group">
+          <label>Locations</label>
+          <div id="new-customer-locations-list">
+            <div class="location-input-row">
+              <input type="text" class="location-suffix-input" maxlength="3" placeholder="e.g. WES" style="text-transform:uppercase;" />
+              <input type="text" class="location-name-input" placeholder="Location name (optional)" />
+            </div>
+          </div>
+          <button id="add-location-row" class="btn ghost slim" type="button">+ Add Location</button>
+          <div class="hint">Last 3 letters of customer code (e.g. WES for Westbury)</div>
+        </div>
+        
+        <div class="form-actions">
+          <button id="cancel-add-customer" class="btn ghost" type="button">Cancel</button>
+          <button id="save-new-customer" class="btn ok" type="button">Save Customer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <section id="tabTracker">
     <div class="card" id="shiftCard">
       <div class="row" style="align-items:flex-end;">
@@ -265,11 +328,11 @@
         
         <div class="tracker-input-bar">
           <div class="tib-customer">
-            <select id="oCust" class="hidden"></select>
-            <div id="oDD" class="dd">
-              <button class="dd-toggle" type="button">Select customer…</button>
-              <div class="dd-menu"></div>
-            </div>
+            <button id="customer-select-trigger" class="glass-input like-select" type="button">
+              <span id="customer-select-label">Select customer…</span>
+            </button>
+            <span id="selected-customer-code" class="customer-code-chip" style="display:none;"></span>
+            <input id="oCust" type="hidden">
             <input id="oOther" type="text" class="hidden" maxlength="6" placeholder="ABCDEF" pattern="[A-Za-z]{6}">
           </div>
           
@@ -1001,6 +1064,7 @@
 <script src="scripts/storage.js"></script>
 <script src="scripts/api.js"></script>
 <script src="scripts/core-state-ui.js"></script>
+<script src="scripts/customer-selector-modal.js"></script>
 <script src="scripts/core-metrics-actions.js"></script>
 <script src="scripts/core-tracker-history.js"></script>
 <script>
