@@ -6,6 +6,9 @@ let customerLocationMap = {};
 // Build the map from existing codes
 function buildCustomerLocationMap() {
   const allCodes = Array.from(new Set([...(DEFAULT_CODES || []), ...(customCodes || [])]));
+  // Sort all codes alphabetically first
+  allCodes.sort((a, b) => a.localeCompare(b));
+  
   customerLocationMap = {};
   
   allCodes.forEach(code => {
@@ -24,7 +27,7 @@ function buildCustomerLocationMap() {
     });
   });
   
-  // Sort locations within each customer
+  // Ensure locations within each customer are sorted alphabetically
   Object.keys(customerLocationMap).forEach(prefix => {
     customerLocationMap[prefix].sort((a, b) => a.fullCode.localeCompare(b.fullCode));
   });
@@ -78,8 +81,8 @@ function renderCustomerGroups() {
   
   container.innerHTML = '';
   
-  // Get sorted customer prefixes
-  const sortedPrefixes = Object.keys(customerLocationMap).sort();
+  // Get customer prefixes sorted alphabetically
+  const sortedPrefixes = Object.keys(customerLocationMap).sort((a, b) => a.localeCompare(b));
   
   if (sortedPrefixes.length === 0) {
     const noResults = document.createElement('div');
@@ -143,26 +146,27 @@ function showLocationSelection(prefix) {
     customerNameEl.textContent = `${prefix.toUpperCase()} – Select Location`;
   }
   
-  // Render locations
+  // Render locations as grid of pill buttons
   if (locationsList) {
     locationsList.innerHTML = '';
     
     locations.forEach(loc => {
-      const itemDiv = document.createElement('div');
-      itemDiv.className = 'location-item';
-      itemDiv.onclick = () => selectCustomerLocation(loc.fullCode);
+      const btnDiv = document.createElement('button');
+      btnDiv.className = 'location-pill-btn';
+      btnDiv.type = 'button';
+      btnDiv.onclick = () => selectCustomerLocation(loc.fullCode);
       
-      const codeDiv = document.createElement('div');
-      codeDiv.className = 'location-item-code';
-      codeDiv.textContent = loc.fullCode;
+      const codeSpan = document.createElement('div');
+      codeSpan.className = 'location-pill-code';
+      codeSpan.textContent = loc.fullCode;
       
-      const labelDiv = document.createElement('div');
-      labelDiv.className = 'location-item-label';
-      labelDiv.textContent = `${prefix.toUpperCase()} – ${loc.suffix.toUpperCase()}`;
+      const labelSpan = document.createElement('div');
+      labelSpan.className = 'location-pill-label';
+      labelSpan.textContent = `${prefix.toUpperCase()} – ${loc.suffix.toUpperCase()}`;
       
-      itemDiv.appendChild(codeDiv);
-      itemDiv.appendChild(labelDiv);
-      locationsList.appendChild(itemDiv);
+      btnDiv.appendChild(codeSpan);
+      btnDiv.appendChild(labelSpan);
+      locationsList.appendChild(btnDiv);
     });
   }
 }
