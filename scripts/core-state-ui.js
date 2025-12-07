@@ -2059,10 +2059,10 @@ function updCalcGate() {
   const raw    = String(inp.value || '');
   const digits = raw.replace(/\D+/g, '');
 
-  // ---- Supervisor dashboard unlock --------------------------------
+  // ---- Admin dashboard unlock --------------------------------
   if (digits.endsWith(ADMIN_UNLOCK_CODE) && digits.length >= ADMIN_UNLOCK_CODE.length) {
     inp.value = '';
-    window.location.href = 'super.html';
+    window.location.href = 'admin.html';
     return;
   }
 

@@ -150,9 +150,13 @@
     return userPayload;
   }
 
-  function gotoWqtApp() {
-    // Change this if your main WQT entry file is named differently.
-    window.location.href = 'index.html';
+  function gotoWqtApp(role) {
+    // Role-based redirect: supervisors → super.html, pickers → index.html
+    if (role === 'supervisor') {
+      window.location.href = 'super.html';
+    } else {
+      window.location.href = 'index.html';
+    }
   }
 
     // --------------------------
@@ -292,7 +296,7 @@
       resumeBtn.textContent = 'Continue as ' + currentUser.displayName;
       resumeBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        gotoWqtApp();
+        gotoWqtApp(currentUser.role);
       });
     }
 
@@ -341,9 +345,9 @@
         setStatus('Logging in…', false);
 
         try {
-          await loginWithPin(pin);
+          const userData = await loginWithPin(pin);
           setStatus('Success. Loading WQT…', false);
-          gotoWqtApp();
+          gotoWqtApp(userData.role);
         } catch (err) {
           console.error(err);
           loginBtn.disabled = false;
@@ -392,9 +396,9 @@
         setStatus('Creating user…', false);
 
         try {
-          await registerWithPin(pin, fullName, role);
+          const userData = await registerWithPin(pin, fullName, role);
           setStatus('User created. Loading WQT…', false);
-          gotoWqtApp();
+          gotoWqtApp(userData.role);
         } catch (err) {
           console.error(err);
           registerBtn.disabled = false;
