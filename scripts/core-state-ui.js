@@ -2059,10 +2059,16 @@ function updCalcGate() {
   const raw    = String(inp.value || '');
   const digits = raw.replace(/\D+/g, '');
 
-  // ---- Admin dashboard unlock --------------------------------
+  // ---- Supervisor dashboard unlock --------------------------------
   if (digits.endsWith(ADMIN_UNLOCK_CODE) && digits.length >= ADMIN_UNLOCK_CODE.length) {
     inp.value = '';
-    window.location.href = 'admin.html';
+    try { localStorage.setItem('wqt_supervisor_override', '1'); } catch {}
+    // Show supervisor tab button
+    const supervisorTab = document.getElementById('tabSupervisorBtn');
+    if (supervisorTab) supervisorTab.style.display = '';
+    // Activate supervisor dashboard
+    showTab('supervisor');
+    showToast('Supervisor dashboard unlocked');
     return;
   }
 
@@ -2102,21 +2108,23 @@ function updCalcGate() {
 
 // ====== Tabs ======
 
-// Generic tab switcher for Calc / Tracker / History
+// Generic tab switcher for Calc / Tracker / History / Supervisor
 function showTab(which){
   // ---------- swap visible section ----------
   const id = 'tab' + which.charAt(0).toUpperCase() + which.slice(1);
-  ['tabCalc','tabTracker','tabHistory'].forEach(x =>
+  ['tabCalc','tabTracker','tabHistory','tabSupervisor'].forEach(x =>
     document.getElementById(x).classList.toggle('hidden', x !== id)
   );
 
   // ---------- tab button active state ----------
-  ['tabCalcBtn','tabTrackBtn','tabHistBtn'].forEach(x =>
-    document.getElementById(x).classList.remove('active')
-  );
-  if (which === 'calc')    document.getElementById('tabCalcBtn').classList.add('active');
-  if (which === 'tracker') document.getElementById('tabTrackBtn').classList.add('active');
-  if (which === 'history') document.getElementById('tabHistBtn').classList.add('active');
+  ['tabCalcBtn','tabTrackBtn','tabHistBtn','tabSupervisorBtn'].forEach(x => {
+    const btn = document.getElementById(x);
+    if (btn) btn.classList.remove('active');
+  });
+  if (which === 'calc')       document.getElementById('tabCalcBtn')?.classList.add('active');
+  if (which === 'tracker')    document.getElementById('tabTrackBtn')?.classList.add('active');
+  if (which === 'history')    document.getElementById('tabHistBtn')?.classList.add('active');
+  if (which === 'supervisor') document.getElementById('tabSupervisorBtn')?.classList.add('active');
 
   // Live banner: only on Tracker *and* only once a shift has started
   const lb = document.getElementById('liveBanner');
@@ -2127,6 +2135,17 @@ function showTab(which){
   const form = document.getElementById('orderHeaderForm');
   const prog = document.getElementById('orderHeaderProgress');
   const area = document.getElementById('orderArea');
+
+  // ---------- SUPERVISOR TAB ----------
+  if (which === 'supervisor') {
+    // hide order-area when on supervisor
+    if (area) area.style.display = 'none';
+    // Load supervisor dashboard if function exists
+    if (typeof refreshSupervisorDashboard === 'function') {
+      refreshSupervisorDashboard();
+    }
+    return;
+  }
 
   // ---------- HISTORY TAB ----------
   if (which === 'history') {
@@ -2177,4 +2196,57 @@ function showTab(which){
     if (el) el.style.display = 'none';
   });
   saveAllDebounced();
+}
+
+// ==================== SUPERVISOR DASHBOARD ====================
+async function refreshSupervisorDashboard() {
+  const errorEl = document.getElementById('supervisor-error');
+  const ordersBody = document.getElementById('supervisor-live-orders');
+  const pickersBody = document.getElementById('supervisor-pickers');
+  const totalUnitsEl = document.getElementById('supervisor-total-units');
+  const totalLocsEl = document.getElementById('supervisor-total-locations');
+  const openOrdersEl = document.getElementById('supervisor-open-orders');
+  const activePickersEl = document.getElementById('supervisor-active-pickers');
+
+  try {
+    if (errorEl) errorEl.style.display = 'none';
+
+    // TODO: Replace with actual API call to /api/admin/dashboard or similar
+    // For now, show placeholder data
+    
+    // Placeholder Live Orders
+    if (ordersBody) {
+      ordersBody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align:center; padding:2rem; color:#9fb3c8;">
+            <em>No live data yet - backend wiring pending</em>
+          </td>
+        </tr>
+      `;
+    }
+
+    // Placeholder Active Pickers
+    if (pickersBody) {
+      pickersBody.innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align:center; padding:2rem; color:#9fb3c8;">
+            <em>No live data yet - backend wiring pending</em>
+          </td>
+        </tr>
+      `;
+    }
+
+    // Placeholder Summary
+    if (totalUnitsEl) totalUnitsEl.textContent = '0';
+    if (totalLocsEl) totalLocsEl.textContent = '0';
+    if (openOrdersEl) openOrdersEl.textContent = '0';
+    if (activePickersEl) activePickersEl.textContent = '0';
+
+  } catch (err) {
+    console.error('Failed to refresh supervisor dashboard:', err);
+    if (errorEl) {
+      errorEl.textContent = 'Failed to load dashboard data';
+      errorEl.style.display = 'block';
+    }
+  }
 }

@@ -15,6 +15,7 @@
     <button id="tabHistBtn" class="tabbtn" type="button" onclick="showTab('history')">
       <span id="userTabLabel">History</span>
     </button>
+    <button id="tabSupervisorBtn" class="tabbtn" type="button" onclick="showTab('supervisor')" style="display:none;">Supervisor</button>
   </div>
 
   <div id="liveBanner" class="rateBanner hidden">
@@ -591,6 +592,83 @@
         </div>
 
         <div id="overlayStatus" class="hint" style="margin-top:6px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tabSupervisor" class="hidden">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+        <h2 style="margin:0; font-size:1.5rem;">Supervisor Dashboard</h2>
+        <button class="btn" type="button" onclick="refreshSupervisorDashboard()">Refresh Data</button>
+      </div>
+      
+      <div id="supervisor-error" class="hint" style="display:none; color:#ef4444; margin-bottom:1rem;"></div>
+      
+      <!-- Live Orders Section -->
+      <div style="margin-bottom:2rem;">
+        <h3 style="margin-bottom:0.75rem; color:#9fb3c8; font-size:1.1rem;">Live Orders</h3>
+        <div class="tablewrap" style="max-height:400px; overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Units</th>
+                <th>Locations</th>
+                <th>Assigned To</th>
+                <th>Start Time</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="supervisor-live-orders">
+              <tr><td colspan="6" style="text-align:center; padding:2rem;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Active Pickers Section -->
+      <div style="margin-bottom:2rem;">
+        <h3 style="margin-bottom:0.75rem; color:#9fb3c8; font-size:1.1rem;">Active Pickers</h3>
+        <div class="tablewrap" style="max-height:400px; overflow:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Picker</th>
+                <th>Live Rate (u/h)</th>
+                <th>Perf Score</th>
+                <th>Current Order</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="supervisor-pickers">
+              <tr><td colspan="5" style="text-align:center; padding:2rem;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Shift Summary Section -->
+      <div>
+        <h3 style="margin-bottom:0.75rem; color:#9fb3c8; font-size:1.1rem;">Shift Summary</h3>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem;">
+          <div class="pill" style="text-align:center; padding:1rem;">
+            <h4 style="margin:0 0 0.5rem 0; color:#9fb3c8; font-size:0.9rem;">Total Units</h4>
+            <p id="supervisor-total-units" style="margin:0; font-size:1.8rem; font-weight:700;">0</p>
+          </div>
+          <div class="pill" style="text-align:center; padding:1rem;">
+            <h4 style="margin:0 0 0.5rem 0; color:#9fb3c8; font-size:0.9rem;">Total Locations</h4>
+            <p id="supervisor-total-locations" style="margin:0; font-size:1.8rem; font-weight:700;">0</p>
+          </div>
+          <div class="pill" style="text-align:center; padding:1rem;">
+            <h4 style="margin:0 0 0.5rem 0; color:#9fb3c8; font-size:0.9rem;">Open Orders</h4>
+            <p id="supervisor-open-orders" style="margin:0; font-size:1.8rem; font-weight:700;">0</p>
+          </div>
+          <div class="pill" style="text-align:center; padding:1rem;">
+            <h4 style="margin:0 0 0.5rem 0; color:#9fb3c8; font-size:0.9rem;">Active Pickers</h4>
+            <p id="supervisor-active-pickers" style="margin:0; font-size:1.8rem; font-weight:700;">0</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
