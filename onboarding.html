@@ -1,48 +1,5 @@
 <!-- onboarding.html — Loaded & injected by index.html preload -->
-<style>
-  /* ===== Hint Bubble ===== */
-  #onboardHintBubble {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    max-width: 92vw;
-    padding: 10px 16px;
-    background: #1a2433;
-    border: 1px solid #2e3a4d;
-    border-radius: 12px;
-    color: #c8d4e4;
-    font-size: 0.9rem;
-    line-height: 1.4;
-    z-index: 9997;
-    box-shadow: 0 8px 22px rgba(0,0,0,.45);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .25s ease;
-  }
-
-  #onboardHintBubble.show {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  #onboardHintBubble .dismiss {
-    margin-left: 12px;
-    color: #9fb3c8;
-    text-decoration: underline;
-    cursor: pointer;
-    font-size: 0.8rem;
-  }
-
-  /* ===== Overlay ===== */
-  .onboard-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,.72);
-    z-index: 9998;
-  }
-</style>
-
+<!-- Styles moved to index.css -->
 
 <!-- ===== Hint Bubble UI ===== -->
 <div id="onboardHintBubble"></div>

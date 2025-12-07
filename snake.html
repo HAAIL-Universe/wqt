@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <title>Snake Lab – Congestion Test</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root{
-      /* Match QuickCalc / Tracker theme */
-      --bg:#0b0d10;
+  <link rel="stylesheet" href="styles/index.css">
+</head>
+<body class="snake-page">
+  <div class="card">
+    <h1>Snake Lab – Break Game</h1>
       --card:#141821;
       --ink:#e8eef7;
       --muted:#9fb3c8;
@@ -241,26 +242,6 @@
 
     /* Compact mode for short viewports (e.g. inside QuickCalc modal iframe) */
     @media (max-height:520px){
-      body{
-        padding:8px;
-      }
-      .card{
-        padding:8px 10px;
-      }
-      #gameShell{
-        margin-top:8px;
-      }
-      #snakeCanvas{
-        height:260px;          /* shrink visual height to avoid scrolling */
-      }
-      #status{
-        margin-top:4px;
-      }
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
     <h1>Snake Lab – Break Game</h1>
     <p style="font-size:0.8rem;color:var(--muted);margin:0 0 8px;">
       Sandbox version for breaks. Score per apple = <code>0.001 × live&nbsp;rate&nbsp;at&nbsp;start&nbsp;of&nbsp;the&nbsp;game</code>.

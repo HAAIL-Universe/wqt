@@ -26,12 +26,18 @@
 
       <div class="summary-chip-divider"></div>
 
+      <div class="kpi-total-units">
+        <div class="summary-chip-label">Total Units</div>
+        <div id="chipTotalVal" class="summary-chip-value">0</div>
+      </div>
+
+      <div class="summary-chip-divider"></div>
+
       <div class="summary-chip-side summary-chip-side-right">
         <div class="summary-chip-label">Perf Score</div>
         <div id="perf-score-value" class="summary-chip-value">—</div>
       </div>
     </div>
-    <div id="chipTotal" class="rateChip"><b>Total Units</b><div id="chipTotalVal">0</div></div>
   </div>
 
   <section id="tabCalc" class="hidden">
@@ -254,39 +260,31 @@
 
     <div class="card" id="activeOrderCard" style="display:none;">
       <div id="orderHeaderForm" class="fade show">
-        <div class="card-h" style="text-align:center; font-size:15px; font-weight:600; margin-bottom:8px;">
-          Select customer + add total units from scanner
-        </div>
-        <div class="row" style="align-items:flex-end;">
-          <div class="col">
-            <label>Customer</label>
-            <div class="row" style="gap:6px;">
-              <div class="col">
-                <select id="oCust" class="hidden"></select>
-                <div id="oDD" class="dd">
-                  <button class="dd-toggle" type="button">Select customer…</button>
-                  <div class="dd-menu"></div>
-                </div>
-              </div>
-              <div class="col">
-                <input id="oOther" type="text" class="hidden" maxlength="6" placeholder="ABCDEF" pattern="[A-Za-z]{6}">
-              </div>
+        <div class="tracker-input-label">Add customer + totals</div>
+        
+        <div class="tracker-input-bar">
+          <div class="tib-customer">
+            <select id="oCust" class="hidden"></select>
+            <div id="oDD" class="dd">
+              <button class="dd-toggle" type="button">Select customer…</button>
+              <div class="dd-menu"></div>
             </div>
+            <input id="oOther" type="text" class="hidden" maxlength="6" placeholder="ABCDEF" pattern="[A-Za-z]{6}">
           </div>
-          <div class="col">
-            <label>Total units</label>
-            <input id="oTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 1024">
+          
+          <div class="tib-units">
+            <input id="oTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="Units">
           </div>
-          <div class="col">
-            <label>Total locations</label>
-            <input id="order-locations" type="number" min="1" step="1" inputmode="numeric" placeholder="e.g. 12">
+          
+          <div class="tib-locations">
+            <input id="order-locations" type="number" min="1" step="1" inputmode="numeric" placeholder="Loc">
           </div>
-          <div class="col" style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
-            <!-- Moved: Picking finished button relocated to History/Shift tools -->
-
-            <button class="btn" type="button" id="btnSharedStart" onclick="openSharedStart()" disabled>Shared Pick</button>
-            <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled>Start</button>
-          </div>
+        </div>
+        
+        <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:0.5rem;">
+          <!-- Moved: Picking finished button relocated to History/Shift tools -->
+          <button class="btn" type="button" id="btnSharedStart" onclick="openSharedStart()" disabled>Shared Pick</button>
+          <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled>Start</button>
         </div>
       </div>
 
@@ -338,8 +336,8 @@
         <h3 style="margin:0; font-size:14px; color:#9fb3c8;">Completed Orders</h3>
         <span id="completedMeta" class="sub"></span>
       </div>
-      <div class="tablewrap" style="margin-top:8px;">
-        <table>
+      <div class="completed-orders-wrapper" style="margin-top:8px;">
+        <table class="completed-orders-table">
           <thead>
             <tr>
               <th>#</th>
@@ -347,8 +345,6 @@
               <th>Units</th>
               <th>Locations</th>
               <th>Pallets</th>
-              <th>Start</th>
-              <th>Closed</th>
               <th>Order Rate</th>
               <th>Perf Rate</th>
             </tr>
@@ -461,17 +457,18 @@
 
         <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
           <div class="week-row">
+            <div class="pill"><h3>Weekly Perf</h3><p id="weeklyPerf">— pts/h</p></div>
             <div class="pill"><h3>Weighted Avg</h3><p id="weekWeighted">— u/h</p></div>
             <div class="pill"><h3>Total Units</h3><p id="weekUnits">0</p></div>
-            <div class="pill"><h3>Days Counted</h3><p id="weekDays">0</p></div>
           </div>
           <div class="week-row">
+            <div class="pill"><h3>Days Counted</h3><p id="weekDays">0</p></div>
             <div class="pill"><h3>Total Hours</h3><p id="weekHours">0.0</p></div>
             <div class="pill"><h3>Overtime (15m blocks)</h3><p id="weekOvertime">0.0 h</p></div>
           </div>
         </div>
 
-        <div class="footnote">Weighted Avg = total units ÷ total hours.</div>
+        <div class="footnote">Weekly Perf = avg of daily perf. Weighted Avg = total units ÷ total hours.</div>
       </div>
     </div>
 
@@ -771,6 +768,24 @@
     </div>
     <div class="actions" style="justify-content:center; margin-top:10px;">
       <button class="btn ghost" type="button" onclick="closeBreakChoiceModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="finishOrderModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="finishOrderTitle">
+  <div class="box" style="max-width:400px;">
+    <div class="hdr">
+      <h3 id="finishOrderTitle">Finish Order</h3>
+      <button class="btn slim ghost" type="button" onclick="closeFinishOrderModal()">✖</button>
+    </div>
+    <div class="fld">
+      <label for="finishDowntime">Downtime (minutes)</label>
+      <input id="finishDowntime" type="number" min="0" max="60" step="1" value="0" inputmode="numeric" placeholder="0">
+      <div class="hint">Optional: Subtract downtime from active minutes (0-60).</div>
+    </div>
+    <div class="actions split">
+      <button class="btn ghost" type="button" onclick="closeFinishOrderModal()">Cancel</button>
+      <button class="btn ok" type="button" onclick="submitFinishOrder()">Finish Order</button>
     </div>
   </div>
 </div>
