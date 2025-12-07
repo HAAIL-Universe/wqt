@@ -466,6 +466,25 @@ button:hover {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.9);
 }
 
+/* Glass buttons inside modals */
+.modal .btn {
+  border-radius: 999px;
+  border: 1px solid rgba(132, 255, 155, 0.55);
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow:
+    0 0 10px rgba(132, 255, 155, 0.28),
+    0 14px 40px rgba(0, 0, 0, 0.9);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.modal .btn:hover {
+  background: rgba(20, 30, 55, 0.95);
+  box-shadow:
+    0 0 16px rgba(132, 255, 155, 0.45),
+    0 18px 50px rgba(0, 0, 0, 0.95);
+}
+
 .btn.ok,
 .btn.primary,
 button.primary {
@@ -913,9 +932,12 @@ td.small { font-size:12px; color:#9fb3c8; }
 .modal {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background:
+    radial-gradient(circle at top left, rgba(244, 114, 182, 0.30), transparent 60%),
+    radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.28), transparent 60%),
+    rgba(2, 6, 23, 0.94);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: none;
   align-items: center;
   justify-content: center;
@@ -926,11 +948,13 @@ td.small { font-size:12px; color:#9fb3c8; }
   position: relative;
   width: min(560px, 92vw);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
-  border: 1px solid rgba(0, 255, 180, 0.35);
-  box-shadow: 0 0 18px rgba(0, 255, 180, 0.25);
+  background: rgba(15, 23, 42, 0.32);
+  backdrop-filter: blur(26px) saturate(160%);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  border: 1px solid rgba(132, 255, 155, 0.55);
+  box-shadow:
+    0 0 10px rgba(132, 255, 155, 0.28),
+    0 24px 60px rgba(0, 0, 0, 0.95);
   padding: 20px;
 }
 
@@ -1065,28 +1089,34 @@ td.small { font-size:12px; color:#9fb3c8; }
   justify-content: center;
   align-items: center;
   padding: 28px 0;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(14px) saturate(180%);
-  -webkit-backdrop-filter: blur(14px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 0 18px rgba(0, 255, 180, 0.25);
-  color: var(--text-primary);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.32);
+  border: 1px solid rgba(132, 255, 155, 0.55);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow:
+    0 0 10px rgba(132, 255, 155, 0.28),
+    0 18px 45px rgba(0, 0, 0, 0.9);
+  color: var(--ink);
   font-weight: 600;
   font-size: 1.6rem;
   cursor: pointer;
-  transition: all 150ms ease-out;
+  transition: transform 0.08s ease, box-shadow 0.1s ease, background 0.1s ease;
 }
 
 .cbPad button:hover {
-  background: rgba(255, 255, 255, 0.18);
-  box-shadow: 0 0 24px rgba(0, 255, 180, 0.4);
+  background: rgba(20, 30, 55, 0.95);
+  box-shadow:
+    0 0 16px rgba(132, 255, 155, 0.48),
+    0 22px 55px rgba(0, 0, 0, 0.98);
   transform: translateY(-1px);
 }
 
 .cbPad button:active {
   transform: translateY(0);
-  box-shadow: 0 0 12px rgba(0, 255, 180, 0.3);
+  box-shadow:
+    0 0 8px rgba(132, 255, 155, 0.35),
+    0 12px 30px rgba(0, 0, 0, 0.9);
 }
 
 .cbChips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
