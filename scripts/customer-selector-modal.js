@@ -146,27 +146,28 @@ function showLocationSelection(prefix) {
     customerNameEl.textContent = `${prefix.toUpperCase()} – Select Location`;
   }
   
-  // Render locations as grid of pill buttons
+  // Render locations as pill buttons (matching contracted start modal)
   if (locationsList) {
     locationsList.innerHTML = '';
     
     locations.forEach(loc => {
-      const btnDiv = document.createElement('button');
-      btnDiv.className = 'location-pill-btn';
-      btnDiv.type = 'button';
-      btnDiv.onclick = () => selectCustomerLocation(loc.fullCode);
+      const btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.type = 'button';
+      btn.style.cssText = 'padding:12px 16px; min-width:110px; display:flex; flex-direction:column; align-items:center; text-align:center;';
+      btn.onclick = () => selectCustomerLocation(loc.fullCode);
       
       const codeSpan = document.createElement('div');
-      codeSpan.className = 'location-pill-code';
+      codeSpan.style.cssText = 'font-weight:700; font-size:15px;';
       codeSpan.textContent = loc.fullCode;
       
       const labelSpan = document.createElement('div');
-      labelSpan.className = 'location-pill-label';
+      labelSpan.style.cssText = 'font-size:11px; opacity:0.6; margin-top:2px;';
       labelSpan.textContent = `${prefix.toUpperCase()} – ${loc.suffix.toUpperCase()}`;
       
-      btnDiv.appendChild(codeSpan);
-      btnDiv.appendChild(labelSpan);
-      locationsList.appendChild(btnDiv);
+      btn.appendChild(codeSpan);
+      btn.appendChild(labelSpan);
+      locationsList.appendChild(btn);
     });
   }
 }

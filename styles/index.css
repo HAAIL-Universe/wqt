@@ -1030,65 +1030,11 @@ td.small { font-size:12px; color:#9fb3c8; }
 }
 
 /* Location panel container */
-.customer-locations-container {
-  margin: 8px 0;
-}
-
 .location-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-}
-
-.location-header h3 {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-/* Location buttons grid */
-.locations-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
-}
-
-.location-pill-btn {
-  padding: 10px 14px;
-  background: rgba(15, 23, 42, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-width: 100px;
-  text-align: center;
-}
-
-.location-pill-btn:hover {
-  background: rgba(15, 23, 42, 0.5);
-  border-color: rgba(132, 255, 155, 0.5);
-  box-shadow: 0 0 8px rgba(132, 255, 155, 0.15);
-}
-
-.location-pill-code {
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--text-primary);
-  margin-bottom: 2px;
-}
-
-.location-pill-label {
-  font-size: 11px;
-  opacity: 0.6;
-  line-height: 1.2;
+  margin-bottom: 8px;
 }
 
 /* Footer with add button */
