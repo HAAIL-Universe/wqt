@@ -1032,9 +1032,8 @@ td.small { font-size:12px; color:#9fb3c8; }
 /* Location panel container */
 .location-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 /* Footer with add button */

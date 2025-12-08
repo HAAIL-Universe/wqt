@@ -133,7 +133,6 @@ function showLocationSelection(prefix) {
   const groupsContainer = document.getElementById('customer-groups');
   const locationsContainer = document.getElementById('customer-locations');
   const locationsList = document.getElementById('locations-list');
-  const customerNameEl = document.getElementById('location-customer-name');
   const footer = document.querySelector('.modal-footer');
   
   // Hide groups, show locations
@@ -141,12 +140,7 @@ function showLocationSelection(prefix) {
   if (locationsContainer) locationsContainer.style.display = 'flex';
   if (footer) footer.style.display = 'none';
   
-  // Set header
-  if (customerNameEl) {
-    customerNameEl.textContent = `${prefix.toUpperCase()} – Select Location`;
-  }
-  
-  // Render locations as pill buttons (matching contracted start modal)
+  // Render locations as compact square buttons (grid keypad style)
   if (locationsList) {
     locationsList.innerHTML = '';
     
@@ -154,15 +148,15 @@ function showLocationSelection(prefix) {
       const btn = document.createElement('button');
       btn.className = 'btn';
       btn.type = 'button';
-      btn.style.cssText = 'padding:12px 16px; min-width:110px; display:flex; flex-direction:column; align-items:center; text-align:center;';
+      btn.style.cssText = 'padding:10px 12px; min-width:90px; max-width:95px; display:flex; flex-direction:column; align-items:center; text-align:center; border-radius:8px;';
       btn.onclick = () => selectCustomerLocation(loc.fullCode);
       
       const codeSpan = document.createElement('div');
-      codeSpan.style.cssText = 'font-weight:700; font-size:15px;';
+      codeSpan.style.cssText = 'font-weight:700; font-size:14px;';
       codeSpan.textContent = loc.fullCode;
       
       const labelSpan = document.createElement('div');
-      labelSpan.style.cssText = 'font-size:11px; opacity:0.6; margin-top:2px;';
+      labelSpan.style.cssText = 'font-size:10px; opacity:0.55; margin-top:2px;';
       labelSpan.textContent = `${prefix.toUpperCase()}${loc.suffix.toUpperCase()}`;
       
       btn.appendChild(codeSpan);
