@@ -324,12 +324,6 @@
             <input id="order-locations" type="number" min="1" step="1" inputmode="numeric" placeholder="Loc">
           </div>
         </div>
-        
-        <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:0.5rem;">
-          <!-- Moved: Picking finished button relocated to History/Shift tools -->
-          <button class="btn" type="button" id="btnSharedStart" onclick="openSharedStart()" disabled>Shared Pick</button>
-          <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled>Start</button>
-        </div>
       </div>
 
       <div id="orderHeaderProgress" class="progHead" style="display:none; position:relative;">
@@ -408,6 +402,8 @@
 
     <div class="bottom-actions">
       <div class="left">
+        <button class="btn" type="button" id="btnSharedStart" onclick="openSharedStart()" disabled>Shared Pick</button>
+        <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled>Start</button>
         <button class="btn" type="button" id="btnDelay" onclick="openDelayModal()" style="display:none;">Log / Delay</button>
         <button id="btnUndo" class="btn" type="button" onclick="undoLast()" style="display:none;">Undo</button>
       </div>
