@@ -217,11 +217,15 @@ function selectCustomerLocation(fullCode) {
     showToast(`Selected: ${fullCode}`);
   }
   
-  // Focus units input
+  // Focus units input and open numeric keyboard
   setTimeout(() => {
     const unitsInput = document.getElementById('oTotal');
-    if (unitsInput) unitsInput.focus();
-  }, 100);
+    if (unitsInput) {
+      unitsInput.focus();
+      // Force numeric keyboard on mobile devices
+      unitsInput.click();
+    }
+  }, 150);
 }
 
 // Show add customer form
@@ -425,4 +429,53 @@ document.addEventListener('DOMContentLoaded', () => {
       e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     }
   });
+  
+  // Auto-open numeric keyboard on Units field focus
+  const oTotal = document.getElementById('oTotal');
+  if (oTotal) {
+    oTotal.addEventListener('focus', () => {
+      // Ensure numeric keyboard appears on mobile
+      oTotal.setAttribute('inputmode', 'numeric');
+    });
+    
+    // Auto-advance to Loc field when Units value entered and user presses Enter or Tab
+    oTotal.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === 'Tab') && oTotal.value) {
+        e.preventDefault();
+        const oLoc = document.getElementById('order-locations');
+        if (oLoc) {
+          setTimeout(() => {
+            oLoc.focus();
+            oLoc.click(); // Trigger numeric keyboard
+          }, 50);
+        }
+      }
+    });
+  }
+  
+  // Auto-open numeric keyboard on Loc field focus and auto-skip on 0
+  const oLoc = document.getElementById('order-locations');
+  if (oLoc) {
+    oLoc.addEventListener('focus', () => {
+      // Ensure numeric keyboard appears on mobile
+      oLoc.setAttribute('inputmode', 'numeric');
+    });
+    
+    // Auto-skip when user enters 0
+    oLoc.addEventListener('input', (e) => {
+      const val = e.target.value;
+      if (val === '0') {
+        // Clear the 0 and move to next field (Start button)
+        e.target.value = '';
+        e.target.blur();
+        // Focus Start button or trigger startOrder if enabled
+        setTimeout(() => {
+          const startBtn = document.getElementById('btnStart');
+          if (startBtn && !startBtn.disabled) {
+            startBtn.focus();
+          }
+        }, 50);
+      }
+    });
+  }
 });
