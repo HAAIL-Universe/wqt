@@ -986,49 +986,6 @@ td.small { font-size:12px; color:#9fb3c8; }
    Customer Selector Modal (Theme-Consistent)
    ===================================================================== */
 
-/* Customer list container - match existing modal fld style */
-.customer-groups-container {
-  max-height: 320px;
-  overflow-y: auto;
-  margin: 8px 0;
-}
-
-/* Customer item - simple row like other modals */
-.customer-item {
-  padding: 10px 12px;
-  background: rgba(15, 23, 42, 0.35);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.customer-item:hover {
-  background: rgba(15, 23, 42, 0.5);
-  border-color: rgba(132, 255, 155, 0.5);
-}
-
-.customer-item-prefix {
-  font-weight: 700;
-  font-size: 15px;
-}
-
-.customer-item-count {
-  font-size: 13px;
-  opacity: 0.6;
-  margin-left: 8px;
-}
-
-.customer-item-arrow {
-  opacity: 0.4;
-  font-size: 16px;
-}
-
 /* Location panel container */
 .location-header {
   display: flex;

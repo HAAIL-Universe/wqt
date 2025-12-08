@@ -87,8 +87,7 @@ function renderCustomerGroups() {
   if (sortedPrefixes.length === 0) {
     const noResults = document.createElement('div');
     noResults.className = 'hint';
-    noResults.style.textAlign = 'center';
-    noResults.style.padding = '20px';
+    noResults.style.cssText = 'text-align:center; padding:20px; width:100%;';
     noResults.textContent = 'No customers available';
     container.appendChild(noResults);
     return;
@@ -97,31 +96,24 @@ function renderCustomerGroups() {
   sortedPrefixes.forEach(prefix => {
     const locations = customerLocationMap[prefix];
     
-    // Single item to click (shows locations for this prefix)
-    const itemDiv = document.createElement('div');
-    itemDiv.className = 'customer-item';
-    itemDiv.onclick = () => showLocationSelection(prefix);
+    // Create compact square button matching location style
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.type = 'button';
+    btn.style.cssText = 'padding:10px 12px; min-width:90px; max-width:95px; display:flex; flex-direction:column; align-items:center; text-align:center; border-radius:8px;';
+    btn.onclick = () => showLocationSelection(prefix);
     
-    const prefixSpan = document.createElement('span');
-    prefixSpan.className = 'customer-item-prefix';
+    const prefixSpan = document.createElement('div');
+    prefixSpan.style.cssText = 'font-weight:700; font-size:14px;';
     prefixSpan.textContent = prefix.toUpperCase();
     
-    const countSpan = document.createElement('span');
-    countSpan.className = 'customer-item-count';
+    const countSpan = document.createElement('div');
+    countSpan.style.cssText = 'font-size:10px; opacity:0.55; margin-top:2px;';
     countSpan.textContent = locations.length.toString();
     
-    const arrowSpan = document.createElement('span');
-    arrowSpan.className = 'customer-item-arrow';
-    arrowSpan.textContent = '→';
-    
-    const leftDiv = document.createElement('div');
-    leftDiv.appendChild(prefixSpan);
-    leftDiv.appendChild(countSpan);
-    
-    itemDiv.appendChild(leftDiv);
-    itemDiv.appendChild(arrowSpan);
-    
-    container.appendChild(itemDiv);
+    btn.appendChild(prefixSpan);
+    btn.appendChild(countSpan);
+    container.appendChild(btn);
   });
 }
 
