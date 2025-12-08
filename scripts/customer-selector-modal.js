@@ -100,7 +100,7 @@ function renderCustomerGroups() {
     const btn = document.createElement('button');
     btn.className = 'btn';
     btn.type = 'button';
-    btn.style.cssText = 'padding:10px 12px; min-width:90px; max-width:95px; display:flex; flex-direction:column; align-items:center; text-align:center; border-radius:8px;';
+    btn.style.cssText = 'padding:10px 12px; min-width:90px; max-width:95px; display:inline-flex; flex-direction:column; align-items:center; text-align:center; border-radius:8px;';
     btn.onclick = () => showLocationSelection(prefix);
     
     const prefixSpan = document.createElement('div');
