@@ -2307,17 +2307,22 @@ function renderDone(){
     var logTd = document.createElement('td');
     logTd.colSpan = 7;
 
-    // Build order log timeline
-    var html = '<div class="order-log-header">Order log</div>';
+    // Build order log table
+    var html = '<div class="order-log-container">';
+    html += '<div class="order-log-header">Order log</div>';
+    html += '<table class="order-log-table">';
+    html += '<thead><tr><th>Event</th><th>Details</th><th>Time</th></tr></thead>';
+    html += '<tbody>';
 
     // Order started
     if (o.start) {
-      html += '<div class="order-log-line"><span class="log-label">Order started</span><span class="log-time">'+o.start+'</span></div>';
+      html += '<tr><td>Order started</td><td></td><td>'+o.start+'</td></tr>';
     }
 
     // Wraps
     (o.log?.wraps || []).forEach(function(w,wi){
       var timeStr = w.t || '—';
+      var details = (wi+1).toString();
       
       // If we have start and end times, show range
       if (w.startTime && w.endTime) {
@@ -2326,34 +2331,36 @@ function renderDone(){
         // Add duration if available
         if (w.durationMs) {
           var durationMin = Math.round(w.durationMs / 60000);
-          timeStr += ' (' + durationMin + 'm)';
+          details += ' (' + durationMin + 'm)';
         }
       }
       
-      html += '<div class="order-log-line"><span class="log-label">📦 Wrap '+(wi+1)+'</span><span class="log-time">'+timeStr+'</span></div>';
+      html += '<tr><td>📦 Wrap</td><td>'+details+'</td><td>'+timeStr+'</td></tr>';
     });
 
     // Breaks/Delays (optional detail)
     (o.log?.breaks || []).forEach(function(b){
       if (b.type === 'D'){
-        html += '<div class="order-log-line"><span class="log-label">⏱️ Delay'+ (b.cause ? ': '+b.cause.replace(/</g,'&lt;') : '') +
-          '</span><span class="log-time">'+b.start+' → '+b.end+'</span></div>';
+        var cause = b.cause ? b.cause.replace(/</g,'&lt;') : '';
+        html += '<tr><td>⏱️ Delay</td><td>'+cause+'</td><td>'+b.start+' → '+b.end+'</td></tr>';
       } else {
-        html += '<div class="order-log-line"><span class="log-label">☕ '+(b.type==='B'?'Break':'Lunch')+
-          '</span><span class="log-time">'+b.start+' → '+b.end+'</span></div>';
+        var label = b.type === 'B' ? '☕ Break' : '🍴 Lunch';
+        html += '<tr><td>'+label+'</td><td></td><td>'+b.start+' → '+b.end+'</td></tr>';
       }
     });
 
     // Order ended
     if (o.close) {
-      html += '<div class="order-log-line"><span class="log-label">Order ended</span><span class="log-time">'+o.close+'</span></div>';
+      html += '<tr><td>Order ended</td><td></td><td>'+o.close+'</td></tr>';
     }
 
     // Early close reason if applicable
     if (o.earlyReason && o.earlyReason.trim().length > 0) {
-      html += `<div class="order-log-line"><span class="log-label">📝 Early close reason</span>` +
-              `<span class="log-time">${o.earlyReason.replace(/</g,'&lt;')}</span></div>`;
+      html += '<tr><td>📝 Early close</td><td>'+o.earlyReason.replace(/</g,'&lt;')+'</td><td></td></tr>';
     }
+
+    html += '</tbody></table></div>';
+    
 
     logTd.innerHTML = html;
     logTr.appendChild(logTd);
