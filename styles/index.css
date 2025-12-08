@@ -801,10 +801,29 @@ td.small { font-size:12px; color:#9fb3c8; }
 }
 
 @media (max-width: 600px) {
+  .completed-orders-table {
+    font-size: 12px;
+  }
+
   .completed-orders-table th,
   .completed-orders-table td {
-    padding: 0.25rem 0.35rem;
-    font-size: 0.75rem;
+    padding: 4px 6px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+  }
+
+  /* Hide Pallets column on small screens */
+  .completed-orders-table th:nth-child(5),
+  .completed-orders-table td:nth-child(5) {
+    display: none;
+  }
+
+  /* Give Locs + Order Rate a bit more room */
+  .completed-orders-table th:nth-child(4),
+  .completed-orders-table td:nth-child(4),
+  .completed-orders-table th:nth-child(6),
+  .completed-orders-table td:nth-child(6) {
+    max-width: 60px;
   }
   
   .order-log-line {

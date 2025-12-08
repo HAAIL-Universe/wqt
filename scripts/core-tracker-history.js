@@ -2314,6 +2314,9 @@ function renderDone(){
     html += '<thead><tr><th>Event</th><th>Details</th><th>Time</th></tr></thead>';
     html += '<tbody>';
 
+    // Order summary info
+    html += '<tr><td>📊 Summary</td><td>Units: '+(o.units||0)+', Locs: '+(o.locations||0)+', Pallets: '+(o.pallets||0)+'</td><td></td></tr>';
+
     // Order started
     if (o.start) {
       html += '<tr><td>Order started</td><td></td><td>'+o.start+'</td></tr>';
