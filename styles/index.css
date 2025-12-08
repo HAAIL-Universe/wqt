@@ -802,14 +802,28 @@ td.small { font-size:12px; color:#9fb3c8; }
 
 @media (max-width: 600px) {
   .completed-orders-table {
-    font-size: 12px;
+    font-size: 11px;
+    table-layout: fixed;
+    width: 100%;
   }
 
   .completed-orders-table th,
   .completed-orders-table td {
-    padding: 4px 6px;
-    font-size: 0.7rem;
+    padding: 4px 3px;
+    font-size: 0.65rem;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+  }
+
+  .completed-orders-table th {
+    white-space: normal;
+    line-height: 1.2;
+  }
+
+  .completed-orders-table td {
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Hide Pallets column on small screens */
@@ -818,12 +832,35 @@ td.small { font-size:12px; color:#9fb3c8; }
     display: none;
   }
 
-  /* Give Locs + Order Rate a bit more room */
+  /* Specific column widths for mobile */
+  .completed-orders-table th:nth-child(1),
+  .completed-orders-table td:nth-child(1) {
+    width: 8%;
+  }
+
+  .completed-orders-table th:nth-child(2),
+  .completed-orders-table td:nth-child(2) {
+    width: 22%;
+  }
+
+  .completed-orders-table th:nth-child(3),
+  .completed-orders-table td:nth-child(3) {
+    width: 15%;
+  }
+
   .completed-orders-table th:nth-child(4),
-  .completed-orders-table td:nth-child(4),
+  .completed-orders-table td:nth-child(4) {
+    width: 13%;
+  }
+
   .completed-orders-table th:nth-child(6),
   .completed-orders-table td:nth-child(6) {
-    max-width: 60px;
+    width: 20%;
+  }
+
+  .completed-orders-table th:nth-child(7),
+  .completed-orders-table td:nth-child(7) {
+    width: 15%;
   }
   
   .order-log-line {
@@ -831,9 +868,48 @@ td.small { font-size:12px; color:#9fb3c8; }
   }
 }
 
-.bottom-actions { margin: 20px 0 10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.bottom-actions .left { flex:1 1 auto; min-width:220px; }
-.bottom-actions .right { flex:0 0 auto; white-space:nowrap; display:flex; gap:8px; }
+.bottom-actions { 
+  margin: 20px 0 10px; 
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.bottom-actions .left { 
+  display: grid;
+  grid-template-columns: repeat(2, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.bottom-actions .right { 
+  display: grid;
+  grid-template-columns: repeat(3, minmax(90px, auto));
+  gap: 8px;
+  justify-content: end;
+}
+
+.bottom-actions .left > *,
+.bottom-actions .right > * {
+  min-height: 36px;
+}
+
+.bottom-actions .left > *[style*="display: none"],
+.bottom-actions .right > *[style*="display: none"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .bottom-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .bottom-actions .left,
+  .bottom-actions .right {
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  }
+}
 
 /* =====================================================================
    5. SAFETYBAR / HINT / TAGS / ACCORDION HEADERS
