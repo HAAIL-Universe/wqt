@@ -163,7 +163,7 @@ function showLocationSelection(prefix) {
       
       const labelSpan = document.createElement('div');
       labelSpan.style.cssText = 'font-size:11px; opacity:0.6; margin-top:2px;';
-      labelSpan.textContent = `${prefix.toUpperCase()} – ${loc.suffix.toUpperCase()}`;
+      labelSpan.textContent = `${prefix.toUpperCase()}${loc.suffix.toUpperCase()}`;
       
       btn.appendChild(codeSpan);
       btn.appendChild(labelSpan);
@@ -241,25 +241,12 @@ function showAddCustomerForm() {
   if (footer) footer.style.display = 'none';
   
   // Clear form
-  const nameInput = document.getElementById('new-customer-name');
-  const prefixInput = document.getElementById('new-customer-prefix');
-  if (nameInput) nameInput.value = '';
-  if (prefixInput) prefixInput.value = '';
+  const codeInput = document.getElementById('new-customer-code');
+  if (codeInput) codeInput.value = '';
   
-  // Reset to one location input
-  const locContainer = document.getElementById('new-customer-locations-list');
-  if (locContainer) {
-    locContainer.innerHTML = `
-      <div class="location-input-row">
-        <input type="text" class="location-suffix-input" maxlength="3" placeholder="e.g. WES" style="text-transform:uppercase;" />
-        <input type="text" class="location-name-input" placeholder="Location name (optional)" />
-      </div>
-    `;
-  }
-  
-  // Focus name input
+  // Focus code input
   setTimeout(() => {
-    if (nameInput) nameInput.focus();
+    if (codeInput) codeInput.focus();
   }, 100);
 }
 
@@ -269,93 +256,48 @@ function cancelAddCustomer() {
   renderCustomerGroups();
 }
 
-// Add another location input row
-function addLocationRow() {
-  const container = document.getElementById('new-customer-locations-list');
-  if (!container) return;
-  
-  const row = document.createElement('div');
-  row.className = 'location-input-row';
-  row.innerHTML = `
-    <input type="text" class="location-suffix-input" maxlength="3" placeholder="e.g. WES" style="text-transform:uppercase;" />
-    <input type="text" class="location-name-input" placeholder="Location name (optional)" />
-    <button class="btn ghost slim" type="button" onclick="this.parentElement.remove()">✖</button>
-  `;
-  container.appendChild(row);
-}
-
 // Save new customer
 function saveNewCustomer() {
-  const nameInput = document.getElementById('new-customer-name');
-  const prefixInput = document.getElementById('new-customer-prefix');
+  const codeInput = document.getElementById('new-customer-code');
   
-  if (!nameInput || !prefixInput) return;
+  if (!codeInput) return;
   
-  const customerName = nameInput.value.trim();
-  const prefix = prefixInput.value.trim().toUpperCase();
+  const code = codeInput.value.trim().toUpperCase();
   
   // Validation
-  if (!customerName) {
-    alert('Please enter a customer name');
-    nameInput.focus();
+  if (code.length !== 6 || !/^[A-Z]{6}$/.test(code)) {
+    alert('Code must be exactly 6 letters (A-Z)');
+    codeInput.focus();
     return;
   }
   
-  if (prefix.length !== 3 || !/^[A-Z]{3}$/.test(prefix)) {
-    alert('Prefix must be exactly 3 letters');
-    prefixInput.focus();
+  // Check if code already exists
+  if (!customCodes) customCodes = [];
+  if (customCodes.indexOf(code) !== -1) {
+    alert('This code already exists');
+    codeInput.focus();
     return;
   }
   
-  // Get all location suffixes
-  const locationRows = document.querySelectorAll('#new-customer-locations-list .location-input-row');
-  const suffixes = [];
+  // Add code to customCodes
+  customCodes.push(code);
   
-  locationRows.forEach(row => {
-    const suffixInput = row.querySelector('.location-suffix-input');
-    const suffix = (suffixInput?.value || '').trim().toUpperCase();
-    
-    if (suffix.length === 3 && /^[A-Z]{3}$/.test(suffix)) {
-      suffixes.push(suffix);
-    }
-  });
-  
-  if (suffixes.length === 0) {
-    alert('Please add at least one valid location (3 letters)');
-    return;
+  // Save and reload
+  if (typeof saveCustomCodes === 'function') {
+    saveCustomCodes();
+  }
+  if (typeof reloadDropdowns === 'function') {
+    reloadDropdowns();
   }
   
-  // Add new codes to customCodes
-  const newCodes = [];
-  suffixes.forEach(suffix => {
-    const fullCode = prefix + suffix;
-    if (!customCodes) customCodes = [];
-    if (customCodes.indexOf(fullCode) === -1) {
-      customCodes.push(fullCode);
-      newCodes.push(fullCode);
-    }
-  });
+  // Rebuild map and go back to customer list
+  buildCustomerLocationMap();
+  showCustomerListView();
+  renderCustomerGroups();
   
-  if (newCodes.length > 0) {
-    // Save and reload
-    if (typeof saveCustomCodes === 'function') {
-      saveCustomCodes();
-    }
-    if (typeof reloadDropdowns === 'function') {
-      reloadDropdowns();
-    }
-    
-    // Rebuild map and go back to customer list
-    buildCustomerLocationMap();
-    showCustomerListView();
-    renderCustomerGroups();
-    
-    // Show toast
-    if (typeof showToast === 'function') {
-      showToast(`Added ${customerName} with ${newCodes.length} location(s)`);
-    }
-  } else {
-    alert('All locations already exist');
+  // Show toast
+  if (typeof showToast === 'function') {
+    showToast(`Added ${code}`);
   }
 }
 
@@ -391,12 +333,6 @@ document.addEventListener('DOMContentLoaded', () => {
     addBtn.addEventListener('click', showAddCustomerForm);
   }
   
-  // Add location row button
-  const addLocBtn = document.getElementById('add-location-row');
-  if (addLocBtn) {
-    addLocBtn.addEventListener('click', addLocationRow);
-  }
-  
   // Cancel add customer button
   const cancelBtn = document.getElementById('cancel-add-customer');
   if (cancelBtn) {
@@ -415,20 +351,13 @@ document.addEventListener('DOMContentLoaded', () => {
     trigger.addEventListener('click', openCustomerModal);
   }
   
-  // Auto-uppercase prefix input
-  const prefixInput = document.getElementById('new-customer-prefix');
-  if (prefixInput) {
-    prefixInput.addEventListener('input', (e) => {
-      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+  // Auto-uppercase new customer code input
+  const newCodeInput = document.getElementById('new-customer-code');
+  if (newCodeInput) {
+    newCodeInput.addEventListener('input', (e) => {
+      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
     });
   }
-  
-  // Auto-uppercase location suffix inputs (delegated)
-  document.addEventListener('input', (e) => {
-    if (e.target.classList.contains('location-suffix-input')) {
-      e.target.value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
-    }
-  });
   
   // Auto-open numeric keyboard on Units field focus
   const oTotal = document.getElementById('oTotal');
