@@ -781,10 +781,13 @@ td.small { font-size:12px; color:#9fb3c8; }
 .order-log-table tbody td:first-child {
   font-weight: 500;
   white-space: nowrap;
+  width: 33%;
 }
 
 .order-log-table tbody td:nth-child(2) {
   color: var(--text-muted);
+  width: 34%;
+  padding-left: 0.25rem;
 }
 
 .order-log-table tbody td:last-child {
