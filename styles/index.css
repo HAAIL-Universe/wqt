@@ -120,54 +120,9 @@
   --radius-md: 12px;
   --radius-pill: 999px;
   
-  /* Beveled corner size (diagonal cut) */
-  --bevel-lg: 10px;
-  --bevel-md: 6px;
-  --bevel-sm: 4px;
-  
   /* Transitions */
   --transition-fast: 150ms ease-out;
   --transition-med: 220ms ease-out;
-}
-
-/* =====================================================================
-   GLOBAL BEVEL (CHAMFERED CORNERS)
-   ===================================================================== */
-/* Apply beveled corners app-wide for geometric, futuristic look */
-.btn,
-button,
-input[type="number"],
-input[type="time"],
-input[type="text"],
-select,
-textarea,
-.card,
-.modal .box,
-.pill,
-.rateChip,
-.chip,
-.cbCard,
-.logwrap,
-.toast,
-.breakbar,
-.tag,
-.cbPad button,
-.cbBox,
-.glass-input,
-.dd-toggle,
-.dd-menu,
-.progBar,
-.tablewrap {
-  clip-path: polygon(
-    var(--bevel-md) 0,
-    calc(100% - var(--bevel-md)) 0,
-    100% var(--bevel-md),
-    100% calc(100% - var(--bevel-md)),
-    calc(100% - var(--bevel-md)) 100%,
-    var(--bevel-md) 100%,
-    0 calc(100% - var(--bevel-md)),
-    0 var(--bevel-md)
-  );
 }
 
 * { box-sizing: border-box; }
