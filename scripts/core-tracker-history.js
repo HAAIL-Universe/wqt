@@ -2360,12 +2360,15 @@ function renderDone(){
     tb.appendChild(logTr);
   });
 
-  // Add click handler to toggle order logs
-  tb.addEventListener('click', function(e){
+  // Remove old click handlers and add new one to toggle order logs
+  const newTb = tb.cloneNode(true);
+  tb.parentNode.replaceChild(newTb, tb);
+  
+  newTb.addEventListener('click', function(e){
     const row = e.target.closest('.completed-row');
     if (!row) return;
     const idx = row.dataset.index;
-    const detail = tb.querySelector(`.order-log-row[data-index="${idx}"]`);
+    const detail = newTb.querySelector(`.order-log-row[data-index="${idx}"]`);
     if (!detail) return;
     detail.classList.toggle('is-open');
   });
