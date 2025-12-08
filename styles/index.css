@@ -781,13 +781,15 @@ td.small { font-size:12px; color:#9fb3c8; }
 .order-log-table tbody td:first-child {
   font-weight: 500;
   white-space: nowrap;
-  width: 33%;
+  width: 20%;
+  padding-right: 0.5rem;
 }
 
 .order-log-table tbody td:nth-child(2) {
   color: var(--text-muted);
-  width: 34%;
-  padding-left: 0.25rem;
+  width: auto;
+  padding-left: 0;
+  padding-right: 2rem;
 }
 
 .order-log-table tbody td:last-child {
@@ -795,6 +797,7 @@ td.small { font-size:12px; color:#9fb3c8; }
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   text-align: right;
+  width: 1%;
 }
 
 @media (max-width: 600px) {
