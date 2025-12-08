@@ -751,6 +751,10 @@ td.small { font-size:12px; color:#9fb3c8; }
   font-weight: 600;
 }
 
+.order-log-table thead th:last-child {
+  text-align: right;
+}
+
 .order-log-table tbody tr {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   transition: background 0.12s ease;
