@@ -805,10 +805,10 @@ function logWrap() {
   // Buttons/complete state
   updateHeaderActions?.();
 
-  // ✅ Auto-close when 0 left - open modal instead of direct completion
+  // ✅ Auto-close when 0 left - complete order directly
   if (left === 0) {
-    showToast?.('Order complete — ready to finish');
-    setTimeout(() => openFinishOrderModal(), 300);
+    showToast?.('Order complete — finishing now');
+    setTimeout(() => completeOrder(), 300);
     return;
   }
 
@@ -1144,32 +1144,6 @@ function completeOrder() {
   if (pct)  pct.textContent = '0%';
   if (fill) fill.style.width = '0%';
   saveAll();
-}
-
-// Open finish order modal
-function openFinishOrderModal() {
-  const modal = document.getElementById('finishOrderModal');
-  const input = document.getElementById('finishDowntime');
-  if (modal) modal.style.display = 'flex';
-  if (input) input.value = '0';
-}
-
-// Close finish order modal
-function closeFinishOrderModal() {
-  const modal = document.getElementById('finishOrderModal');
-  if (modal) modal.style.display = 'none';
-}
-
-// Submit finish order with downtime
-function submitFinishOrder() {
-  const input = document.getElementById('finishDowntime');
-  let downtime = parseInt(input?.value || '0', 10);
-  
-  // Clamp to 0-60 range
-  downtime = Math.max(0, Math.min(60, downtime));
-  
-  closeFinishOrderModal();
-  completeOrder(downtime);
 }
 
 // Show/hide Delay button based on active shift

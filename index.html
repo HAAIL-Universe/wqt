@@ -889,24 +889,6 @@
   </div>
 </div>
 
-<div id="finishOrderModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="finishOrderTitle">
-  <div class="box" style="max-width:400px;">
-    <div class="hdr">
-      <h3 id="finishOrderTitle">Finish Order</h3>
-      <button class="btn slim ghost" type="button" onclick="closeFinishOrderModal()">✖</button>
-    </div>
-    <div class="fld">
-      <label for="finishDowntime">Downtime (minutes)</label>
-      <input id="finishDowntime" type="number" min="0" max="60" step="1" value="0" inputmode="numeric" placeholder="0">
-      <div class="hint">Optional: Subtract downtime from active minutes (0-60).</div>
-    </div>
-    <div class="actions split">
-      <button class="btn ghost" type="button" onclick="closeFinishOrderModal()">Cancel</button>
-      <button class="btn ok" type="button" onclick="submitFinishOrder()">Finish Order</button>
-    </div>
-  </div>
-</div>
-
 <div id="contractModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); align-items:center; justify-content:center; z-index:9999;">
   <div style="background:#141821; border:1px solid #243244; border-radius:14px; padding:16px; width:min(520px,92%);">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
