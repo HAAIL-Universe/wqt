@@ -928,7 +928,29 @@ function exitShiftNoArchive(){
   shiftBreaks = [];
   startTime = '';
   pickingCutoff = '';
-  try { localStorage.setItem('shiftActive','0'); } catch(e){}
+
+  // ====== NEW: Clear shift-specific operational logs ======
+  if (typeof operativeLog !== 'undefined') {
+    operativeLog = [];
+  }
+  if (typeof operativeActive !== 'undefined') {
+    operativeActive = null;
+  }
+
+  // Clear side-channel localStorage keys
+  try {
+    localStorage.setItem('shiftActive', '0');
+    localStorage.removeItem('shiftNotes');
+    localStorage.removeItem('shiftDelays');
+    localStorage.removeItem('currentOrder');
+    localStorage.removeItem('breakDraft');
+    localStorage.removeItem('sharedBlock');
+    localStorage.removeItem('sharedDockOpen');
+    localStorage.removeItem('sharedMySum');
+    console.log('[exitShiftNoArchive] Cleared all shift-specific localStorage keys');
+  } catch(e) {
+    console.warn('[exitShiftNoArchive] Failed to clear some localStorage keys:', e);
+  }
 
   // UI → Start Shift screen
   const shiftCard  = document.getElementById('shiftCard');
@@ -959,7 +981,18 @@ function exitShiftNoArchive(){
   document.getElementById('progRate')?.replaceChildren(document.createTextNode('—'));
   document.getElementById('progETA')?.replaceChildren(document.createTextNode('—'));
 
-  saveAll?.();
+  // ====== NEW: Reset summary chips to default state ======
+  const lrEl = document.getElementById('live-rate-value');
+  const psEl = document.getElementById('perf-score-value');
+  if (lrEl) lrEl.textContent = '—';
+  if (psEl) psEl.textContent = '—';
+
+  // ====== NEW: Persist cleared state immediately ======
+  if (typeof saveAll === 'function') {
+    saveAll();
+    console.log('[exitShiftNoArchive] Persisted cleared state via saveAll()');
+  }
+
   showToast?.('Shift ended.');
 
   // After exiting shift, repurpose the ghost button as a one-click restart

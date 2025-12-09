@@ -13,6 +13,21 @@ function getDeviceIdSafe() {
 }
 
 function logoutAndReset() {
+  // ====== NEW: Clear in-memory shift state first ======
+  // If exitShiftNoArchive exists, call it to wipe all shift-related state and UI
+  if (typeof exitShiftNoArchive === 'function') {
+    try {
+      // Temporarily suppress the alert if current order exists
+      const originalCurrent = typeof current !== 'undefined' ? current : null;
+      if (typeof current !== 'undefined') current = null;
+      
+      exitShiftNoArchive();
+      console.log('[logout] Cleared shift state via exitShiftNoArchive()');
+    } catch (e) {
+      console.warn('[logout] exitShiftNoArchive failed:', e);
+    }
+  }
+
   // Identity
   localStorage.removeItem('WQT_CURRENT_USER');
   localStorage.removeItem('wqt_operator_id');
@@ -52,7 +67,7 @@ function logoutAndReset() {
     try { localStorage.removeItem('wqt_codes'); } catch(_){}
   }
 
-  // Side-channel state
+  // Side-channel state (belt-and-suspenders: exitShiftNoArchive should have cleared these)
   localStorage.removeItem('shiftActive');
   localStorage.removeItem('currentOrder');
   localStorage.removeItem('shiftDelays');
@@ -63,6 +78,8 @@ function logoutAndReset() {
   localStorage.removeItem('sharedMySum');
   localStorage.removeItem('weekCardCollapsed');
   localStorage.removeItem('proUnlocked');
+
+  console.log('[logout] Full reset complete - redirecting to login');
 
   // OPTIONAL: reset device identity if you want fresh devices each time
   // localStorage.removeItem('wqt_device_id'); 

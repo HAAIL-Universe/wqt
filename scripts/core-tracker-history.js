@@ -2791,7 +2791,25 @@ function endShift(){
     }
   }
 
-  exitShiftNoArchive?.();  // reuse your existing full reset
+  // ====== CRITICAL: Clear all shift state after archive ======
+  // Call exitShiftNoArchive to wipe in-memory state and UI
+  if (typeof exitShiftNoArchive === 'function') {
+    exitShiftNoArchive();
+  }
+
+  // Immediately persist the cleared state to localStorage
+  if (typeof saveAll === 'function') {
+    saveAll();
+  }
+
+  // Final safety: ensure shiftActive flag is off
+  try {
+    localStorage.setItem('shiftActive', '0');
+    console.log('[endShift] Shift state fully cleared and persisted');
+  } catch (e) {
+    console.warn('[endShift] Failed to set shiftActive flag:', e);
+  }
+
   showTab?.('tracker');    // land back on the Tracker start screen
   showToast?.('Shift archived to History');
 
