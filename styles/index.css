@@ -74,6 +74,17 @@
   opacity: 0.8;
   margin-top: 2px;
 }
+
+/* PAC (Performance Adjustment Coefficient) color bands */
+.pac-strong {
+  color: #22c55e; /* green - strong effort / heavy orders */
+}
+.pac-balanced {
+  color: #fbbf24; /* amber - balanced effort / typical day */
+}
+.pac-low {
+  color: #f97373; /* red - weak effort or extremely easy flow */
+}
 :root {
   /* Base colors */
   --bg-main: #05060a;

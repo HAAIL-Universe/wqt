@@ -2397,6 +2397,25 @@ function renderHistory(){
     // Daily Perf: average of perfPerHour from orders (if available)
     const dailyPerf = Number.isFinite(d.dailyPerf) && d.dailyPerf > 0 ? d.dailyPerf : 0;
 
+    // PAC (Performance Adjustment Coefficient): Perf Score ÷ Live Rate
+    // For history, use dailyPerf (pts/h) ÷ pickRate (u/h)
+    let pac = null;
+    let pacDisplay = '—';
+    let pacClass = '';
+    if (dailyPerf > 0 && pickRate > 0) {
+      pac = dailyPerf / pickRate;
+      if (Number.isFinite(pac) && pac >= 0) {
+        pacDisplay = pac.toFixed(2);
+        if (pac >= 1.30) {
+          pacClass = 'pac-strong';
+        } else if (pac >= 0.90) {
+          pacClass = 'pac-balanced';
+        } else {
+          pacClass = 'pac-low';
+        }
+      }
+    }
+
     const boxState = effectiveRate >= 300 ? 'ok'
                     : (effectiveRate >= 249 ? 'warn' : 'bad');
     head.className = 'accHead ' + boxState;
@@ -2409,6 +2428,7 @@ function renderHistory(){
         <span>Locations: <b>${d.totalLocations || 0}</b></span>
         <span>Pick Rate: <b>${pickRate}</b> u/h</span>
         ${dailyPerf > 0 ? `<span>Daily Perf: <b>${dailyPerf.toFixed(1)}</b> pts/h</span>` : ''}
+        ${pac != null ? `<span>PAC: <b class="${pacClass}">${pacDisplay}</b></span>` : ''}
         <span>Worked: <b>${fmtElapsed(workedMin)}</b>` +
         `${otMin ? ` • OT: <b>${(otMin/60).toFixed(2)} h</b>` : ''}</span>
       </div>`;
