@@ -13,7 +13,7 @@ const STORAGE_KEY_CODES = 'wqt_codes';        // == KEY_CODES
 const CURRENT_USER_KEY  = 'WQT_CURRENT_USER';
 
 // Side-channel keys used directly in bootstrap.js
-// (delays, notes, shared pick, snake, etc.)
+// (delays, notes, shared pick, etc.)
 const StorageKeys = {
   SHIFT_ACTIVE:        'shiftActive',        // "1"/"0" flag
   CURRENT_ORDER:       'currentOrder',       // JSON blob for active order
@@ -23,9 +23,6 @@ const StorageKeys = {
   SHARED_BLOCK:        'sharedBlock',        // JSON shared order meta
   SHARED_DOCK_OPEN:    'sharedDockOpen',     // "1"/"0" dock open flag
   SHARED_MY_SUM:       'sharedMySum',        // JSON summary for my units
-  SNAKE_DELAY_DRAFT:   'snakeDelayDraft',    // JSON snake delay draft
-  SNAKE_DELAY_DONE:    'snakeDelayCompleted',// JSON snake delay commit
-  SNAKE_LIVE_RATE:     'snakeLiveRateUh',    // stringified number (u/h)
   WEEK_CARD_COLLAPSED: 'weekCardCollapsed',  // "1"/"0" for history UI
   PRO_UNLOCKED_FLAG:   'proUnlocked'         // legacy one-off pro gate
 };
@@ -117,7 +114,6 @@ const Storage = {
         pickingCutoff: '',
         undoStack: [],
         proUnlocked: false,
-        snakeUnlocked: false,
         shiftBreaks: [],
         operativeLog: [],
         operativeActive: null
@@ -147,7 +143,6 @@ const Storage = {
       pickingCutoff: typeof p.pickingCutoff === 'string' ? p.pickingCutoff : '',
       undoStack: Array.isArray(p.undoStack) ? p.undoStack : [],
       proUnlocked: !!p.proUnlocked,
-      snakeUnlocked: !!p.snakeUnlocked,
       shiftBreaks: Array.isArray(p.shiftBreaks) ? p.shiftBreaks : [],
       operativeLog: Array.isArray(p.operativeLog) ? p.operativeLog : [],
       operativeActive: p.operativeActive || null
@@ -169,7 +164,6 @@ const Storage = {
         pickingCutoff: s.pickingCutoff || '',
         undoStack: s.undoStack || [],
         proUnlocked: !!s.proUnlocked,
-        snakeUnlocked: !!s.snakeUnlocked,
         shiftBreaks: s.shiftBreaks || [],
         operativeLog: s.operativeLog || [],
         operativeActive: s.operativeActive || null

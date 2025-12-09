@@ -51,7 +51,6 @@ class MainState(BaseModel):
     # UX / power user features
     undoStack: List[Dict[str, Any]] = Field(default_factory=list)
     proUnlocked: bool = False
-    snakeUnlocked: bool = False
 
     # Shift + operative logging
     shiftBreaks: List[Dict[str, Any]] = Field(default_factory=list)

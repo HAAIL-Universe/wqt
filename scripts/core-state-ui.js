@@ -1098,7 +1098,6 @@ const ADMIN_UNLOCK_CODE = '1234';
 const AUDIT_UNLOCK_CODE = '5555';
 
 let proUnlocked  = false;  // Gate: Export/Import/Manage Customers
-let snakeUnlocked = false; // Gate: Snake congestion game
 
 // Persisted preference: one-time shift length (hours)
 const SHIFT_PREF = 'wqt.shiftLenH';
@@ -1677,7 +1676,6 @@ function loadAll(){
       undoStack   = Array.isArray(p.undoStack) ? p.undoStack : [];
       pickingCutoff = (typeof p.pickingCutoff === 'string') ? p.pickingCutoff : "";
       proUnlocked = !!p.proUnlocked;
-      snakeUnlocked = !!p.snakeUnlocked;
       shiftBreaks = Array.isArray(p.shiftBreaks) ? p.shiftBreaks : [];
       operativeLog    = Array.isArray(p.operativeLog) ? p.operativeLog : [];
       operativeActive = p.operativeActive || null;
@@ -1685,7 +1683,7 @@ function loadAll(){
     } else {
       picks = []; historyDays = []; current = null; tempWraps = [];
       startTime = ""; lastClose = ""; pickingCutoff = ""; undoStack = [];
-      proUnlocked = false; snakeUnlocked = false; shiftBreaks = [];
+      proUnlocked = false; shiftBreaks = [];
       operativeLog = []; operativeActive = null;
     }
 
@@ -1775,7 +1773,7 @@ function saveAll(){
       version: '3.3.55',
       savedAt: new Date().toISOString(),
       picks, history: historyDays, current, tempWraps, startTime,
-      lastClose, pickingCutoff, undoStack, proUnlocked, snakeUnlocked,
+      lastClose, pickingCutoff, undoStack, proUnlocked,
       shiftBreaks, operativeLog, operativeActive
     };
 
@@ -1960,25 +1958,16 @@ function onOtherInput(prefix){
 
 // ====== Gates ======
 
-// Show/hide Snake-only UI based on gate flag
-function applySnakeGate(){
-  document.querySelectorAll('.gate-snake').forEach(el => {
-    // Force-show when unlocked, otherwise hide
-    el.style.display = snakeUnlocked ? 'inline-block' : 'none';
-  });
-}
-
 // Show/hide Pro-only UI based on gate flag (plus history exceptions)
 function applyProGate(){
   document.querySelectorAll('.gate-pro').forEach(el => {
     const inHistory = !!el.closest('#tabHistory');
     el.style.display = (proUnlocked && !inHistory) ? 'inline-block' : 'none';
   });
-  applySnakeGate();
   saveAll();
 }
 
-// QC rate input gate: detect secret codes (Pro, Snake, Operative)
+// QC rate input gate: detect secret codes (Pro, Operative)
 function updCalcGate() {
   const inp = document.getElementById('qcRate');
   if (!inp) return;

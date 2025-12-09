@@ -461,14 +461,6 @@
     </div>
     <div class="count" id="breakBarCountdown">20 min</div>
       <div style="display:flex; gap:8px;">
-        <button
-          id="btnSnakeBreak"
-          class="btn gate-snake"
-          type="button"
-          onclick="openSnakeFromBreak()"
-          disabled>
-          🐍 Snake
-        </button>
       <button
         id="btnBreakStopLog"
         class="btn"
@@ -738,26 +730,6 @@
         <button class="btn" type="button" onclick="submitNote()">Note</button>
       </div>
       <button class="btn ok" type="button" onclick="submitDelay()">Submit &amp; Stop</button>
-    </div>
-  </div>
-</div>
-<div id="snakeHostModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="snakeHostTitle">
-  <div class="box" style="max-width:720px;">
-    <div class="hdr">
-      <h3 id="snakeHostTitle">Break Snake</h3>
-      <button class="btn slim ghost" type="button" onclick="closeSnakeHost()">✖</button>
-    </div>
-
-    <div class="fld">
-      <iframe
-        id="snakeFrame"
-        src="snake.html"
-        style="width:100%; height:560px; border:none; border-radius:14px; background:#000;">
-      </iframe>
-    </div>
-
-    <div class="hint">
-      Play this only on break or lunch. Snake is a Pro tool and stays hidden unless unlocked.
     </div>
   </div>
 </div>

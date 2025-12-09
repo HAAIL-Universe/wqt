@@ -1206,129 +1206,12 @@ function submitDelay(){
 
   delayDraft = null;
   closeDelayModal();
-  showToast?.(`Delay logged (${minutes}m)`);
+  showToast('Delay logged (' + minutes + 'm)');
 }
 
-// Auto-log a congestion delay when returning from the Snake game
-function applySnakeDelayIfAny(){
-  try {
-    const doneRaw  = localStorage.getItem('snakeDelayCompleted');
-    if (!doneRaw) return;
+// ====== Shared Pick dock ======
 
-    const draftRaw = localStorage.getItem('snakeDelayDraft');
-    let done  = null;
-    let draft = null;
-
-    try { done  = JSON.parse(doneRaw || 'null') || null; } catch(_){ done = null; }
-    try { draft = draftRaw ? (JSON.parse(draftRaw) || null) : null; } catch(_){ draft = null; }
-
-    // Determine start/end HH:MM
-    let start = (draft && typeof draft.start === 'string') ? draft.start : null;
-    let end   = (done  && typeof done.end   === 'string') ? done.end   : nowHHMM();
-    const cause = (done && typeof done.cause === 'string') ? done.cause : 'Congestion';
-
-    if (!start) start = end;
-
-    let minutes = Math.max(1, Math.round((hm(end) - hm(start)) * 60));
-    if (!Number.isFinite(minutes) || minutes <= 0) minutes = 1;
-
-    if (window.current && Number.isFinite(window.current.total)) {
-      window.current.breaks = window.current.breaks || [];
-      const entry = { type:'D', start, end, minutes, cause };
-      window.current.breaks.push(entry);
-      window.current.__lastDelay = entry;
-      window.undoStack?.push?.({ type:'delay' });
-      window.renderTimeline?.();
-      window.updateSummary?.();
-      window.saveAll?.();
-    } else {
-      const key = 'shiftDelays';
-      let arr = [];
-      try { arr = JSON.parse(localStorage.getItem(key) || '[]'); } catch(_){ arr = []; }
-      arr.push({ type:'D', start, end, minutes, cause });
-      localStorage.setItem(key, JSON.stringify(arr));
-      window.renderShiftPanel?.();
-    }
-
-    // Best-effort cleanup so we don't accidentally re-log
-    localStorage.removeItem('snakeDelayDraft');
-    localStorage.removeItem('snakeDelayCompleted');
-  } catch (e) {
-    console.error('applySnakeDelayIfAny failed', e);
-    try {
-      localStorage.removeItem('snakeDelayDraft');
-      localStorage.removeItem('snakeDelayCompleted');
-    } catch(_){}
-  }
-}
-
-// Launch Snake from an active break/lunch
-function openSnakeFromBreak(){
-  if (!snakeUnlocked) {
-    showToast?.('Enter the Snake code first');
-    return;
-  }
-
-  if (!breakDraft) {
-    showToast?.('Snake is only available during an active break or lunch.');
-    return;
-  }
-
-  // Reuse the same maths as tickBreak to enforce “no minus-time Snake”
-  const now       = nowHHMM();
-  const elapsedMin = Math.round((hm(now) - hm(breakDraft.startHHMM)) * 60);
-  const targetMin  = Math.round((breakDraft.targetSec || 0) / 60);
-  const diff       = targetMin - elapsedMin;
-
-  if (diff < 0) {
-    showToast?.('Snake only while the timer is positive – your break is already over.');
-    return;
-  }
-
-  const host = document.getElementById('snakeHostModal');
-  if (!host) return;
-
-  // Show modal
-  host.classList.remove('hidden');
-  host.style.display = 'flex';
-
-  // Ensure the iframe is loaded
-  const iframe = document.getElementById('snakeFrame');
-  if (iframe && !iframe.src) {
-    iframe.src = 'snake.html';
-  }
-
-  // Adjust title & hint to match break/lunch context
-  const titleEl = document.getElementById('snakeHostTitle');
-  if (titleEl) {
-    titleEl.textContent = (breakDraft.type === 'L' ? 'Lunch Snake' : 'Break Snake');
-  }
-
-  const hintEl = host.querySelector('.hint');
-  if (hintEl) {
-    hintEl.textContent = 'Play during break or lunch only. Snake is a Pro tool and stays hidden unless unlocked.';
-  }
-}
-
-// Legacy name kept so any old calls don’t explode – now just routes to the break behaviour
-function openSnakeFromDelay(){
-  openSnakeFromBreak();
-}
-
-// Close the embedded Snake host modal (iframe sandbox)
-function closeSnakeHost(){
-  const host = document.getElementById('snakeHostModal');
-  if (!host) return;
-
-  // Work with both CSS class + inline style hiding
-  host.classList.add('hidden');
-  host.style.display = 'none';
-
-  // Clear iframe src so the game fully resets next time
-  const iframe = document.getElementById('snakeFrame');
-  if (iframe) iframe.src = '';
-}
-
+// Update the shared dock label + button disabled state
 // ====== Shared Pick dock ======
 
 // Update the shared dock label + button disabled state
@@ -1728,14 +1611,7 @@ function tickBreak() {
     chipBox.classList.remove('green', 'amber');
     chipBox.classList.add(diff >= 0 ? 'green' : 'amber');
   }
-  // Enable Snake only while timer is positive and we’re on break
-  const snakeBtn = document.getElementById('btnSnakeBreak');
-  if (snakeBtn) {
-    const allow = diff >= 0 && !!breakDraft;
-    snakeBtn.disabled = !allow;
-  }
-
-  if (diff === 0 && !breakDraft.beeping) {
+if (diff === 0 && !breakDraft.beeping) {
     breakDraft.beeping = true;
     tryBeep?.();
   }

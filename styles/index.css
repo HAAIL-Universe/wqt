@@ -1068,7 +1068,6 @@ td.small { font-size:12px; color:#9fb3c8; }
    ===================================================================== */
 /* Gated controls */
 .gate-pro { display:none; }      /* Pro tools (export, etc.)      */
-.gate-snake { display:none; }    /* Snake congestion game button  */
 /* Keep history page clean: never show gate-pro buttons there */
 #tabHistory .gate-pro { display: none !important; }
 
@@ -1076,7 +1075,7 @@ td.small { font-size:12px; color:#9fb3c8; }
 .hidden { display: none !important; }
 
 /* =====================================================================
-   9. MODALS (GENERIC + SNAKE) 
+   9. MODALS (GENERIC)
    ===================================================================== */
 .modal {
   position: fixed;
@@ -1106,23 +1105,6 @@ td.small { font-size:12px; color:#9fb3c8; }
     0 24px 60px rgba(0, 0, 0, 0.95);
   padding: 20px;
 }
-
-/* Snake modal: wider + taller so you don't have to scroll */
-#snakeHostModal .box {
-  width: min(720px, 96vw);
-  max-height: 90vh;
-}
-
-#snakeHostModal .fld {
-  margin: 8px 0;
-  max-height: none;
-}
-
-#snakeHostModal #snakeFrame {
-  width: 100%;
-  height: 480px;  /* was 560px – brings the game up a bit so the break bar doesn't sit on it */
-}
-
 
 .modal .hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
 .modal .hdr h3 { margin:0; font-size:16px; color:#cfe2ff; }
@@ -1835,7 +1817,6 @@ td.small { font-size:12px; color:#9fb3c8; }
 #btnCloseEarly,
 #btnUndo,
 #btnWrapTop,
-#btnSnakeBreak,
 #btnBreakStopLog,
 #opNoteSave, #opToggleBtn, #opBreakBtn, #opLunchBtn,
 #delayModal .btn[onclick="submitNote()"]  {
@@ -1846,201 +1827,6 @@ td.small { font-size:12px; color:#9fb3c8; }
     inset 0 0 0 1px rgba(255,255,255,.06); /* inner crispness */
   color: var(--ink);
   background-color: var(--color-bg-surface, var(--bg1)); /* note: bg1 var not defined yet */
-}
-
-/* =====================================================================
-   EXTRACTED STYLES FROM snake.html
-   ===================================================================== */
-/* Snake game page specific styles */
-.snake-page-root {
-  /* Match QuickCalc / Tracker theme */
-  --bg:#0b0d10;
-  --card:#141821;
-  --ink:#e8eef7;
-  --muted:#9fb3c8;
-
-  --accent:#b4363a;   /* maroon accent */
-  --line:#5a1e25;
-  --ok:#1b6e36;       /* green OK (for Start button) */
-  --warn:#8a6a15;
-  --bad:#7a2b2b;
-
-  --rim1:#d84b52;     /* red rim gradient – same as tracker */
-  --rim2:#5e1a1e;
-
-  --grid:#1b1f28;
-  --snake:#6dd6ff;
-  --food:#ffb347;
-}
-
-/* Snake-specific body (scoped to avoid conflicts) */
-.snake-page body {
-  margin:0;
-  padding:16px;
-  font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  background:var(--bg);
-  color:var(--ink);
-  display:flex;
-  flex-direction:column;
-  gap:16px;
-  align-items:center;
-}
-
-.snake-page h1 {
-  font-size:1.25rem;
-  margin:0 0 4px;
-  text-align:center;
-}
-
-.snake-page .row {
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-  align-items:center;
-  justify-content:space-between;
-}
-
-.snake-page label {
-  font-size:0.8rem;
-  color:var(--muted);
-}
-
-.snake-page input[type="number"] {
-  width:100%;
-  padding:6px 8px;
-  border-radius:8px;
-  border:1px solid #252b42;
-  background:#080a13;
-  color:var(--ink);
-  font-size:0.9rem;
-}
-
-.snake-page .badge {
-  padding:4px 8px;
-  border-radius:999px;
-  background:#171c2e;
-  color:var(--ink);
-  font-size:0.75rem;
-}
-
-#gameShell {
-  margin-top:12px;
-  display:flex;
-  justify-content:center;
-}
-
-/* Enlarged + responsive canvas */
-#snakeCanvas {
-  width:100%;
-  max-width:360px;
-  height:auto;
-  border-radius:12px;
-  border:1px solid transparent;
-  background:
-    linear-gradient(#050711,#050711) padding-box,
-    linear-gradient(180deg,var(--rim1),var(--rim2)) border-box;
-  box-shadow:
-    inset 0 0 0 1px rgba(212,64,72,0.10),
-    0 0 18px rgba(212,64,72,0.25);
-  image-rendering:pixelated;
-  touch-action:none; /* don't treat touches as scroll/zoom */
-}
-
-#status span.live {
-  color:var(--accent);
-}
-
-/* Break countdown bar while playing Snake */
-.snake-breakbar {
-  position:fixed;
-  left:50%;
-  bottom:24px;
-  transform:translateX(-50%);
-  z-index:50;
-  min-width:260px;
-  max-width:90vw;
-  padding:8px 12px;
-  border-radius:999px;
-  border:1px solid rgba(216,75,82,0.85);
-  background:rgba(7,7,12,0.96);
-  box-shadow:0 0 18px rgba(0,0,0,0.75);
-  display:none;
-  align-items:center;
-  gap:12px;
-  font-size:0.85rem;
-}
-.snake-breakbar .sb-main { flex:1; }
-.snake-breakbar .sb-title { font-weight:700; }
-.snake-breakbar .sb-meta {
-  font-size:0.75rem;
-  color:var(--muted);
-}
-.snake-breakbar .sb-count {
-  font-weight:800;
-  white-space:nowrap;
-}
-.snake-breakbar.green .sb-count { color:#55d67b; }
-.snake-breakbar.amber .sb-count { color:#f4c45f; }
-
-.overlay.hidden {
-  display: none !important;
-  pointer-events: none !important;
-}
-.overlay {
-  position:fixed;
-  inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:rgba(0,0,0,0.65);
-  z-index:1000;
-}
-.overlay .panel {
-  background:var(--card);
-  padding:14px 16px;
-  border-radius:12px;
-  width:90%;
-  max-width:320px;
-  box-shadow:0 12px 32px rgba(0,0,0,0.7);
-  text-align:center;
-}
-.overlay h2 {
-  margin:0 0 6px;
-  font-size:1rem;
-}
-.overlay p {
-  margin:0 0 10px;
-  font-size:0.8rem;
-  color:var(--muted);
-}
-.overlay .btn-row {
-  display:flex;
-  gap:8px;
-  justify-content:center;
-}
-
-/* Phone width */
-@media (max-width:480px) {
-  .snake-page body { padding:12px; }
-}
-
-/* Compact mode for short viewports (e.g. inside QuickCalc modal iframe) */
-@media (max-height:520px) {
-  .snake-page body {
-    padding:8px;
-  }
-  .snake-page .card {
-    padding:8px 10px;
-  }
-  #gameShell {
-    margin-top:8px;
-  }
-  #snakeCanvas {
-    height:260px;          /* shrink visual height to avoid scrolling */
-  }
-  #status {
-    margin-top:4px;
-  }
 }
 
 /* =====================================================================

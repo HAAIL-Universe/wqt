@@ -61,9 +61,6 @@ function logoutAndReset() {
   localStorage.removeItem('sharedBlock');
   localStorage.removeItem('sharedDockOpen');
   localStorage.removeItem('sharedMySum');
-  localStorage.removeItem('snakeDelayDraft');
-  localStorage.removeItem('snakeDelayCompleted');
-  localStorage.removeItem('snakeLiveRateUh');
   localStorage.removeItem('weekCardCollapsed');
   localStorage.removeItem('proUnlocked');
 
@@ -107,9 +104,6 @@ document.addEventListener('DOMContentLoaded', function () {
       // ── 2) Restore persisted state from localStorage ──────────────
       loadCustomCodes();
       loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
-
-      // If we just came back from Snake, auto-log that congestion delay
-      if (typeof applySnakeDelayIfAny === 'function') applySnakeDelayIfAny();
 
       const hadShift = !!startTime;
       const hadOpen  = !!(current && Number.isFinite(current.total));

@@ -573,52 +573,6 @@ const WqtAPI = {
         Storage.setJSON(StorageKeys.SHARED_MY_SUM, summary || null);
     },
 
-    // Snake delay + live rate
-    async getSnakeDelayDraft() {
-        return Storage.getJSON(StorageKeys.SNAKE_DELAY_DRAFT, null);
-    },
-
-    async setSnakeDelayDraft(draft) {
-        Storage.setJSON(StorageKeys.SNAKE_DELAY_DRAFT, draft || null);
-    },
-
-    async clearSnakeDelayDraft() {
-        Storage.setJSON(StorageKeys.SNAKE_DELAY_DRAFT, null);
-    },
-
-    async getSnakeDelayCompleted() {
-        return Storage.getJSON(StorageKeys.SNAKE_DELAY_DONE, null);
-    },
-
-    async setSnakeDelayCompleted(done) {
-        Storage.setJSON(StorageKeys.SNAKE_DELAY_DONE, done || null);
-    },
-
-    async clearSnakeDelayCompleted() {
-        Storage.setJSON(StorageKeys.SNAKE_DELAY_DONE, null);
-    },
-
-    async getSnakeLiveRate() {
-        // Stored as a plain string; normalise to number or null.
-        try {
-            const raw = window.localStorage.getItem(StorageKeys.SNAKE_LIVE_RATE);
-            if (!raw) return null;
-            const n = Number(raw);
-            return Number.isFinite(n) && n > 0 ? n : null;
-        } catch {
-            return null;
-        }
-    },
-
-    async setSnakeLiveRate(rateUh) {
-        if (!rateUh || !Number.isFinite(rateUh)) return;
-        try {
-            window.localStorage.setItem(StorageKeys.SNAKE_LIVE_RATE, String(rateUh));
-        } catch (e) {
-            console.error('WqtAPI.setSnakeLiveRate failed', e);
-        }
-    },
-
     // History UI: collapsed week card flag
     async getWeekCardCollapsed() {
         return Storage.getFlag(StorageKeys.WEEK_CARD_COLLAPSED);
