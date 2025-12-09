@@ -554,8 +554,11 @@ function restoreActiveOrderUI() {
 function startOrder() {
   const sel   = document.getElementById('oCust');
   const name  = sel ? sel.value : '';
-  const total = parseInt((document.getElementById('oTotal').value || '0'), 10);
-  const locations = Math.max(0, parseInt((document.getElementById('order-locations')?.value || '0'), 10));
+  const totalInput = document.getElementById('oTotal');
+  const locsInput = document.getElementById('order-locations');
+  
+  const total = parseInt((totalInput?.value || '0'), 10);
+  const locations = parseInt((locsInput?.value || '0'), 10);
 
   if (!startTime) return alert('Set shift start before starting an order.');
   pickingCutoff = ""; // resume counting time if we start picking again
@@ -569,7 +572,27 @@ function startOrder() {
   if (!(name && name !== '__OTHER__') && !(isOther && hasValidOther)) {
     return alert('Select a valid customer code');
   }
-  if (!(total > 0)) return alert('Enter total units');
+
+  // ====== VALIDATION: Units ======
+  if (!total || isNaN(total) || total <= 0) {
+    if (totalInput) totalInput.focus();
+    return alert('Enter a valid number of units (must be greater than 0)');
+  }
+
+  // ====== VALIDATION: Locations ======
+  if (isNaN(locations) || locations <= 0) {
+    if (locsInput) locsInput.focus();
+    return alert('Enter a valid number of locations (must be greater than 0)');
+  }
+
+  // ====== CRITICAL VALIDATION: Locations cannot exceed Units ======
+  if (locations > total) {
+    if (locsInput) {
+      locsInput.focus();
+      locsInput.select();
+    }
+    return alert('Locations can\'t be higher than units. Please check your totals.');
+  }
 
   const finalName = isOther ? otherVal : name;
 
@@ -577,7 +600,7 @@ function startOrder() {
   current = {
     name: finalName,
     total,
-    locations: locations || 0,
+    locations,
     start: nowHHMM(),
     breaks: [],
     notes: [],
