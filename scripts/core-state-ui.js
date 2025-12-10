@@ -2288,8 +2288,8 @@ function initWarehouseRowForm() {
   if (!form || form.dataset.wired === '1') return;
   form.dataset.wired = '1';
 
-  const spots = document.getElementById('wmSpotsPerBay');
-  if (spots && !spots.value) spots.value = '2';
+  const defaultSpots = document.getElementById('wmDefaultSpotsPerBay');
+  if (defaultSpots && !defaultSpots.value) defaultSpots.value = '2';
 
   form.addEventListener('submit', (ev) => {
     ev.preventDefault();
@@ -2301,32 +2301,56 @@ function handleWarehouseRowSubmit() {
   const rowInput = document.getElementById('wmRowId');
   const bayInput = document.getElementById('wmRowBays');
   const layerInput = document.getElementById('wmRowLayers');
-  const spotsInput = document.getElementById('wmSpotsPerBay');
+  const defaultSpotsInput = document.getElementById('wmDefaultSpotsPerBay');
+  const threeSpotInput = document.getElementById('wmThreeSpotBays');
   const statusEl = document.getElementById('wmRowStatus');
 
   const rowId = (rowInput?.value || '').trim();
   const bayCount = parseInt(bayInput?.value || '0', 10);
   const layerCount = parseInt(layerInput?.value || '0', 10);
-  let spotsPerBay = parseInt(spotsInput?.value || '2', 10);
+  let defaultSpots = parseInt(defaultSpotsInput?.value || '2', 10);
 
-  spotsPerBay = Math.max(1, Math.min(3, Number.isFinite(spotsPerBay) ? spotsPerBay : 2));
+  defaultSpots = (defaultSpots === 3) ? 3 : 2; // limit to 2 or 3 only
 
   if (!rowId || !(bayCount > 0) || !(layerCount > 0)) {
     showToast?.('Enter row, bays, and layers');
     return;
   }
 
+  const parseThreeSpotSet = (raw) => {
+    const set = new Set();
+    if (!raw) return set;
+    raw.split(',').forEach(token => {
+      const t = token.trim();
+      if (!t) return;
+      if (t.includes('-')) {
+        const [a, b] = t.split('-').map(x => parseInt(x.trim(), 10));
+        if (Number.isFinite(a) && Number.isFinite(b)) {
+          const start = Math.min(a, b);
+          const end = Math.max(a, b);
+          for (let n = start; n <= end; n++) set.add(n);
+        }
+        return;
+      }
+      const n = parseInt(t, 10);
+      if (Number.isFinite(n)) set.add(n);
+    });
+    return set;
+  };
+
   const aislesInRow = rowId.split('/')
     .map(a => a.trim())
     .filter(Boolean);
   const warehouseId = getActiveWarehouseId();
-  const spotLabels = SPOT_LABELS.slice(0, spotsPerBay || 1);
+  const threeSpotSet = parseThreeSpotSet(threeSpotInput?.value || '');
+  const defaultLayout = defaultSpots === 3 ? SPOT_LABELS : SPOT_LABELS.slice(0, 2);
 
   const locations = [];
   (aislesInRow.length ? aislesInRow : [rowId]).forEach(aisle => {
     for (let bay = 1; bay <= bayCount; bay++) {
+      const spotLayout = threeSpotSet.has(bay) ? SPOT_LABELS : defaultLayout;
       for (let layer = 1; layer <= layerCount; layer++) {
-        spotLabels.forEach(spot => {
+        spotLayout.forEach(spot => {
           const code = `${warehouseId}${aisle}-${String(bay).padStart(3, '0')}-${layer}${spot}`;
           locations.push({ aisle, bay, layer, spot, code });
         });

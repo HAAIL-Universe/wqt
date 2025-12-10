@@ -670,9 +670,14 @@
             <input id="wmRowLayers" type="number" min="1" step="1" inputmode="numeric" placeholder="Layers">
           </div>
           <div class="wm-field">
-            <label for="wmSpotsPerBay">Spots per bay</label>
-            <input id="wmSpotsPerBay" type="number" min="1" max="3" step="1" inputmode="numeric" value="2">
-            <div class="hint">2 = L/R, 3 = L/R/C</div>
+            <label for="wmDefaultSpotsPerBay">Default spots per bay</label>
+            <input id="wmDefaultSpotsPerBay" type="number" min="2" max="3" step="1" inputmode="numeric" value="2">
+            <div class="hint">Accepts 2 (L/R) or 3 (L/R/C).</div>
+          </div>
+          <div class="wm-field">
+            <label for="wmThreeSpotBays">Bays with 3 spots</label>
+            <input id="wmThreeSpotBays" type="text" placeholder="e.g. 3, 7-10, 25">
+            <div class="hint">Comma-separated bays or ranges (e.g. "3, 7-10, 25").</div>
           </div>
           <div class="wm-actions">
             <button class="btn ok" type="submit" style="width:100%;">Submit</button>
