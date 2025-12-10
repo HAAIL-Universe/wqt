@@ -2382,7 +2382,11 @@ function showTab(which){
   if (which === 'tracker')      document.getElementById('tabTrackBtn')?.classList.add('active');
   if (which === 'history')      document.getElementById('tabHistBtn')?.classList.add('active');
   if (which === 'supervisor')   document.getElementById('tabSupervisorBtn')?.classList.add('active');
-  if (which === 'warehouseMap') document.getElementById('tabWarehouseMapBtn')?.classList.add('active');
+  if (which === 'warehouseMap') {
+    // Keep Tracker highlighted when opening Warehouse Map from the header card
+    document.getElementById('tabTrackBtn')?.classList.add('active');
+    document.getElementById('tabWarehouseMapBtn')?.classList.add('active');
+  }
 
   // Live banner: only on Tracker *and* only once a shift has started
   const lb = document.getElementById('liveBanner');

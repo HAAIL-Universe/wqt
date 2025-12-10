@@ -94,7 +94,7 @@ function renderRoleChips() {
   const overlayChip  = document.getElementById('roleOverlayChip');
   const reqBtn       = document.getElementById('btnRequestOverlay');
   const supervisorTabBtn = document.getElementById('tabSupervisorBtn');
-  const warehouseMapTabBtn = document.getElementById('tabWarehouseMapBtn');
+  const warehouseToolsCard = document.getElementById('warehouseToolsCard');
 
   // Primary role always "Picker" for now
   if (primaryChip) primaryChip.textContent = "Role: Picker";
@@ -121,9 +121,9 @@ function renderRoleChips() {
   const overlayRole = overlay?.role;
   const overlayAllowsWarehouseMap = overlayRole === 'operative' || overlayRole === 'supervisor';
   const isSupervisorPage = window.location.pathname.includes('super.html');
-  if (warehouseMapTabBtn) {
-    warehouseMapTabBtn.style.display = (overlayAllowsWarehouseMap && !isSupervisorPage)
-      ? 'inline-block'
+  if (warehouseToolsCard) {
+    warehouseToolsCard.style.display = (overlayAllowsWarehouseMap && !isSupervisorPage)
+      ? 'block'
       : 'none';
   }
 }
