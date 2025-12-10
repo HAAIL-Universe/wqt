@@ -15,9 +15,11 @@ from sqlalchemy import (
     func,
     Boolean,
     ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy import text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.exc import IntegrityError
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -244,6 +246,25 @@ class AdminMessage(Base):
     read_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class WarehouseLocation(Base):
+    __tablename__ = "warehouse_locations"
+    __table_args__ = (
+        UniqueConstraint("warehouse", "row_id", "aisle", "bay", "layer", "spot", name="uq_warehouse_location_unique"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    warehouse = Column(Text, nullable=False, index=True)
+    row_id = Column(Text, nullable=False, index=True)
+    aisle = Column(Text, nullable=False)
+    bay = Column(Integer, nullable=False)
+    layer = Column(Integer, nullable=False)
+    spot = Column(Text, nullable=False)
+    code = Column(Text, nullable=False, index=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 # --- Global / device state helpers ---
 
 
@@ -456,6 +477,99 @@ def pop_admin_messages(device_id: str) -> List[str]:
         return results
     finally:
         session.close()
+
+
+# --- Warehouse location helpers ---
+
+
+def bulk_upsert_locations(
+    warehouse: str,
+    row_id: str,
+    locations: List[Dict[str, Any]],
+    operator_id: str,
+) -> int:
+    """Replace locations for a warehouse/row_id pair with a new generated set.
+
+    - Drops existing rows for (warehouse, row_id)
+    - Inserts the provided locations (deduped) in a single transaction
+    - Gracefully ignores duplicates that slip through client-side generation
+    """
+    if engine is None:
+        return 0
+
+    inserted = 0
+    cleaned: List[WarehouseLocation] = []
+    seen_keys: set[tuple[str, str, str, int, int, str]] = set()
+
+    session = get_session()
+    try:
+        for loc in locations or []:
+            if not isinstance(loc, dict):
+                continue
+
+            aisle = str(loc.get("aisle") or "").strip()
+            spot = str(loc.get("spot") or "").strip()
+            code = str(loc.get("code") or "").strip()
+
+            try:
+                bay = int(loc.get("bay"))
+                layer = int(loc.get("layer"))
+            except Exception:
+                continue
+
+            if not aisle or not spot or not code:
+                continue
+
+            key = (warehouse, row_id, aisle, bay, layer, spot)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            cleaned.append(
+                WarehouseLocation(
+                    warehouse=warehouse,
+                    row_id=row_id,
+                    aisle=aisle,
+                    bay=bay,
+                    layer=layer,
+                    spot=spot,
+                    code=code,
+                    is_active=bool(loc.get("is_active", True)),
+                )
+            )
+
+        # Replace existing rows for this warehouse+row combination
+        session.query(WarehouseLocation).filter(
+            WarehouseLocation.warehouse == warehouse,
+            WarehouseLocation.row_id == row_id,
+        ).delete(synchronize_session=False)
+
+        for row in cleaned:
+            session.add(row)
+
+        session.commit()
+        inserted = len(cleaned)
+    except IntegrityError as err:
+        # If duplicates still slip through, attempt per-row insert and ignore violations
+        session.rollback()
+        print(f"[WarehouseLocation] bulk upsert constraint issue for operator={operator_id}: {err}")
+        inserted = 0
+        for row in cleaned:
+            try:
+                session.add(row)
+                session.flush()
+                inserted += 1
+            except IntegrityError:
+                session.rollback()
+                continue
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
+    finally:
+        session.close()
+
+    return inserted
 
 
 # --- Shift helpers ---

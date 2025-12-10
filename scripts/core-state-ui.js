@@ -2073,6 +2073,43 @@ let warehouseMapData = {
   aisles: {},  // e.g., { A: { minBay: 1, maxBay: 18, bays: { '1': 'empty', '2': 'full', ... } } }
 };
 const WAREHOUSE_AISLES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'AGL'];
+const SPOT_LABELS = ['L', 'R', 'C'];
+const WAREHOUSE_LOCATION_QUEUE_PREFIX = 'wqt_wm_row_queue';
+
+function getActiveWarehouseId() {
+  try {
+    if (typeof window !== 'undefined' && window.WQT_WAREHOUSE_ID) {
+      return String(window.WQT_WAREHOUSE_ID);
+    }
+  } catch (_) {}
+
+  const heading = document.querySelector('#tabWarehouseMap h2');
+  if (heading && heading.textContent) {
+    const m = heading.textContent.match(/Warehouse\s*(.+)$/i);
+    if (m && m[1]) return m[1].trim().replace(/\s+/g, '');
+  }
+  return 'WH3';
+}
+
+function buildRowQueueKey(warehouseId, rowId) {
+  const userId = window?.WqtAPI?.getLoggedInUserIdentity?.()?.userId || 'guest';
+  const safeRow = (rowId || 'row').replace(/\s+/g, '_');
+  return `${WAREHOUSE_LOCATION_QUEUE_PREFIX}_${warehouseId || 'WH3'}__${safeRow}__${userId}`;
+}
+
+function queueRowPayload(key, payload) {
+  try {
+    localStorage.setItem(key, JSON.stringify(payload || {}));
+  } catch (err) {
+    console.warn('[Warehouse Map] Failed to queue payload', err);
+  }
+}
+
+function clearRowPayload(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch (_) {}
+}
 
 // Load warehouse map from localStorage
 function loadWarehouseMap() {
@@ -2246,6 +2283,94 @@ function saveWarehouseMap() {
   showToast?.('Warehouse map saved');
 }
 
+function initWarehouseRowForm() {
+  const form = document.getElementById('wmRowForm');
+  if (!form || form.dataset.wired === '1') return;
+  form.dataset.wired = '1';
+
+  const spots = document.getElementById('wmSpotsPerBay');
+  if (spots && !spots.value) spots.value = '2';
+
+  form.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    handleWarehouseRowSubmit();
+  });
+}
+
+function handleWarehouseRowSubmit() {
+  const rowInput = document.getElementById('wmRowId');
+  const bayInput = document.getElementById('wmRowBays');
+  const layerInput = document.getElementById('wmRowLayers');
+  const spotsInput = document.getElementById('wmSpotsPerBay');
+  const statusEl = document.getElementById('wmRowStatus');
+
+  const rowId = (rowInput?.value || '').trim();
+  const bayCount = parseInt(bayInput?.value || '0', 10);
+  const layerCount = parseInt(layerInput?.value || '0', 10);
+  let spotsPerBay = parseInt(spotsInput?.value || '2', 10);
+
+  spotsPerBay = Math.max(1, Math.min(3, Number.isFinite(spotsPerBay) ? spotsPerBay : 2));
+
+  if (!rowId || !(bayCount > 0) || !(layerCount > 0)) {
+    showToast?.('Enter row, bays, and layers');
+    return;
+  }
+
+  const aislesInRow = rowId.split('/')
+    .map(a => a.trim())
+    .filter(Boolean);
+  const warehouseId = getActiveWarehouseId();
+  const spotLabels = SPOT_LABELS.slice(0, spotsPerBay || 1);
+
+  const locations = [];
+  (aislesInRow.length ? aislesInRow : [rowId]).forEach(aisle => {
+    for (let bay = 1; bay <= bayCount; bay++) {
+      for (let layer = 1; layer <= layerCount; layer++) {
+        spotLabels.forEach(spot => {
+          const code = `${warehouseId}${aisle}-${String(bay).padStart(3, '0')}-${layer}${spot}`;
+          locations.push({ aisle, bay, layer, spot, code });
+        });
+      }
+    }
+  });
+
+  const payload = {
+    warehouse: warehouseId,
+    row_id: rowId,
+    locations,
+  };
+
+  const queueKey = buildRowQueueKey(warehouseId, rowId);
+
+  const onFailure = (err) => {
+    queueRowPayload(queueKey, payload);
+    statusEl && (statusEl.textContent = 'Saved locally for retry');
+    console.warn('[Warehouse Map] Failed to save locations, queued locally', err);
+    showToast?.('Saved locally; backend unavailable');
+  };
+
+  try {
+    const saveFn = window?.WqtAPI?.saveWarehouseLocationsBulk;
+    if (typeof saveFn !== 'function') {
+      onFailure(new Error('API helper missing'));
+      return;
+    }
+
+    statusEl && (statusEl.textContent = `Submitting ${locations.length} locations…`);
+
+    Promise.resolve(saveFn(payload))
+      .then(res => {
+        const inserted = res?.inserted ?? locations.length;
+        clearRowPayload(queueKey);
+        statusEl && (statusEl.textContent = `Committed ${inserted} locations for row ${rowId}`);
+        showToast?.('Row committed to backend');
+      })
+      .catch(onFailure);
+  } catch (err) {
+    onFailure(err);
+  }
+}
+
 // Open aisle detail view
 function openAisleDetail(aisleName) {
   const aisleData = warehouseMapData.aisles[aisleName];
@@ -2414,6 +2539,7 @@ function showTab(which){
     // hide order-area when on warehouse map
     if (area) area.style.display = 'none';
     // Load and render warehouse map
+    initWarehouseRowForm();
     loadWarehouseMap();
     renderAisleConfig();
     return;

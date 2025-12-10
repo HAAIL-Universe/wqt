@@ -32,6 +32,7 @@ from .db import (
     load_global_state,
     save_global_state,
     User,
+    bulk_upsert_locations,
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -587,6 +588,20 @@ class WarehouseMapPayload(BaseModel):
     map: Dict[str, Any]
 
 
+class WarehouseLocationItem(BaseModel):
+    aisle: str
+    bay: int
+    layer: int
+    spot: str
+    code: str
+
+
+class WarehouseLocationBulkPayload(BaseModel):
+    warehouse: str
+    row_id: str
+    locations: List[WarehouseLocationItem]
+
+
 @app.post("/api/orders/record")
 async def api_orders_record(
     payload: OrderRecordPayload,
@@ -704,3 +719,26 @@ async def api_set_warehouse_map(
     save_global_state(payload)
 
     return {"success": True, "map": payload["warehouse_map"]}
+
+
+@app.post("/api/warehouse-locations/bulk")
+async def api_warehouse_locations_bulk(
+    payload: WarehouseLocationBulkPayload,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    try:
+        inserted = bulk_upsert_locations(
+            warehouse=payload.warehouse.strip(),
+            row_id=payload.row_id.strip(),
+            locations=[loc.dict() for loc in payload.locations or []],
+            operator_id=current_user.username,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to persist warehouse locations") from exc
+
+    return {"success": True, "inserted": inserted}

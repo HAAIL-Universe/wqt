@@ -654,6 +654,33 @@
         </div>
       </div>
 
+      <div class="wm-row-tools">
+        <div class="hint" style="margin-bottom:8px;">Generate full pallet locations for a row.</div>
+        <form id="wmRowForm" class="wm-row-form">
+          <div class="wm-field">
+            <label for="wmRowId">Row</label>
+            <input id="wmRowId" type="text" placeholder="e.g. A/B" autocomplete="off">
+          </div>
+          <div class="wm-field">
+            <label for="wmRowBays">Amount in row</label>
+            <input id="wmRowBays" type="number" min="1" step="1" inputmode="numeric" placeholder="Bays">
+          </div>
+          <div class="wm-field">
+            <label for="wmRowLayers">Amount on layers</label>
+            <input id="wmRowLayers" type="number" min="1" step="1" inputmode="numeric" placeholder="Layers">
+          </div>
+          <div class="wm-field">
+            <label for="wmSpotsPerBay">Spots per bay</label>
+            <input id="wmSpotsPerBay" type="number" min="1" max="3" step="1" inputmode="numeric" value="2">
+            <div class="hint">2 = L/R, 3 = L/R/C</div>
+          </div>
+          <div class="wm-actions">
+            <button class="btn ok" type="submit" style="width:100%;">Submit</button>
+          </div>
+        </form>
+        <div id="wmRowStatus" class="hint" style="margin-top:6px;"></div>
+      </div>
+
       <!-- Aisle Configuration View -->
       <div id="wmAisleConfig">
         <div class="hint" style="margin-bottom:1rem;">

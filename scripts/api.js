@@ -414,6 +414,14 @@ const WqtAPI = {
         });
     },
 
+    async saveWarehouseLocationsBulk(payload) {
+        return fetchJSON('/api/warehouse-locations/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {}),
+        });
+    },
+
     // ------------------------------------------------------------------
     // NEW: Orders – record closed orders into backend summary table
     // ------------------------------------------------------------------
