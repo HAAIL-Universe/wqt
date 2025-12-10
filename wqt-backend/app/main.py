@@ -35,6 +35,7 @@ from .db import (
     bulk_upsert_locations,
     get_warehouse_aisle_summary,
     get_locations_by_aisle,
+    set_location_empty_state,
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -611,6 +612,12 @@ class WarehouseAisleSummaryResponse(BaseModel):
     empty: int
 
 
+class WarehouseLocationTogglePayload(BaseModel):
+    id: Optional[int] = None
+    code: Optional[str] = None
+    is_empty: bool
+
+
 @app.post("/api/orders/record")
 async def api_orders_record(
     payload: OrderRecordPayload,
@@ -782,3 +789,29 @@ async def api_warehouse_locations_by_aisle(
     )
 
     return {"success": True, "locations": locations}
+
+
+@app.post("/api/warehouse-locations/set-empty")
+async def api_warehouse_locations_set_empty(
+    payload: WarehouseLocationTogglePayload,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    if payload.id is None and (payload.code is None or not payload.code.strip()):
+        raise HTTPException(status_code=400, detail="Provide a location id or code")
+
+    try:
+        updated = set_location_empty_state(
+            location_id=payload.id,
+            code=payload.code.strip() if payload.code else None,
+            is_empty=payload.is_empty,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to update location") from exc
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="Location not found")
+
+    return {"success": True, "is_empty": payload.is_empty}

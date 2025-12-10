@@ -427,9 +427,17 @@ const WqtAPI = {
         return fetchJSON(`/api/warehouse-locations/summary${qs}`, { method: 'GET' });
     },
 
-    async fetchLocationsByAisle(warehouseId, aisle) {
-        const qs = `?warehouse=${encodeURIComponent(warehouseId || '')}&aisle=${encodeURIComponent(aisle || '')}&only_empty=true`;
+    async fetchLocationsByAisle(warehouseId, aisle, onlyEmpty = true) {
+        const qs = `?warehouse=${encodeURIComponent(warehouseId || '')}&aisle=${encodeURIComponent(aisle || '')}&only_empty=${onlyEmpty ? 'true' : 'false'}`;
         return fetchJSON(`/api/warehouse-locations/by-aisle${qs}`, { method: 'GET' });
+    },
+
+    async setWarehouseLocationEmpty(payload) {
+        return fetchJSON('/api/warehouse-locations/set-empty', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {}),
+        });
     },
 
     // ------------------------------------------------------------------

@@ -2328,14 +2328,20 @@ function renderAisleChips() {
     wmActiveAisle = firstWithSpace?.aisle || wmAisleSummary[0].aisle;
   }
 
+  const mappingMode = !!window.rowGeneratorUnlocked;
+
   wmAisleSummary.forEach(item => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'wm-aisle-chip';
     btn.textContent = item.aisle;
-    if ((item.empty || 0) === 0) {
-      btn.classList.add('empty-zero');
-      btn.disabled = true;
+    const emptyCount = Number(item.empty || 0);
+    if (emptyCount > 0) {
+      btn.classList.add('has-empty');
+    } else {
+      btn.classList.add('no-empty');
+      // Keep clickable so mappers can still inspect
+      btn.disabled = false;
     }
     if (item.aisle === wmActiveAisle) {
       btn.classList.add('active');
@@ -2345,7 +2351,7 @@ function renderAisleChips() {
   });
 }
 
-function renderAisleList(locations) {
+function renderAisleList(locations, { mappingMode = false } = {}) {
   const list = document.getElementById('wmAisleList');
   if (!list) return;
 
@@ -2401,9 +2407,43 @@ function renderAisleList(locations) {
       const meta = document.createElement('div');
       meta.className = 'wm-aisle-meta';
       meta.textContent = `Bay ${loc.bay} • Layer ${loc.layer} • Spot ${loc.spot}`;
+      const status = document.createElement('div');
+      status.className = 'wm-aisle-status';
+
+      const applyState = (isEmpty) => {
+        row.classList.toggle('wm-loc-empty', isEmpty);
+        row.classList.toggle('wm-loc-full', !isEmpty);
+        status.textContent = isEmpty ? 'Empty' : 'Full';
+        status.classList.toggle('empty', isEmpty);
+        status.classList.toggle('full', !isEmpty);
+      };
+
+      applyState(!!loc.is_empty);
+
+      if (mappingMode) {
+        row.classList.add('wm-loc-clickable');
+        row.onclick = async () => {
+          const nextVal = !loc.is_empty;
+          applyState(nextVal);
+          row.classList.add('wm-loc-updating');
+          try {
+            const setter = window?.WqtAPI?.setWarehouseLocationEmpty;
+            if (typeof setter !== 'function') throw new Error('API missing');
+            await setter({ id: loc.id, code: loc.code, is_empty: nextVal });
+            loc.is_empty = nextVal;
+          } catch (err) {
+            applyState(!!loc.is_empty); // revert
+            console.warn('[Warehouse Map] Failed to toggle empty state', err);
+            showToast?.('Failed to update slot');
+          } finally {
+            row.classList.remove('wm-loc-updating');
+          }
+        };
+      }
 
       row.appendChild(code);
       row.appendChild(meta);
+      row.appendChild(status);
       section.appendChild(row);
     });
 
@@ -2419,11 +2459,12 @@ async function selectAisle(aisle) {
   if (list) list.innerHTML = '<div class="hint">Loading locations…</div>';
 
   const warehouseId = getActiveWarehouseId();
+  const mappingMode = !!window.rowGeneratorUnlocked;
   try {
     const fetchFn = window?.WqtAPI?.fetchLocationsByAisle;
     if (typeof fetchFn !== 'function') throw new Error('API missing');
-    const res = await fetchFn(warehouseId, aisle);
-    renderAisleList(res?.locations || []);
+    const res = await fetchFn(warehouseId, aisle, !mappingMode ? true : false);
+    renderAisleList(res?.locations || [], { mappingMode });
   } catch (err) {
     console.warn('[Warehouse Map] Failed to load aisle locations', err);
     if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';

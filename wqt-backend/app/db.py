@@ -16,6 +16,7 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     UniqueConstraint,
+    case,
 )
 from sqlalchemy import text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
@@ -72,6 +73,7 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS locations INTEGER DEFAULT 0;"))
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_rate_uh FLOAT;"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_pin TEXT;"))
+            conn.execute(text("ALTER TABLE warehouse_locations ADD COLUMN IF NOT EXISTS is_empty BOOLEAN NOT NULL DEFAULT FALSE;"))
     except Exception:
         # If ALTER fails (e.g., non-Postgres or permission issues), ignore —
         # admins can run the migration manually in the DB.
@@ -261,6 +263,7 @@ class WarehouseLocation(Base):
     spot = Column(Text, nullable=False)
     code = Column(Text, nullable=False, index=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    is_empty = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -535,6 +538,7 @@ def bulk_upsert_locations(
                     spot=spot,
                     code=code,
                     is_active=bool(loc.get("is_active", True)),
+                    is_empty=bool(loc.get("is_empty", False)),
                 )
             )
 
@@ -574,9 +578,6 @@ def bulk_upsert_locations(
 
 def get_warehouse_aisle_summary(warehouse: str) -> List[Dict[str, Any]]:
     """Return aggregated counts per aisle for a warehouse.
-
-    For now all locations are treated as empty; occupied_count stays 0 so
-    callers can light up aisles that have capacity.
     """
     if engine is None:
         return []
@@ -587,8 +588,12 @@ def get_warehouse_aisle_summary(warehouse: str) -> List[Dict[str, Any]]:
             session.query(
                 WarehouseLocation.aisle,
                 func.count(WarehouseLocation.id).label("total"),
+                func.sum(
+                    case((WarehouseLocation.is_empty == True, 1), else_=0)
+                ).label("empty_count"),
             )
             .filter(WarehouseLocation.warehouse == warehouse)
+            .filter(WarehouseLocation.is_active == True)
             .group_by(WarehouseLocation.aisle)
             .order_by(WarehouseLocation.aisle.asc())
         )
@@ -596,13 +601,14 @@ def get_warehouse_aisle_summary(warehouse: str) -> List[Dict[str, Any]]:
         aisles: List[Dict[str, Any]] = []
         for row in q:
             total = int(row.total or 0)
-            occupied = 0  # placeholder for future occupancy logic
+            empty_count = int(row.empty_count or 0)
+            occupied = max(0, total - empty_count)
             aisles.append(
                 {
                     "aisle": row.aisle,
                     "total": total,
                     "occupied": occupied,
-                    "empty": max(0, total - occupied),
+                    "empty": empty_count,
                 }
             )
 
@@ -616,11 +622,7 @@ def get_locations_by_aisle(
     aisle: str,
     only_empty: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Return locations for an aisle, optionally filtering to empty ones.
-
-    Currently all rows are treated as empty; the only_empty flag is reserved
-    for future occupancy filtering.
-    """
+    """Return locations for an aisle, optionally filtering to empty ones."""
     if engine is None:
         return []
 
@@ -630,10 +632,11 @@ def get_locations_by_aisle(
             session.query(WarehouseLocation)
             .filter(WarehouseLocation.warehouse == warehouse)
             .filter(WarehouseLocation.aisle == aisle)
+            .filter(WarehouseLocation.is_active == True)
         )
 
         if only_empty:
-            q = q.filter(WarehouseLocation.is_active == True)
+            q = q.filter(WarehouseLocation.is_empty == True)
 
         q = q.order_by(
             WarehouseLocation.bay.asc(),
@@ -654,9 +657,47 @@ def get_locations_by_aisle(
                     "spot": loc.spot,
                     "code": loc.code,
                     "is_active": loc.is_active,
+                    "is_empty": loc.is_empty,
                 }
             )
         return results
+    finally:
+        session.close()
+
+
+def set_location_empty_state(
+    *,
+    location_id: Optional[int] = None,
+    code: Optional[str] = None,
+    is_empty: bool,
+) -> bool:
+    """Toggle the empty flag for a single location.
+
+    Returns True when a matching row was updated; False when not found.
+    """
+    if engine is None:
+        return False
+
+    session = get_session()
+    try:
+        q = session.query(WarehouseLocation).filter(WarehouseLocation.is_active == True)
+        if location_id is not None:
+            q = q.filter(WarehouseLocation.id == location_id)
+        elif code is not None:
+            q = q.filter(WarehouseLocation.code == code)
+        else:
+            return False
+
+        loc = q.first()
+        if not loc:
+            return False
+
+        loc.is_empty = bool(is_empty)
+        session.commit()
+        return True
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
