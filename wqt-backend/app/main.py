@@ -29,6 +29,8 @@ from .db import (
     get_history_for_operator,   # NEW: fetch archived orders for frontend
     load_device_state,          # NEW: legacy fallback
     save_device_state,          # NEW: migrate to user key
+    load_global_state,
+    save_global_state,
     User,
 )
 
@@ -581,6 +583,10 @@ class OrderRecordPayload(BaseModel):
     notes: Optional[str] = None
 
 
+class WarehouseMapPayload(BaseModel):
+    map: Dict[str, Any]
+
+
 @app.post("/api/orders/record")
 async def api_orders_record(
     payload: OrderRecordPayload,
@@ -668,3 +674,33 @@ async def api_history_me(
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
     return await api_history_operator(operator_id=current_user.username, limit=limit, current_user=current_user)
+
+
+# -------------------------------------------------------------------
+# Warehouse Map API (shared state)
+# -------------------------------------------------------------------
+@app.get("/api/warehouse-map")
+async def api_get_warehouse_map(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    payload = load_global_state() or {}
+    existing_map = payload.get("warehouse_map") if isinstance(payload, dict) else None
+    if not isinstance(existing_map, dict):
+        existing_map = {"aisles": {}}
+
+    return {"success": True, "map": existing_map}
+
+
+@app.post("/api/warehouse-map")
+async def api_set_warehouse_map(
+    data: WarehouseMapPayload,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = load_global_state() or {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    payload["warehouse_map"] = data.map
+    save_global_state(payload)
+
+    return {"success": True, "map": payload["warehouse_map"]}

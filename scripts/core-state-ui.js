@@ -2090,6 +2090,33 @@ function loadWarehouseMap() {
     console.warn('[Warehouse Map] Failed to load map data', e);
     warehouseMapData = { aisles: {} };
   }
+
+  // Try to hydrate from shared backend state if available (non-blocking)
+  try {
+    const fetchFn = window?.WqtAPI?.fetchWarehouseMap;
+    if (typeof fetchFn === 'function') {
+      fetchFn()
+        .then(res => {
+          const sharedMap = res?.map;
+          if (sharedMap && typeof sharedMap === 'object' && sharedMap.aisles) {
+            warehouseMapData = sharedMap;
+            try {
+              const userId = window.WQT_CURRENT_USER?.userId || 'guest';
+              const key = `wqt_warehouse_map_${userId}`;
+              localStorage.setItem(key, JSON.stringify(warehouseMapData));
+            } catch (err) {
+              console.warn('[Warehouse Map] Failed to persist shared map locally', err);
+            }
+            renderAisleConfig();
+          }
+        })
+        .catch(err => {
+          console.warn('[Warehouse Map] Backend map load failed, using local map', err);
+        });
+    }
+  } catch (err) {
+    console.warn('[Warehouse Map] Error while fetching shared map', err);
+  }
 }
 
 // Save warehouse map to localStorage
@@ -2196,6 +2223,26 @@ function handleBayInputChange(e) {
 // Save warehouse map (called from Save Map button)
 function saveWarehouseMap() {
   saveWarehouseMapData();
+
+  try {
+    const saveFn = window?.WqtAPI?.saveWarehouseMapToBackend;
+    if (typeof saveFn === 'function') {
+      Promise.resolve(saveFn(warehouseMapData))
+        .then(() => {
+          showToast?.('Warehouse map committed');
+        })
+        .catch(err => {
+          console.warn('[Warehouse Map] Failed to commit shared map', err);
+          showToast?.('Saved locally; commit failed');
+        });
+      return;
+    }
+  } catch (err) {
+    console.warn('[Warehouse Map] Error while committing shared map', err);
+    showToast?.('Saved locally; commit failed');
+    return;
+  }
+
   showToast?.('Warehouse map saved');
 }
 

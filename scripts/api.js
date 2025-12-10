@@ -402,6 +402,18 @@ const WqtAPI = {
         }
     },
 
+    async fetchWarehouseMap() {
+        return fetchJSON('/api/warehouse-map', { method: 'GET' });
+    },
+
+    async saveWarehouseMapToBackend(map) {
+        return fetchJSON('/api/warehouse-map', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ map }),
+        });
+    },
+
     // ------------------------------------------------------------------
     // NEW: Orders – record closed orders into backend summary table
     // ------------------------------------------------------------------
