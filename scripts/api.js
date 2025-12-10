@@ -440,6 +440,14 @@ const WqtAPI = {
         });
     },
 
+    async toggleLocationEmpty(code) {
+        return fetchJSON('/api/warehouse-locations/toggle-empty', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+        });
+    },
+
     // ------------------------------------------------------------------
     // NEW: Orders – record closed orders into backend summary table
     // ------------------------------------------------------------------

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from fastapi.responses import JSONResponse
 
 from .models import MainState
 from .storage import load_main, save_main
@@ -36,6 +37,8 @@ from .db import (
     get_warehouse_aisle_summary,
     get_locations_by_aisle,
     set_location_empty_state,
+    get_session,
+    WarehouseLocation,
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -618,6 +621,10 @@ class WarehouseLocationTogglePayload(BaseModel):
     is_empty: bool
 
 
+class WarehouseLocationToggleByCodePayload(BaseModel):
+    code: str
+
+
 @app.post("/api/orders/record")
 async def api_orders_record(
     payload: OrderRecordPayload,
@@ -815,3 +822,35 @@ async def api_warehouse_locations_set_empty(
         raise HTTPException(status_code=404, detail="Location not found")
 
     return {"success": True, "is_empty": payload.is_empty}
+
+
+@app.post("/api/warehouse-locations/toggle-empty")
+async def api_warehouse_locations_toggle_empty(
+    payload: WarehouseLocationToggleByCodePayload,
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    session = get_session()
+    try:
+        code = payload.code.strip()
+        loc = (
+            session.query(WarehouseLocation)
+            .filter(WarehouseLocation.code == code)
+            .first()
+        )
+
+        if not loc:
+            return JSONResponse(status_code=404, content={"success": False, "message": "Location not found"})
+
+        loc.is_empty = not bool(loc.is_empty)
+        session.commit()
+
+        return {
+            "success": True,
+            "is_empty": loc.is_empty,
+            "aisle": loc.aisle,
+        }
+    finally:
+        session.close()

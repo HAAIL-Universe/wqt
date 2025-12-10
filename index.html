@@ -696,10 +696,11 @@
     <div class="card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:12px;">
         <h2 style="margin:0; font-size:1.5rem;">Warehouse Map — Warehouse 3</h2>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:8px; align-items:center;" class="warehouse-map-actions">
           <button class="btn ghost" type="button" id="wmBackBtn" onclick="closeAisleDetail()" style="display:none;">← Back to Aisles</button>
+          <button class="btn" type="button" id="btnUpdateBays">Update bays</button>
           <button class="btn" type="button" id="wmUpdateBaseBtn" style="display:none;" onclick="toggleUpdateBasePanel()">Update base</button>
-          <button class="btn" type="button" onclick="saveWarehouseMap()">Save Map</button>
+          <button class="btn" type="button" id="btnSaveMap" onclick="saveWarehouseMap()">Save Map</button>
         </div>
       </div>
 
@@ -755,6 +756,19 @@
         <div id="wmAisleChips" class="wm-aisle-chips"></div>
         <div id="wmAisleList" class="wm-aisle-list">
           <div class="hint">Loading aisles…</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="updateBayModal" class="modal hidden">
+      <div class="modal-content slim">
+        <h3>Update bay location</h3>
+        <div class="wm-field">
+          <label for="updateBayCodeInput">Location code</label>
+          <input id="updateBayCodeInput" type="text" placeholder="e.g. 3A-03-1L" />
+        </div>
+        <div class="modal-actions" style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
+          <button id="btnUpdateBaySubmit" class="btn">Submit</button>
         </div>
       </div>
     </div>

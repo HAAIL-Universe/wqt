@@ -62,6 +62,7 @@ window.updateSummary = function() {
 // Also call on load
 document.addEventListener('DOMContentLoaded', refreshSummaryChips);
 document.addEventListener('DOMContentLoaded', initUpdateBasePanel);
+document.addEventListener('DOMContentLoaded', initUpdateBaysModal);
 
 // Hide the shared-dock panel and persist that choice
 function hideSharedDock(){
@@ -2339,6 +2340,72 @@ function initUpdateBasePanel() {
       if (ev.key === 'Enter') {
         ev.preventDefault();
         submitUpdateBase(true);
+      }
+    });
+  }
+}
+
+function initUpdateBaysModal() {
+  const btnUpdateBays = document.getElementById('btnUpdateBays');
+  const updateBayModal = document.getElementById('updateBayModal');
+  const updateBayCodeInput = document.getElementById('updateBayCodeInput');
+  const btnUpdateBaySubmit = document.getElementById('btnUpdateBaySubmit');
+
+  const showUpdateBayModal = () => {
+    if (!updateBayModal) return;
+    updateBayModal.classList.remove('hidden');
+    if (updateBayCodeInput) {
+      updateBayCodeInput.value = '';
+      updateBayCodeInput.focus();
+    }
+  };
+
+  const hideUpdateBayModal = () => {
+    if (!updateBayModal) return;
+    updateBayModal.classList.add('hidden');
+  };
+
+  const handleUpdateBaySubmit = async () => {
+    if (!updateBayCodeInput) return;
+    const rawCode = updateBayCodeInput.value.trim();
+    if (!rawCode) return;
+
+    const code = rawCode; // If DB stores prefixes, add normalization here.
+
+    try {
+      const res = await window?.WqtAPI?.toggleLocationEmpty?.(code);
+      if (res && res.success) {
+        const stateLabel = res.is_empty ? 'empty' : 'full';
+        showToast?.(`Marked ${rawCode} as ${stateLabel}`);
+        hideUpdateBayModal();
+        if (wmActiveAisle) {
+          selectAisle(wmActiveAisle);
+        }
+      } else {
+        showToast?.(res?.message || 'Location not found');
+      }
+    } catch (err) {
+      console.warn('[UpdateBays] Failed to toggle location', err);
+      showToast?.('Failed to update location');
+    }
+  };
+
+  if (btnUpdateBays && !btnUpdateBays.dataset.wired) {
+    btnUpdateBays.dataset.wired = '1';
+    btnUpdateBays.addEventListener('click', showUpdateBayModal);
+  }
+
+  if (btnUpdateBaySubmit && !btnUpdateBaySubmit.dataset.wired) {
+    btnUpdateBaySubmit.dataset.wired = '1';
+    btnUpdateBaySubmit.addEventListener('click', handleUpdateBaySubmit);
+  }
+
+  if (updateBayCodeInput && !updateBayCodeInput.dataset.wiredEnter) {
+    updateBayCodeInput.dataset.wiredEnter = '1';
+    updateBayCodeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleUpdateBaySubmit();
       }
     });
   }
