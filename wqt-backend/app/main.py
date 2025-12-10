@@ -40,6 +40,7 @@ app = FastAPI(title="WQT Backend v1")
 JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("AUTH_SECRET") or "dev-change-me"
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "720"))
+ALLOWED_ROLES = {"picker", "operative", "supervisor", "gm"}
 
 security = HTTPBearer(auto_error=False)
 
@@ -434,16 +435,22 @@ async def api_register(payload: AuthPayload) -> Dict[str, Any]:
     # Prefer provided full_name, else fall back to username
     full_name = (payload.full_name or "").strip() or clean_user
     # Normalise role, default to 'picker'
-    role = (payload.role or "picker").strip() or "picker"
+    role = (payload.role or "picker").strip().lower() or "picker"
+    if role not in ALLOWED_ROLES:
+        return {"success": False, "message": "Invalid role"}
 
-    created = create_user(
+    created, reason = create_user(
         username=clean_user,
         pin=payload.pin,
         display_name=full_name,
         role=role,
     )
     if not created:
-        return {"success": False, "message": "Username taken"}
+        if reason == "db_not_initialised":
+            raise HTTPException(status_code=500, detail="Database not initialised")
+        if reason == "username_exists":
+            return {"success": False, "message": "Username taken"}
+        return {"success": False, "message": "Failed to create user"}
 
     user = get_user(clean_user)
     if not user:

@@ -8,3 +8,9 @@
 - Requirements updated to include JWT + bcrypt libraries; persistent state logic keeps per-user caches while respecting authenticated identity.
 
 This entry starts the continuous, authoritative update record maintained by CodexMax; all future changes will append here.
+
+## 2025-12-10 — Auth user-creation hardening
+- Enforced fail-fast startup when `DATABASE_URL` is missing; `init_db` now raises with a clear `[AUTH_INIT_ERROR]` instead of silently skipping engine setup.
+- Refined `create_user` to return detailed outcomes (`db_not_initialised`, `username_exists`, `db_error`) and added robust commit rollback; `verify_user` logs when DB is uninitialised.
+- Registration now validates roles against a strict whitelist (`picker`, `operative`, `supervisor`, `gm`) and surfaces precise errors for conflicts and DB issues.
+- Maintained hashed-only PIN handling for new users; role spoofing and silent failures are blocked.

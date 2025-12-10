@@ -50,8 +50,10 @@ def init_db() -> None:
     """
     global engine, SessionLocal
     if not DATABASE_URL:
-        # In production, you might want to raise an error here
-        return
+        # Fail fast: running without a DB URL leaves the service half-initialised
+        msg = "DATABASE_URL is not set; backend cannot start"
+        print(f"[AUTH_INIT_ERROR] {msg}")
+        raise RuntimeError(msg)
     if engine is not None:
         return
     engine = create_engine(DATABASE_URL)
@@ -886,15 +888,23 @@ def create_user(
     pin: str,
     display_name: Optional[str] = None,
     role: str = "picker",
-) -> bool:
-    """Creates a new user with PIN, display_name and role."""
+) -> tuple[bool, str]:
+    """
+    Creates a new user with PIN, display_name and role.
+
+    Returns (success, code):
+      - (False, "db_not_initialised") if engine is missing
+      - (False, "username_exists") if username already present
+      - (False, "db_error") on commit failure
+      - (True, "created") on success
+    """
     if engine is None:
-        return False
+        return False, "db_not_initialised"
     session = get_session()
     try:
         existing = session.query(User).filter(User.username == username).first()
         if existing:
-            return False
+            return False, "username_exists"
 
         clean_display_name = (display_name or username).strip()
         clean_role = (role or "picker").strip().lower()
@@ -910,7 +920,10 @@ def create_user(
         )
         session.add(new_user)
         session.commit()
-        return True
+        return True, "created"
+    except Exception:
+        session.rollback()
+        return False, "db_error"
     finally:
         session.close()
 
@@ -918,6 +931,7 @@ def create_user(
 def verify_user(username: str, pin: str) -> bool:
     """Verifies a username and PIN."""
     if engine is None:
+        print("[AUTH_VERIFY_ERROR] DATABASE_URL/engine not initialised")
         return False
     session = get_session()
     try:
