@@ -26,7 +26,8 @@ engine = None
 SessionLocal: Optional[sessionmaker] = None
 
 # Password hashing (PINs are stored hashed)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Switched to pbkdf2_sha256 to avoid bcrypt backend issues in some environments.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
 def hash_pin_value(pin: str) -> str:
