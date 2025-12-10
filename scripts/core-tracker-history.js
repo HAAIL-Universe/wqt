@@ -96,8 +96,13 @@ function renderRoleChips() {
   const supervisorTabBtn = document.getElementById('tabSupervisorBtn');
   const warehouseToolsCard = document.getElementById('warehouseToolsCard');
 
-  // Primary role always "Picker" for now
-  if (primaryChip) primaryChip.textContent = "Role: Picker";
+  // Determine primary role from logged-in identity, default to picker
+  const identity = WqtAPI.getLoggedInUserIdentity?.();
+  const primaryRole = (identity && identity.role)
+    ? String(identity.role).toLowerCase()
+    : 'picker';
+  const primaryRoleLabel = primaryRole.charAt(0).toUpperCase() + primaryRole.slice(1);
+  if (primaryChip) primaryChip.textContent = `Role: ${primaryRoleLabel}`;
 
   const overlaySession = WqtAPI.loadOverlaySession?.();
   const overlay = (overlaySession && overlaySession.role)
@@ -120,9 +125,11 @@ function renderRoleChips() {
   
   const overlayRole = overlay?.role;
   const overlayAllowsWarehouseMap = overlayRole === 'operative' || overlayRole === 'supervisor';
+  const primaryAllowsWarehouseMap = primaryRole === 'operative' || primaryRole === 'supervisor';
+  const hasMapAccess = primaryAllowsWarehouseMap || overlayAllowsWarehouseMap;
   const isSupervisorPage = window.location.pathname.includes('super.html');
   if (warehouseToolsCard) {
-    warehouseToolsCard.style.display = (overlayAllowsWarehouseMap && !isSupervisorPage)
+    warehouseToolsCard.style.display = (hasMapAccess && !isSupervisorPage)
       ? 'block'
       : 'none';
   }
