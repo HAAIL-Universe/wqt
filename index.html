@@ -686,30 +686,11 @@
         <div id="wmRowStatus" class="hint" style="margin-top:6px;"></div>
       </div>
 
-      <!-- Aisle Configuration View -->
-      <div id="wmAisleConfig">
-        <div class="hint" style="margin-bottom:1rem;">
-          Define the bay range for each aisle in Warehouse 3. Enter the minimum and maximum bay numbers for each aisle (e.g., aisle A might have bays 1 to 18).
-        </div>
-        
-        <div id="wmAisleGrid" class="wm-aisle-grid">
-          <!-- Aisles will be rendered here by JavaScript -->
-        </div>
-      </div>
-
-      <!-- Aisle Detail View (hidden initially) -->
-      <div id="wmAisleDetail" style="display:none;">
-        <div style="margin-bottom:1rem;">
-          <h3 id="wmAisleTitle" style="margin:0 0 0.5rem 0; font-size:1.3rem; color:#22c55e;">AISLE A</h3>
-          <div class="hint" id="wmAisleRange">Bays 1–18</div>
-        </div>
-
-        <div class="hint" style="margin-bottom:1rem;">
-          Click any bay to toggle its status: <span style="color:#22c55e;">✓ Empty/Free</span> or <span style="color:#ef4444;">✗ Full/Blocked</span>
-        </div>
-
-        <div id="wmQuarters" class="wm-quarters">
-          <!-- Quarters will be rendered here by JavaScript -->
+      <div id="wmAisleBrowser">
+        <div class="hint" style="margin-bottom:10px;">Tap an aisle to view empty locations.</div>
+        <div id="wmAisleChips" class="wm-aisle-chips"></div>
+        <div id="wmAisleList" class="wm-aisle-list">
+          <div class="hint">Loading aisles…</div>
         </div>
       </div>
     </div>

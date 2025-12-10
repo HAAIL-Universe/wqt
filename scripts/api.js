@@ -422,6 +422,16 @@ const WqtAPI = {
         });
     },
 
+    async fetchWarehouseLocationSummary(warehouseId) {
+        const qs = `?warehouse=${encodeURIComponent(warehouseId || '')}`;
+        return fetchJSON(`/api/warehouse-locations/summary${qs}`, { method: 'GET' });
+    },
+
+    async fetchLocationsByAisle(warehouseId, aisle) {
+        const qs = `?warehouse=${encodeURIComponent(warehouseId || '')}&aisle=${encodeURIComponent(aisle || '')}&only_empty=true`;
+        return fetchJSON(`/api/warehouse-locations/by-aisle${qs}`, { method: 'GET' });
+    },
+
     // ------------------------------------------------------------------
     // NEW: Orders – record closed orders into backend summary table
     // ------------------------------------------------------------------

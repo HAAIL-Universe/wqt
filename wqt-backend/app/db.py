@@ -572,6 +572,95 @@ def bulk_upsert_locations(
     return inserted
 
 
+def get_warehouse_aisle_summary(warehouse: str) -> List[Dict[str, Any]]:
+    """Return aggregated counts per aisle for a warehouse.
+
+    For now all locations are treated as empty; occupied_count stays 0 so
+    callers can light up aisles that have capacity.
+    """
+    if engine is None:
+        return []
+
+    session = get_session()
+    try:
+        q = (
+            session.query(
+                WarehouseLocation.aisle,
+                func.count(WarehouseLocation.id).label("total"),
+            )
+            .filter(WarehouseLocation.warehouse == warehouse)
+            .group_by(WarehouseLocation.aisle)
+            .order_by(WarehouseLocation.aisle.asc())
+        )
+
+        aisles: List[Dict[str, Any]] = []
+        for row in q:
+            total = int(row.total or 0)
+            occupied = 0  # placeholder for future occupancy logic
+            aisles.append(
+                {
+                    "aisle": row.aisle,
+                    "total": total,
+                    "occupied": occupied,
+                    "empty": max(0, total - occupied),
+                }
+            )
+
+        return aisles
+    finally:
+        session.close()
+
+
+def get_locations_by_aisle(
+    warehouse: str,
+    aisle: str,
+    only_empty: bool = True,
+) -> List[Dict[str, Any]]:
+    """Return locations for an aisle, optionally filtering to empty ones.
+
+    Currently all rows are treated as empty; the only_empty flag is reserved
+    for future occupancy filtering.
+    """
+    if engine is None:
+        return []
+
+    session = get_session()
+    try:
+        q = (
+            session.query(WarehouseLocation)
+            .filter(WarehouseLocation.warehouse == warehouse)
+            .filter(WarehouseLocation.aisle == aisle)
+        )
+
+        if only_empty:
+            q = q.filter(WarehouseLocation.is_active == True)
+
+        q = q.order_by(
+            WarehouseLocation.bay.asc(),
+            WarehouseLocation.layer.asc(),
+            WarehouseLocation.spot.asc(),
+        )
+
+        results: List[Dict[str, Any]] = []
+        for loc in q:
+            results.append(
+                {
+                    "id": loc.id,
+                    "warehouse": loc.warehouse,
+                    "row_id": loc.row_id,
+                    "aisle": loc.aisle,
+                    "bay": loc.bay,
+                    "layer": loc.layer,
+                    "spot": loc.spot,
+                    "code": loc.code,
+                    "is_active": loc.is_active,
+                }
+            )
+        return results
+    finally:
+        session.close()
+
+
 # --- Shift helpers ---
 
 

@@ -33,6 +33,8 @@ from .db import (
     save_global_state,
     User,
     bulk_upsert_locations,
+    get_warehouse_aisle_summary,
+    get_locations_by_aisle,
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -602,6 +604,13 @@ class WarehouseLocationBulkPayload(BaseModel):
     locations: List[WarehouseLocationItem]
 
 
+class WarehouseAisleSummaryResponse(BaseModel):
+    aisle: str
+    total: int
+    occupied: int
+    empty: int
+
+
 @app.post("/api/orders/record")
 async def api_orders_record(
     payload: OrderRecordPayload,
@@ -742,3 +751,34 @@ async def api_warehouse_locations_bulk(
         raise HTTPException(status_code=500, detail="Failed to persist warehouse locations") from exc
 
     return {"success": True, "inserted": inserted}
+
+
+@app.get("/api/warehouse-locations/summary")
+async def api_warehouse_locations_summary(
+    warehouse: str = Query(..., min_length=1),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    aisles = get_warehouse_aisle_summary(warehouse.strip())
+    return {"success": True, "aisles": aisles}
+
+
+@app.get("/api/warehouse-locations/by-aisle")
+async def api_warehouse_locations_by_aisle(
+    warehouse: str = Query(..., min_length=1),
+    aisle: str = Query(..., min_length=1),
+    only_empty: bool = Query(True),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    locations = get_locations_by_aisle(
+        warehouse=warehouse.strip(),
+        aisle=aisle.strip(),
+        only_empty=only_empty,
+    )
+
+    return {"success": True, "locations": locations}

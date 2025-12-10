@@ -2075,6 +2075,8 @@ let warehouseMapData = {
 const WAREHOUSE_AISLES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'AGL'];
 const SPOT_LABELS = ['L', 'R', 'C'];
 const WAREHOUSE_LOCATION_QUEUE_PREFIX = 'wqt_wm_row_queue';
+let wmAisleSummary = [];
+let wmActiveAisle = null;
 
 function getActiveWarehouseId() {
   try {
@@ -2164,6 +2166,110 @@ function saveWarehouseMapData() {
     localStorage.setItem(key, JSON.stringify(warehouseMapData));
   } catch (e) {
     console.warn('[Warehouse Map] Failed to save map data', e);
+  }
+}
+
+function renderAisleChips() {
+  const chips = document.getElementById('wmAisleChips');
+  const list = document.getElementById('wmAisleList');
+  if (!chips || !list) return;
+
+  chips.innerHTML = '';
+
+  if (!wmAisleSummary.length) {
+    list.innerHTML = '<div class="hint">No aisles found for this warehouse.</div>';
+    return;
+  }
+
+  // Ensure active aisle is valid
+  const aisles = wmAisleSummary.map(a => a.aisle);
+  if (!wmActiveAisle || !aisles.includes(wmActiveAisle)) {
+    const firstWithSpace = wmAisleSummary.find(a => (a.empty || 0) > 0);
+    wmActiveAisle = firstWithSpace?.aisle || wmAisleSummary[0].aisle;
+  }
+
+  wmAisleSummary.forEach(item => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'wm-aisle-chip';
+    btn.textContent = item.aisle;
+    if ((item.empty || 0) === 0) {
+      btn.classList.add('empty-zero');
+      btn.disabled = true;
+    }
+    if (item.aisle === wmActiveAisle) {
+      btn.classList.add('active');
+    }
+    btn.onclick = () => selectAisle(item.aisle);
+    chips.appendChild(btn);
+  });
+}
+
+function renderAisleList(locations) {
+  const list = document.getElementById('wmAisleList');
+  if (!list) return;
+
+  if (!locations || !locations.length) {
+    list.innerHTML = '<div class="hint">No empty locations for this aisle.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  locations.forEach(loc => {
+    const row = document.createElement('div');
+    row.className = 'wm-aisle-item';
+
+    const code = document.createElement('div');
+    code.className = 'wm-aisle-code';
+    code.textContent = loc.code;
+
+    const meta = document.createElement('div');
+    meta.className = 'wm-aisle-meta';
+    meta.textContent = `Bay ${loc.bay} • Layer ${loc.layer} • Spot ${loc.spot}`;
+
+    row.appendChild(code);
+    row.appendChild(meta);
+    list.appendChild(row);
+  });
+}
+
+async function selectAisle(aisle) {
+  wmActiveAisle = aisle;
+  renderAisleChips();
+
+  const list = document.getElementById('wmAisleList');
+  if (list) list.innerHTML = '<div class="hint">Loading locations…</div>';
+
+  const warehouseId = getActiveWarehouseId();
+  try {
+    const fetchFn = window?.WqtAPI?.fetchLocationsByAisle;
+    if (typeof fetchFn !== 'function') throw new Error('API missing');
+    const res = await fetchFn(warehouseId, aisle);
+    renderAisleList(res?.locations || []);
+  } catch (err) {
+    console.warn('[Warehouse Map] Failed to load aisle locations', err);
+    if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';
+  }
+}
+
+async function refreshWarehouseAisleBrowser() {
+  const chips = document.getElementById('wmAisleChips');
+  const list = document.getElementById('wmAisleList');
+  if (chips) chips.innerHTML = '';
+  if (list) list.innerHTML = '<div class="hint">Loading aisles…</div>';
+
+  const warehouseId = getActiveWarehouseId();
+  try {
+    const fetchFn = window?.WqtAPI?.fetchWarehouseLocationSummary;
+    if (typeof fetchFn !== 'function') throw new Error('API missing');
+
+    const res = await fetchFn(warehouseId);
+    wmAisleSummary = Array.isArray(res?.aisles) ? res.aisles : [];
+    renderAisleChips();
+    if (wmActiveAisle) selectAisle(wmActiveAisle);
+  } catch (err) {
+    console.warn('[Warehouse Map] Failed to load aisle summary', err);
+    if (list) list.innerHTML = '<div class="hint">Failed to load aisles.</div>';
   }
 }
 
@@ -2565,7 +2671,7 @@ function showTab(which){
     // Load and render warehouse map
     initWarehouseRowForm();
     loadWarehouseMap();
-    renderAisleConfig();
+    refreshWarehouseAisleBrowser();
     return;
   }
 
