@@ -2729,6 +2729,29 @@ td.small { font-size:12px; color:#9fb3c8; }
   color: #cbd5e1;
 }
 
+.wm-update-base {
+  margin: 12px 0;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.wm-update-base-inner {
+  display: grid;
+  gap: 10px;
+}
+
+.wm-update-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wm-update-base input {
+  width: 100%;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 768px) {
   .wm-aisle-grid {

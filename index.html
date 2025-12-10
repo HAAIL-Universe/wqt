@@ -698,6 +698,7 @@
         <h2 style="margin:0; font-size:1.5rem;">Warehouse Map — Warehouse 3</h2>
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="btn ghost" type="button" id="wmBackBtn" onclick="closeAisleDetail()" style="display:none;">← Back to Aisles</button>
+          <button class="btn" type="button" id="wmUpdateBaseBtn" style="display:none;" onclick="toggleUpdateBasePanel()">Update base</button>
           <button class="btn" type="button" onclick="saveWarehouseMap()">Save Map</button>
         </div>
       </div>
@@ -732,6 +733,21 @@
           </div>
         </form>
         <div id="wmRowStatus" class="hint" style="margin-top:6px;"></div>
+      </div>
+
+      <div id="wmUpdateBasePanel" class="wm-update-base" style="display:none;">
+        <div class="wm-update-base-inner">
+          <div class="wm-field">
+            <label for="wmUpdateBaseInput">Location code</label>
+            <input id="wmUpdateBaseInput" type="text" placeholder="e.g. 3A-03-1L" autocomplete="off">
+            <div class="hint">Format: 3A-03-1L</div>
+          </div>
+          <div class="wm-update-actions">
+            <button class="btn ok" type="button" onclick="submitUpdateBase(true)">Mark empty</button>
+            <button class="btn ghost" type="button" onclick="submitUpdateBase(false)">Mark full</button>
+          </div>
+          <div id="wmUpdateBaseStatus" class="hint" style="margin-top:6px;"></div>
+        </div>
       </div>
 
       <div id="wmAisleBrowser">

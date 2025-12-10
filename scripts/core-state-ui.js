@@ -61,6 +61,7 @@ window.updateSummary = function() {
 
 // Also call on load
 document.addEventListener('DOMContentLoaded', refreshSummaryChips);
+document.addEventListener('DOMContentLoaded', initUpdateBasePanel);
 
 // Hide the shared-dock panel and persist that choice
 function hideSharedDock(){
@@ -2241,6 +2242,7 @@ function showRowGeneratorPanel(){
   if (typeof panel.classList?.remove === 'function') panel.classList.remove('hidden');
   // Optional: bring into view without forcing jump if already visible
   try { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+  toggleUpdateBaseControls();
 }
 
 function ensureRowGeneratorVisibility(){
@@ -2251,6 +2253,103 @@ function ensureRowGeneratorVisibility(){
   } else {
     panel.style.display = 'none';
   }
+  toggleUpdateBaseControls();
+}
+
+function normalizeLocationCodeInput(raw) {
+  const warehouseId = (getActiveWarehouseId() || '').trim();
+  const widUpper = warehouseId.toUpperCase();
+  if (!raw) return '';
+  let txt = String(raw).trim().replace(/[—–]/g, '-');
+  txt = txt.replace(/^MAP[- ]?WAREHOUSE\d*/i, '');
+  txt = txt.replace(/^MAP[- ]?WAREHOUSE/i, '');
+  txt = txt.trim();
+  if (!txt) return '';
+  if (widUpper && !txt.toUpperCase().startsWith(widUpper)) {
+    txt = `${widUpper}${txt.startsWith('-') ? '' : ''}${txt}`;
+  }
+  return txt.toUpperCase();
+}
+
+function deriveAisleFromCode(code) {
+  if (!code) return null;
+  const warehouseId = (getActiveWarehouseId() || '').trim().toUpperCase();
+  let rest = code.toUpperCase();
+  if (warehouseId && rest.startsWith(warehouseId)) {
+    rest = rest.slice(warehouseId.length);
+  }
+  rest = rest.replace(/^[-]+/, '');
+  const m = rest.match(/^([A-Z]+)/);
+  return m ? m[1] : null;
+}
+
+function toggleUpdateBasePanel(forceState) {
+  const panel = document.getElementById('wmUpdateBasePanel');
+  const input = document.getElementById('wmUpdateBaseInput');
+  const btn = document.getElementById('wmUpdateBaseBtn');
+  if (!panel || !btn) return;
+  const shouldShow = typeof forceState === 'boolean'
+    ? forceState
+    : (panel.style.display === 'none' || panel.style.display === '');
+  panel.style.display = shouldShow ? '' : 'none';
+  if (shouldShow && input) {
+    input.focus();
+    input.select();
+  }
+}
+
+async function submitUpdateBase(markEmpty = true) {
+  const input = document.getElementById('wmUpdateBaseInput');
+  const status = document.getElementById('wmUpdateBaseStatus');
+  const raw = (input?.value || '').trim();
+  const code = normalizeLocationCodeInput(raw);
+
+  if (!code) {
+    if (status) status.textContent = 'Enter a location code first';
+    return;
+  }
+
+  if (status) status.textContent = 'Updating…';
+
+  try {
+    const setter = window?.WqtAPI?.setWarehouseLocationEmpty;
+    if (typeof setter !== 'function') throw new Error('API missing');
+    await setter({ code, is_empty: !!markEmpty });
+    const msg = markEmpty ? `Marked ${code} as empty` : `Marked ${code} as full`;
+    if (status) status.textContent = msg;
+    showToast?.(msg);
+    if (input) input.focus();
+
+    const aisle = deriveAisleFromCode(code);
+    if (aisle && wmActiveAisle === aisle) {
+      selectAisle(aisle);
+    }
+  } catch (err) {
+    const detail = err?.detail || err?.message || 'Failed to update location';
+    if (status) status.textContent = detail;
+    console.warn('[Warehouse Map] Update base failed', err);
+  }
+}
+
+function initUpdateBasePanel() {
+  const input = document.getElementById('wmUpdateBaseInput');
+  if (input && !input.dataset.wired) {
+    input.dataset.wired = '1';
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        submitUpdateBase(true);
+      }
+    });
+  }
+}
+
+function toggleUpdateBaseControls() {
+  const btn = document.getElementById('wmUpdateBaseBtn');
+  const panel = document.getElementById('wmUpdateBasePanel');
+  const visible = !!window.rowGeneratorUnlocked;
+  if (btn) btn.style.display = visible ? '' : 'none';
+  if (!visible && panel) panel.style.display = 'none';
 }
 
 // Load warehouse map from localStorage
