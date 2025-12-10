@@ -2355,21 +2355,59 @@ function renderAisleList(locations) {
   }
 
   list.innerHTML = '';
-  locations.forEach(loc => {
-    const row = document.createElement('div');
-    row.className = 'wm-aisle-item';
+  const warehouseId = getActiveWarehouseId();
+  const spotRank = (spot) => {
+    const idx = SPOT_LABELS.indexOf(String(spot));
+    return idx >= 0 ? idx : 99;
+  };
 
-    const code = document.createElement('div');
-    code.className = 'wm-aisle-code';
-    code.textContent = loc.code;
+  const sorted = [...locations].sort((a, b) => {
+    const bayA = Number(a?.bay) || 0;
+    const bayB = Number(b?.bay) || 0;
+    if (bayA !== bayB) return bayA - bayB;
+    const layerA = Number(a?.layer) || 0;
+    const layerB = Number(b?.layer) || 0;
+    if (layerA !== layerB) return layerA - layerB;
+    return spotRank(a?.spot) - spotRank(b?.spot);
+  });
 
-    const meta = document.createElement('div');
-    meta.className = 'wm-aisle-meta';
-    meta.textContent = `Bay ${loc.bay} • Layer ${loc.layer} • Spot ${loc.spot}`;
+  const grouped = new Map();
+  sorted.forEach(loc => {
+    const bayKey = Number(loc?.bay) || loc?.bay || '0';
+    if (!grouped.has(bayKey)) grouped.set(bayKey, []);
+    grouped.get(bayKey).push(loc);
+  });
 
-    row.appendChild(code);
-    row.appendChild(meta);
-    list.appendChild(row);
+  grouped.forEach((bayLocs, bay) => {
+    const section = document.createElement('div');
+    section.className = 'wm-bay-section';
+
+    const heading = document.createElement('div');
+    heading.className = 'wm-bay-heading';
+    heading.textContent = `Bay ${bay}`;
+    section.appendChild(heading);
+
+    bayLocs.forEach(loc => {
+      const row = document.createElement('div');
+      row.className = 'wm-aisle-item';
+
+      const paddedBay = String(loc?.bay ?? '').padStart(2, '0');
+      const displayCode = `${warehouseId}${loc.aisle}-${paddedBay}-${loc.layer}${loc.spot}`;
+
+      const code = document.createElement('div');
+      code.className = 'wm-aisle-code';
+      code.textContent = displayCode;
+
+      const meta = document.createElement('div');
+      meta.className = 'wm-aisle-meta';
+      meta.textContent = `Bay ${loc.bay} • Layer ${loc.layer} • Spot ${loc.spot}`;
+
+      row.appendChild(code);
+      row.appendChild(meta);
+      section.appendChild(row);
+    });
+
+    list.appendChild(section);
   });
 }
 
@@ -2597,7 +2635,7 @@ function handleWarehouseRowSubmit() {
       const spotLayout = threeSpotSet.has(bay) ? SPOT_LABELS : defaultLayout;
       for (let layer = 1; layer <= layerCount; layer++) {
         spotLayout.forEach(spot => {
-          const code = `${warehouseId}${aisle}-${String(bay).padStart(3, '0')}-${layer}${spot}`;
+          const code = `${warehouseId}${aisle}-${String(bay).padStart(2, '0')}-${layer}${spot}`;
           locations.push({ aisle, bay, layer, spot, code });
         });
       }
