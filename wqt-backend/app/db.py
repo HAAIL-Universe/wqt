@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
+from passlib.context import CryptContext
+
 from sqlalchemy import (
     create_engine,
     Column,
@@ -22,6 +24,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 Base = declarative_base()
 engine = None
 SessionLocal: Optional[sessionmaker] = None
+
+# Password hashing (PINs are stored hashed)
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_pin_value(pin: str) -> str:
+    return pwd_context.hash(pin)
+
+
+def verify_pin_value(pin: str, hashed: str) -> bool:
+    try:
+        return pwd_context.verify(pin, hashed)
+    except Exception:
+        return False
 
 
 def init_db() -> None:
@@ -47,6 +63,7 @@ def init_db() -> None:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS locations INTEGER DEFAULT 0;"))
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_rate_uh FLOAT;"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_pin TEXT;"))
     except Exception:
         # If ALTER fails (e.g., non-Postgres or permission issues), ignore —
         # admins can run the migration manually in the DB.
@@ -202,7 +219,8 @@ class User(Base):
     __tablename__ = "users"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(Text, unique=True, index=True, nullable=False)
-    pin = Column(Text, nullable=False)  # Plain text 4/5-digit PIN for simplicity
+    pin = Column(Text, nullable=False)  # legacy column; now stores hashed value
+    hashed_pin = Column(Text, nullable=True)  # canonical hashed PIN
     display_name = Column(Text, nullable=True)
     role = Column(Text, nullable=False, default="picker")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -484,14 +502,15 @@ def end_shift(
         session.close()
 
 
-def get_recent_shifts(limit: int = 50) -> List[Dict[str, Any]]:
+def get_recent_shifts(limit: int = 50, operator_id: Optional[str] = None) -> List[Dict[str, Any]]:
     if engine is None:
         return []
     session = get_session()
     try:
-        q = session.query(ShiftSession).order_by(ShiftSession.started_at.desc()).limit(
-            limit
-        )
+        q = session.query(ShiftSession)
+        if operator_id:
+            q = q.filter(ShiftSession.operator_id == operator_id)
+        q = q.order_by(ShiftSession.started_at.desc()).limit(limit)
         return [
             {
                 "id": s.id,
@@ -880,9 +899,12 @@ def create_user(
         clean_display_name = (display_name or username).strip()
         clean_role = (role or "picker").strip().lower()
 
+        hashed = hash_pin_value(pin)
+
         new_user = User(
             username=username,
-            pin=pin,
+            pin=hashed,          # store hashed even in legacy column
+            hashed_pin=hashed,
             display_name=clean_display_name,
             role=clean_role,
         )
@@ -900,8 +922,24 @@ def verify_user(username: str, pin: str) -> bool:
     session = get_session()
     try:
         user = session.query(User).filter(User.username == username).first()
-        if user and user.pin == pin:
+        if not user:
+            return False
+
+        # Prefer hashed PIN verification
+        if user.hashed_pin and verify_pin_value(pin, user.hashed_pin):
             return True
+
+        # Legacy fallback: plain-text pin stored in `pin` column
+        if user.pin and user.pin == pin:
+            try:
+                new_hash = hash_pin_value(pin)
+                user.hashed_pin = new_hash
+                user.pin = new_hash  # scrub legacy column by replacing with hashed value
+                session.commit()
+            except Exception:
+                session.rollback()
+            return True
+
         return False
     finally:
         session.close()
@@ -914,5 +952,16 @@ def get_user(username: str) -> Optional[User]:
     session = get_session()
     try:
         return session.query(User).filter(User.username == username).first()
+    finally:
+        session.close()
+
+
+def get_user_by_id(user_id: int) -> Optional[User]:
+    """Fetches a user record by numeric ID."""
+    if engine is None:
+        return None
+    session = get_session()
+    try:
+        return session.get(User, user_id)
     finally:
         session.close()

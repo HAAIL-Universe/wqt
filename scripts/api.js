@@ -124,6 +124,7 @@ function getLoggedInUserIdentity() {
                         userId: obj.userId,
                         displayName: obj.displayName || obj.userId,
                         role: obj.role || null,
+                        token: obj.token || null,
                     };
                 }
             } catch {}
@@ -132,9 +133,21 @@ function getLoggedInUserIdentity() {
         const id = getLoggedInUser();
         if (!id) return null;
 
-        return { userId: id, displayName: id, role: null };
+        return { userId: id, displayName: id, role: null, token: null };
     } catch (e) {
         console.warn('[WQT API] getLoggedInUserIdentity failed:', e);
+        return null;
+    }
+}
+
+function getAuthToken() {
+    try {
+        const raw = localStorage.getItem('WQT_CURRENT_USER');
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        return obj?.token || null;
+    } catch (e) {
+        console.warn('[WQT API] getAuthToken failed:', e);
         return null;
     }
 }
@@ -142,9 +155,23 @@ function getLoggedInUserIdentity() {
 // Tiny helper: fetch JSON from backend with basic error handling.
 async function fetchJSON(path, options = {}) {
     const url = `${API_BASE}${path}`;
+
+    // Inject bearer token for authenticated calls
+    const token = getAuthToken?.();
+    const authHeaders = {};
+    if (token) {
+        authHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
+    const mergedHeaders = {
+        ...(options.headers || {}),
+        ...authHeaders,
+    };
+
     const res = await fetch(url, {
         credentials: 'omit',
         ...options,
+        headers: mergedHeaders,
     });
 
     if (!res.ok) {
@@ -262,16 +289,17 @@ const WqtAPI = {
         // 1) Try backend - CRITICAL: only use user_id, never device_id for history queries
         // This ensures strict per-user data isolation even on shared devices
         try {
-            const userId = getLoggedInUser();
+            const identity = getLoggedInUserIdentity();
+            const userId = identity?.userId;
+            const deviceId = getDeviceId();
 
-            if (!userId) {
-                console.warn('[WQT API] No user_id found - cannot load backend state');
+            if (!identity || !identity.token) {
+                console.warn('[WQT API] No auth token found - cannot load backend state');
                 throw new Error('No authenticated user');
             }
 
-            // Only filter by user_id - device_id should NOT affect history queries
-            const qs = `?user-id=${encodeURIComponent(userId)}`;
-            console.log(`[WQT API] Loading state for user: ${userId}`);
+            const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+            console.log(`[HISTORY_REQUEST] using current authenticated user id ${userId || 'unknown'}`);
 
             remoteMain = await fetchJSON(`/api/state${qs}`);
             console.log(`[WQT API] Backend returned ${remoteMain?.history?.length || 0} history records for user ${userId}`);
@@ -362,7 +390,6 @@ const WqtAPI = {
 
             // Build query string for POST just like GET
             let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
-            if (userId) qs += `${qs ? '&' : '?'}user-id=${encodeURIComponent(userId)}`;
 
             await fetchJSON(`/api/state${qs}`, {
                 method: 'POST',
@@ -442,6 +469,7 @@ const WqtAPI = {
                     userId: res.username,
                     displayName,
                     role,
+                    token: res.token,
                 })
             );
 
@@ -480,6 +508,7 @@ const WqtAPI = {
                     userId: res.username,
                     displayName,
                     role,
+                    token: res.token,
                 })
             );
 
@@ -698,5 +727,6 @@ if (typeof window !== 'undefined') {
     window.WqtAPI.getLoggedInUser = getLoggedInUser;           // Expose helper for use in bootstrap.js
     window.WqtAPI.getDeviceId = getDeviceId;                   // Expose helper for use in bootstrap.js
     window.WqtAPI.getLoggedInUserIdentity = getLoggedInUserIdentity;
+    window.WqtAPI.getAuthToken = getAuthToken;
     window.WqtAPI.uuidv4 = uuidv4;                             // Expose UUID generator
 }

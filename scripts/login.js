@@ -28,6 +28,14 @@
     localStorage.removeItem(CURRENT_USER_KEY);
   }
 
+  function clearLegacyAuthKeys() {
+    try {
+      localStorage.removeItem('wqt_operator_id');
+      localStorage.removeItem('wqt_username');
+      localStorage.removeItem('wqt_overlay_session');
+    } catch (_) {}
+  }
+
   function ensureDeviceId() {
     let id = localStorage.getItem(DEVICE_ID_KEY);
     if (!id) {
@@ -80,6 +88,10 @@
       throw new Error(data.message || 'Invalid code');
     }
 
+    if (!data.token) {
+      throw new Error('Login failed: missing auth token');
+    }
+
     // /auth/login_pin returns: { success, user_id, display_name, role, token }
     const userId = data.user_id || data.username || pin;
 
@@ -90,11 +102,15 @@
       console.log('[Login] Previous user data will remain isolated in per-user localStorage keys');
     }
 
+    // Ensure any previous identity on this device is cleared before writing new credentials
+    clearLegacyAuthKeys();
+    clearCurrentUser();
+
     const userPayload = {
       userId: userId,
       displayName: data.display_name || userId,
       role: data.role || 'picker',
-      token: data.token || null,
+      token: data.token,
       lastLoginAt: new Date().toISOString(),
       deviceId: deviceId  // Track which device this login came from
     };
@@ -107,6 +123,7 @@
     localStorage.setItem('wqt_username', userId);
 
     console.log(`[Login] ✓ User ${userId} logged in successfully on device ${deviceId.slice(0, 8)}`);
+    console.log(`[AUTH_DEBUG] logged in as ${userPayload.displayName} (${userPayload.userId}) with token present`);
 
     return userPayload;
   }
@@ -153,6 +170,10 @@
       console.log(`[Register] ✓ New user ${userId} created - fresh account with zero history`);
     }
 
+    // Ensure any previous identity on this device is cleared before writing new credentials
+    clearLegacyAuthKeys();
+    clearCurrentUser();
+
     const userPayload = {
       userId: userId,
       displayName: data.display_name || userId,
@@ -163,10 +184,16 @@
       isNewAccount: true  // Flag to indicate this is a fresh registration
     };
 
+    if (!userPayload.token) {
+      console.warn('[Register] Backend did not return token for new user');
+    }
+
     saveCurrentUser(userPayload);
     // Mirror legacy keys for consistency
     localStorage.setItem('wqt_operator_id', userId);
     localStorage.setItem('wqt_username', userId);
+
+    console.log(`[AUTH_DEBUG] registered and logged in as ${userPayload.displayName} (${userPayload.userId}) with token present=${!!userPayload.token}`);
 
     return userPayload;
   }
