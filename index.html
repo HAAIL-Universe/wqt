@@ -230,6 +230,40 @@
     </div>
   </div>
 
+  <!-- Codes Helper Modal (local-only, lightweight CRUD) -->
+  <div id="codesHelperModal" class="modal" style="display:none;">
+    <div class="box" style="max-width:520px;">
+      <div class="hdr">
+        <h3>Codes helper</h3>
+        <button class="btn ghost slim" type="button" onclick="closeCodesHelperModal()">✖</button>
+      </div>
+
+      <div class="fld">
+        <div class="hint">Store quick reference codes locally (per user, device-only).</div>
+      </div>
+
+      <div class="fld">
+        <div class="row" style="gap:8px; flex-wrap:wrap; align-items:flex-end;">
+          <div class="col" style="flex:1; min-width:160px;">
+            <label>Code / label</label>
+            <input id="codesHelperCode" type="text" placeholder="e.g. BAY-17" autocomplete="off">
+          </div>
+          <div class="col" style="flex:2; min-width:200px;">
+            <label>Note (optional)</label>
+            <input id="codesHelperNote" type="text" placeholder="What this code is for">
+          </div>
+          <button class="btn ok" type="button" onclick="addCodesHelperEntry()">Add</button>
+        </div>
+      </div>
+
+      <div class="fld">
+        <div id="codesHelperList" class="codes-helper-list"></div>
+      </div>
+
+      <div class="hint" style="margin-top:6px;">List is saved in localStorage for this user only.</div>
+    </div>
+  </div>
+
   <!-- Customer Selector Modal -->
   <div id="customerSelectorModal" class="modal" style="display:none;">
     <div class="box">
@@ -278,9 +312,23 @@
         <div style="min-width:200px;">
           <div class="hint" style="margin:0;">Operative tools</div>
           <h3 class="card-h" style="margin:2px 0 6px;">Warehouse tools</h3>
-          <div class="hint" style="margin:0;">Open the Warehouse Map without starting a shift.</div>
+          <div class="hint" style="margin:0;">Open the Warehouse Map, stock pad, and quick codes without starting a shift.</div>
         </div>
         <div class="row" style="gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+          <button
+            class="btn"
+            type="button"
+            style="min-width:180px;"
+            onclick="openStockAuditModal()">
+            Stock discrepancy pad
+          </button>
+          <button
+            class="btn"
+            type="button"
+            style="min-width:160px;"
+            onclick="openCodesHelperModal()">
+            Codes helper
+          </button>
           <button
             id="warehouseMapHeaderBtn"
             class="btn ok"
@@ -654,7 +702,7 @@
         </div>
       </div>
 
-      <div class="wm-row-tools">
+      <div id="rowGeneratorPanel" class="wm-row-tools" style="display:none;">
         <div class="hint" style="margin-bottom:8px;">Generate full pallet locations for a row.</div>
         <form id="wmRowForm" class="wm-row-form">
           <div class="wm-field">

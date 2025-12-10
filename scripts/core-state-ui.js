@@ -8,6 +8,7 @@ let etaSmooth = [];            // rolling window of recent order rates
 let lastETAmin = null;         // last computed (smoothed) ETA in minutes
 let lastRenderedETAmin = null; // last value we actually showed (for 1m threshold)
 let stockAuditRows = [];   // Ephemeral rows for Stock Audit pad (not persisted)
+let codesHelperEntries = []; // Local-only codes helper entries
 
 // Reset predictive ETA smoothing buffer
 function resetEtaSmoother(){
@@ -340,6 +341,112 @@ function showStockAuditNote(idx){
     if (e.target?.id === 'stockAuditModal') closeStockAuditModal();
   });
 })();
+
+// ── Codes Helper (local, per-user) ───────────────────────────────────────────
+function codesHelperKey(){
+  try {
+    const userId = window?.WQT_CURRENT_USER?.userId;
+    return userId ? `${KEY_CODES_HELPER}__${userId}` : KEY_CODES_HELPER;
+  } catch (_) {
+    return KEY_CODES_HELPER;
+  }
+}
+
+function loadCodesHelper(){
+  try {
+    const raw = localStorage.getItem(codesHelperKey());
+    const parsed = raw ? JSON.parse(raw) : [];
+    codesHelperEntries = Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    console.warn('[CodesHelper] Failed to load, resetting', err);
+    codesHelperEntries = [];
+  }
+}
+
+function saveCodesHelper(){
+  try {
+    localStorage.setItem(codesHelperKey(), JSON.stringify(codesHelperEntries || []));
+  } catch (err) {
+    console.warn('[CodesHelper] Failed to save', err);
+  }
+}
+
+function openCodesHelperModal(){
+  loadCodesHelper();
+  renderCodesHelperList();
+  const m = document.getElementById('codesHelperModal');
+  if (m) {
+    m.style.display = 'flex';
+    setTimeout(() => document.getElementById('codesHelperCode')?.focus(), 0);
+  }
+}
+
+function closeCodesHelperModal(){
+  const m = document.getElementById('codesHelperModal');
+  if (m) m.style.display = 'none';
+}
+
+function addCodesHelperEntry(){
+  const codeEl = document.getElementById('codesHelperCode');
+  const noteEl = document.getElementById('codesHelperNote');
+  if (!codeEl) return;
+
+  const code = (codeEl.value || '').trim();
+  const note = (noteEl?.value || '').trim();
+  if (!code) {
+    showToast?.('Add a code first');
+    codeEl.focus();
+    return;
+  }
+
+  codesHelperEntries = Array.isArray(codesHelperEntries) ? codesHelperEntries : [];
+  codesHelperEntries.unshift({
+    code: code.toUpperCase(),
+    note
+  });
+
+  saveCodesHelper();
+  renderCodesHelperList();
+
+  codeEl.value = '';
+  if (noteEl) noteEl.value = '';
+  codeEl.focus();
+}
+
+function removeCodesHelperEntry(idx){
+  if (!Array.isArray(codesHelperEntries)) return;
+  codesHelperEntries.splice(idx, 1);
+  saveCodesHelper();
+  renderCodesHelperList();
+}
+
+function renderCodesHelperList(){
+  const host = document.getElementById('codesHelperList');
+  if (!host) return;
+
+  host.innerHTML = '';
+  const list = Array.isArray(codesHelperEntries) ? codesHelperEntries : [];
+  if (!list.length){
+    const empty = document.createElement('div');
+    empty.className = 'codes-helper-empty hint';
+    empty.textContent = 'No saved codes yet.';
+    host.appendChild(empty);
+    return;
+  }
+
+  list.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'codes-helper-row';
+    row.innerHTML = `
+      <div class="codes-helper-meta">
+        <div class="codes-helper-code">${(item?.code || '').toString()}</div>
+        <div class="codes-helper-note">${(item?.note || '—')}</div>
+      </div>
+      <button class="btn ghost slim" type="button" onclick="removeCodesHelperEntry(${idx})">✖</button>
+    `;
+    host.appendChild(row);
+  });
+}
 
 // Entry point when starting a break/lunch via Operative modal
 function opOpenBreak(kind){
@@ -1046,6 +1153,9 @@ function restoreBreakDraftIfAny(){
 // Defer so SharedPad helpers (showSharedPad/hideSharedPad) are defined first
 setTimeout(earlyRestore, 0);
 
+// Ensure gated panels match unlock state on load
+document.addEventListener('DOMContentLoaded', ensureRowGeneratorVisibility);
+
 // 3) Keep persisting while a break is active
 setInterval(()=>{
   if (breakDraft) localStorage.setItem('breakDraft', JSON.stringify(breakDraft));
@@ -1125,10 +1235,12 @@ function clearHistory(){
 const KEY = 'wqt_v2722_data';
 const KEY_CODES = 'wqt_codes';
 const KEY_LEARN = 'wqt_learn_ul';
+const KEY_CODES_HELPER = 'wqt_codes_helper';
 const PRO_UNLOCK_CODE = '0000';
 const OPER_UNLOCK_CODE = '2222';
 const ADMIN_UNLOCK_CODE = '1234';
 const AUDIT_UNLOCK_CODE = '5555';
+const MAP_ADMIN_CODE = '1111';
 
 let proUnlocked  = false;  // Gate: Export/Import/Manage Customers
 
@@ -2032,6 +2144,15 @@ function updCalcGate() {
     return;
   }
 
+  // ---- Warehouse map generator unlock -------------------------
+  if (digits.endsWith(MAP_ADMIN_CODE) && digits.length >= MAP_ADMIN_CODE.length) {
+    inp.value = '';
+    window.rowGeneratorUnlocked = true;
+    showToast?.('Warehouse map generator unlocked');
+    showRowGeneratorPanel();
+    return;
+  }
+
   // ---- Pro tools unlock ------------------------------------
   if (digits.endsWith(PRO_UNLOCK_CODE) && digits.length >= PRO_UNLOCK_CODE.length) {
     inp.value = '';
@@ -2111,6 +2232,25 @@ function clearRowPayload(key) {
   try {
     localStorage.removeItem(key);
   } catch (_) {}
+}
+
+function showRowGeneratorPanel(){
+  const panel = document.getElementById('rowGeneratorPanel');
+  if (!panel) return;
+  panel.style.display = '';
+  if (typeof panel.classList?.remove === 'function') panel.classList.remove('hidden');
+  // Optional: bring into view without forcing jump if already visible
+  try { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+}
+
+function ensureRowGeneratorVisibility(){
+  const panel = document.getElementById('rowGeneratorPanel');
+  if (!panel) return;
+  if (window.rowGeneratorUnlocked) {
+    showRowGeneratorPanel();
+  } else {
+    panel.style.display = 'none';
+  }
 }
 
 // Load warehouse map from localStorage
