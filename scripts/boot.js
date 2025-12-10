@@ -311,6 +311,9 @@ document.addEventListener('DOMContentLoaded', function () {
       updateCloseEarlyVisibility();
       updateElapsedChip();
       if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync with state
+      
+      // Render role chips to show/hide supervisor and warehouse map tabs
+      if (typeof renderRoleChips === 'function') renderRoleChips();
 
       // Wire Shared Pick bottom bar (padUnits / padSubmit) once DOM is ready
       initSharedPad?.();

@@ -243,7 +243,7 @@ function addStockAuditRow(){
   const noteEl = document.getElementById('saNote');           // NEW
   if (!locEl || !expEl || !actEl) return;
 
-  const location = (locEl.value || '').trim();
+  const location = (locEl.value || '').trim().toUpperCase();  // Convert to uppercase
   const expectedStr = (expEl.value || '').trim();
   const actualStr   = (actEl.value || '').trim();
   const note        = (noteEl?.value || '').trim();           // NEW
@@ -2051,23 +2051,274 @@ function updCalcGate() {
 
 // ====== Tabs ======
 
-// Generic tab switcher for Calc / Tracker / History / Supervisor
+// Warehouse Map global state
+let warehouseMapData = {
+  aisles: {},  // e.g., { A: { minBay: 1, maxBay: 18, bays: { '1': 'empty', '2': 'full', ... } } }
+};
+const WAREHOUSE_AISLES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'AGL'];
+
+// Load warehouse map from localStorage
+function loadWarehouseMap() {
+  try {
+    const userId = window.WQT_CURRENT_USER?.userId || 'guest';
+    const key = `wqt_warehouse_map_${userId}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      warehouseMapData = JSON.parse(stored);
+    } else {
+      // Initialize empty structure
+      warehouseMapData = { aisles: {} };
+    }
+  } catch (e) {
+    console.warn('[Warehouse Map] Failed to load map data', e);
+    warehouseMapData = { aisles: {} };
+  }
+}
+
+// Save warehouse map to localStorage
+function saveWarehouseMapData() {
+  try {
+    const userId = window.WQT_CURRENT_USER?.userId || 'guest';
+    const key = `wqt_warehouse_map_${userId}`;
+    localStorage.setItem(key, JSON.stringify(warehouseMapData));
+  } catch (e) {
+    console.warn('[Warehouse Map] Failed to save map data', e);
+  }
+}
+
+// Render aisle configuration grid
+function renderAisleConfig() {
+  const grid = document.getElementById('wmAisleGrid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+
+  WAREHOUSE_AISLES.forEach(aisleName => {
+    const aisleData = warehouseMapData.aisles[aisleName] || {};
+    const minBay = aisleData.minBay ?? '';
+    const maxBay = aisleData.maxBay ?? '';
+    const hasRange = minBay !== '' && maxBay !== '';
+
+    const aisleCard = document.createElement('div');
+    aisleCard.className = 'wm-aisle-card';
+
+    const aisleHeader = document.createElement('div');
+    aisleHeader.className = 'wm-aisle-header';
+    aisleHeader.textContent = `AISLE ${aisleName}`;
+
+    const inputRow = document.createElement('div');
+    inputRow.className = 'wm-aisle-inputs';
+
+    const minInput = document.createElement('input');
+    minInput.type = 'number';
+    minInput.min = '1';
+    minInput.step = '1';
+    minInput.placeholder = 'Min';
+    minInput.value = minBay;
+    minInput.className = 'wm-bay-input';
+    minInput.dataset.aisle = aisleName;
+    minInput.dataset.type = 'min';
+
+    const dash = document.createElement('span');
+    dash.textContent = '—';
+    dash.style.margin = '0 4px';
+
+    const maxInput = document.createElement('input');
+    maxInput.type = 'number';
+    maxInput.min = '1';
+    maxInput.step = '1';
+    maxInput.placeholder = 'Max';
+    maxInput.value = maxBay;
+    maxInput.className = 'wm-bay-input';
+    maxInput.dataset.aisle = aisleName;
+    maxInput.dataset.type = 'max';
+
+    inputRow.appendChild(minInput);
+    inputRow.appendChild(dash);
+    inputRow.appendChild(maxInput);
+
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn slim wm-view-btn';
+    viewBtn.textContent = 'View Bays';
+    viewBtn.disabled = !hasRange;
+    viewBtn.onclick = () => openAisleDetail(aisleName);
+
+    aisleCard.appendChild(aisleHeader);
+    aisleCard.appendChild(inputRow);
+    aisleCard.appendChild(viewBtn);
+
+    grid.appendChild(aisleCard);
+  });
+
+  // Add event listeners to inputs
+  grid.querySelectorAll('.wm-bay-input').forEach(input => {
+    input.addEventListener('input', handleBayInputChange);
+  });
+}
+
+// Handle bay input changes
+function handleBayInputChange(e) {
+  const aisleName = e.target.dataset.aisle;
+  const type = e.target.dataset.type;
+  const value = e.target.value.trim();
+
+  if (!warehouseMapData.aisles[aisleName]) {
+    warehouseMapData.aisles[aisleName] = {};
+  }
+
+  if (type === 'min') {
+    warehouseMapData.aisles[aisleName].minBay = value === '' ? null : parseInt(value, 10);
+  } else {
+    warehouseMapData.aisles[aisleName].maxBay = value === '' ? null : parseInt(value, 10);
+  }
+
+  // Re-render to update button states
+  renderAisleConfig();
+}
+
+// Save warehouse map (called from Save Map button)
+function saveWarehouseMap() {
+  saveWarehouseMapData();
+  showToast?.('Warehouse map saved');
+}
+
+// Open aisle detail view
+function openAisleDetail(aisleName) {
+  const aisleData = warehouseMapData.aisles[aisleName];
+  if (!aisleData || aisleData.minBay == null || aisleData.maxBay == null) {
+    showToast?.('Please set min and max bays first');
+    return;
+  }
+
+  const configView = document.getElementById('wmAisleConfig');
+  const detailView = document.getElementById('wmAisleDetail');
+  const backBtn = document.getElementById('wmBackBtn');
+  const titleEl = document.getElementById('wmAisleTitle');
+  const rangeEl = document.getElementById('wmAisleRange');
+
+  if (configView) configView.style.display = 'none';
+  if (detailView) detailView.style.display = 'block';
+  if (backBtn) backBtn.style.display = 'inline-block';
+  if (titleEl) titleEl.textContent = `AISLE ${aisleName}`;
+  if (rangeEl) rangeEl.textContent = `Bays ${aisleData.minBay}–${aisleData.maxBay}`;
+
+  renderAisleQuarters(aisleName);
+}
+
+// Close aisle detail view
+function closeAisleDetail() {
+  const configView = document.getElementById('wmAisleConfig');
+  const detailView = document.getElementById('wmAisleDetail');
+  const backBtn = document.getElementById('wmBackBtn');
+
+  if (configView) configView.style.display = 'block';
+  if (detailView) detailView.style.display = 'none';
+  if (backBtn) backBtn.style.display = 'none';
+
+  saveWarehouseMapData();
+}
+
+// Render aisle quarters with individual bays
+function renderAisleQuarters(aisleName) {
+  const quartersContainer = document.getElementById('wmQuarters');
+  if (!quartersContainer) return;
+
+  const aisleData = warehouseMapData.aisles[aisleName];
+  const minBay = aisleData.minBay;
+  const maxBay = aisleData.maxBay;
+  const totalBays = maxBay - minBay + 1;
+
+  // Initialize bay states if not present
+  if (!aisleData.bays) {
+    aisleData.bays = {};
+  }
+
+  // Calculate quarter ranges
+  const baysPerQuarter = Math.ceil(totalBays / 4);
+  const quarters = [];
+
+  for (let q = 0; q < 4; q++) {
+    const startBay = minBay + (q * baysPerQuarter);
+    const endBay = Math.min(minBay + ((q + 1) * baysPerQuarter) - 1, maxBay);
+    if (startBay <= maxBay) {
+      quarters.push({ startBay, endBay });
+    }
+  }
+
+  quartersContainer.innerHTML = '';
+
+  quarters.forEach((quarter, qIndex) => {
+    const quarterCard = document.createElement('div');
+    quarterCard.className = 'wm-quarter-card';
+
+    const quarterHeader = document.createElement('div');
+    quarterHeader.className = 'wm-quarter-header';
+    quarterHeader.textContent = `Quarter ${qIndex + 1} — Bays ${quarter.startBay}–${quarter.endBay}`;
+
+    const baysGrid = document.createElement('div');
+    baysGrid.className = 'wm-bays-grid';
+
+    for (let bay = quarter.startBay; bay <= quarter.endBay; bay++) {
+      const bayBtn = document.createElement('button');
+      bayBtn.className = 'wm-bay-btn';
+      bayBtn.type = 'button';
+
+      const bayState = aisleData.bays[bay] || 'empty';
+      bayBtn.dataset.aisle = aisleName;
+      bayBtn.dataset.bay = bay;
+      bayBtn.dataset.state = bayState;
+
+      if (bayState === 'full') {
+        bayBtn.classList.add('full');
+        bayBtn.innerHTML = `<span class="wm-bay-number">${bay}</span><span class="wm-bay-icon">✗</span>`;
+      } else {
+        bayBtn.classList.add('empty');
+        bayBtn.innerHTML = `<span class="wm-bay-number">${bay}</span><span class="wm-bay-icon">✓</span>`;
+      }
+
+      bayBtn.onclick = () => toggleBayState(aisleName, bay);
+
+      baysGrid.appendChild(bayBtn);
+    }
+
+    quarterCard.appendChild(quarterHeader);
+    quarterCard.appendChild(baysGrid);
+    quartersContainer.appendChild(quarterCard);
+  });
+}
+
+// Toggle bay state between empty and full
+function toggleBayState(aisleName, bay) {
+  const aisleData = warehouseMapData.aisles[aisleName];
+  if (!aisleData || !aisleData.bays) return;
+
+  const currentState = aisleData.bays[bay] || 'empty';
+  aisleData.bays[bay] = currentState === 'empty' ? 'full' : 'empty';
+
+  renderAisleQuarters(aisleName);
+  saveWarehouseMapData();
+}
+
+// ====== Tabs ======
+
+// Generic tab switcher for Calc / Tracker / History / Supervisor / Warehouse Map
 function showTab(which){
   // ---------- swap visible section ----------
   const id = 'tab' + which.charAt(0).toUpperCase() + which.slice(1);
-  ['tabCalc','tabTracker','tabHistory','tabSupervisor'].forEach(x =>
+  ['tabCalc','tabTracker','tabHistory','tabSupervisor','tabWarehouseMap'].forEach(x =>
     document.getElementById(x).classList.toggle('hidden', x !== id)
   );
 
   // ---------- tab button active state ----------
-  ['tabCalcBtn','tabTrackBtn','tabHistBtn','tabSupervisorBtn'].forEach(x => {
+  ['tabCalcBtn','tabTrackBtn','tabHistBtn','tabSupervisorBtn','tabWarehouseMapBtn'].forEach(x => {
     const btn = document.getElementById(x);
     if (btn) btn.classList.remove('active');
   });
-  if (which === 'calc')       document.getElementById('tabCalcBtn')?.classList.add('active');
-  if (which === 'tracker')    document.getElementById('tabTrackBtn')?.classList.add('active');
-  if (which === 'history')    document.getElementById('tabHistBtn')?.classList.add('active');
-  if (which === 'supervisor') document.getElementById('tabSupervisorBtn')?.classList.add('active');
+  if (which === 'calc')         document.getElementById('tabCalcBtn')?.classList.add('active');
+  if (which === 'tracker')      document.getElementById('tabTrackBtn')?.classList.add('active');
+  if (which === 'history')      document.getElementById('tabHistBtn')?.classList.add('active');
+  if (which === 'supervisor')   document.getElementById('tabSupervisorBtn')?.classList.add('active');
+  if (which === 'warehouseMap') document.getElementById('tabWarehouseMapBtn')?.classList.add('active');
 
   // Live banner: only on Tracker *and* only once a shift has started
   const lb = document.getElementById('liveBanner');
@@ -2087,6 +2338,16 @@ function showTab(which){
     if (typeof refreshSupervisorDashboard === 'function') {
       refreshSupervisorDashboard();
     }
+    return;
+  }
+
+  // ---------- WAREHOUSE MAP TAB ----------
+  if (which === 'warehouseMap') {
+    // hide order-area when on warehouse map
+    if (area) area.style.display = 'none';
+    // Load and render warehouse map
+    loadWarehouseMap();
+    renderAisleConfig();
     return;
   }
 

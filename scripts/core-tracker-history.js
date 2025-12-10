@@ -93,6 +93,8 @@ function renderRoleChips() {
   const primaryChip  = document.getElementById('rolePrimaryChip');
   const overlayChip  = document.getElementById('roleOverlayChip');
   const reqBtn       = document.getElementById('btnRequestOverlay');
+  const supervisorTabBtn = document.getElementById('tabSupervisorBtn');
+  const warehouseMapTabBtn = document.getElementById('tabWarehouseMapBtn');
 
   // Primary role always "Picker" for now
   if (primaryChip) primaryChip.textContent = "Role: Picker";
@@ -102,8 +104,22 @@ function renderRoleChips() {
   if (overlay && overlay.role) {
     overlayChip.classList.remove('hidden');
     overlayChip.textContent = `Overlay: ${overlay.role}`;
+    
+    // Show supervisor tab if overlay role is supervisor
+    if (overlay.role === 'supervisor' && supervisorTabBtn) {
+      supervisorTabBtn.style.display = 'inline-block';
+    }
   } else {
     overlayChip.classList.add('hidden');
+    // Hide supervisor tab when no supervisor overlay
+    if (supervisorTabBtn) supervisorTabBtn.style.display = 'none';
+  }
+  
+  // Warehouse Map tab is always visible for operatives (non-supervisor primary role)
+  // Hide it only if user is on super.html (dedicated supervisor dashboard)
+  const isSupervisorPage = window.location.pathname.includes('super.html');
+  if (warehouseMapTabBtn && !isSupervisorPage) {
+    warehouseMapTabBtn.style.display = 'inline-block';
   }
 }
 

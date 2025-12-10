@@ -15,6 +15,7 @@
     <button id="tabHistBtn" class="tabbtn" type="button" onclick="showTab('history')">
       <span id="userTabLabel">History</span>
     </button>
+    <button id="tabWarehouseMapBtn" class="tabbtn" type="button" onclick="showTab('warehouseMap')" style="display:none;">Warehouse Map</button>
     <button id="tabSupervisorBtn" class="tabbtn" type="button" onclick="showTab('supervisor')" style="display:none;">Supervisor</button>
   </div>
 
@@ -179,7 +180,7 @@
         <div class="row" style="gap:8px; flex-wrap:wrap;">
           <div class="col">
             <label>Location</label>
-            <input id="saLocation" type="text" placeholder="e.g. A01-03-02">
+            <input id="saLocation" type="text" placeholder="e.g. A01-03-02" style="text-transform: uppercase;">
           </div>
           <div class="col">
             <label>Expected</label>
@@ -624,6 +625,45 @@
         </div>
 
         <div id="overlayStatus" class="hint" style="margin-top:6px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tabWarehouseMap" class="hidden">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:12px;">
+        <h2 style="margin:0; font-size:1.5rem;">Warehouse Map — Warehouse 3</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn ghost" type="button" id="wmBackBtn" onclick="closeAisleDetail()" style="display:none;">← Back to Aisles</button>
+          <button class="btn" type="button" onclick="saveWarehouseMap()">Save Map</button>
+        </div>
+      </div>
+
+      <!-- Aisle Configuration View -->
+      <div id="wmAisleConfig">
+        <div class="hint" style="margin-bottom:1rem;">
+          Define the bay range for each aisle in Warehouse 3. Enter the minimum and maximum bay numbers for each aisle (e.g., aisle A might have bays 1 to 18).
+        </div>
+        
+        <div id="wmAisleGrid" class="wm-aisle-grid">
+          <!-- Aisles will be rendered here by JavaScript -->
+        </div>
+      </div>
+
+      <!-- Aisle Detail View (hidden initially) -->
+      <div id="wmAisleDetail" style="display:none;">
+        <div style="margin-bottom:1rem;">
+          <h3 id="wmAisleTitle" style="margin:0 0 0.5rem 0; font-size:1.3rem; color:#22c55e;">AISLE A</h3>
+          <div class="hint" id="wmAisleRange">Bays 1–18</div>
+        </div>
+
+        <div class="hint" style="margin-bottom:1rem;">
+          Click any bay to toggle its status: <span style="color:#22c55e;">✓ Empty/Free</span> or <span style="color:#ef4444;">✗ Full/Blocked</span>
+        </div>
+
+        <div id="wmQuarters" class="wm-quarters">
+          <!-- Quarters will be rendered here by JavaScript -->
+        </div>
       </div>
     </div>
   </section>
