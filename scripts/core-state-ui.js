@@ -1713,11 +1713,28 @@ function loadAll(){
       operativeLog    = Array.isArray(p.operativeLog) ? p.operativeLog : [];
       operativeActive = p.operativeActive || null;
       refreshOperativeChip();
+      
+      // DEBUG: Log history count for current user
+      try {
+        const currentUser = window.WQT_CURRENT_USER;
+        const userId = currentUser?.userId || 'unknown';
+        console.log(`[loadAll] ✓ Loaded ${historyDays.length} history records for user ${userId}`);
+        if (historyDays.length === 0) {
+          console.log('[loadAll] ✓ Empty history confirmed (new user or fresh account)');
+        }
+      } catch(e){}
     } else {
       picks = []; historyDays = []; current = null; tempWraps = [];
       startTime = ""; lastClose = ""; pickingCutoff = ""; undoStack = [];
       proUnlocked = false; shiftBreaks = [];
       operativeLog = []; operativeActive = null;
+      
+      // DEBUG: Log empty state for current user
+      try {
+        const currentUser = window.WQT_CURRENT_USER;
+        const userId = currentUser?.userId || 'unknown';
+        console.log(`[loadAll] ✓ Initialized blank state for user ${userId} (no previous data)`);
+      } catch(e){}
     }
 
     // Debug: report which source we used for main hydration to aid troubleshooting

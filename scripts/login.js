@@ -83,12 +83,20 @@
     // /auth/login_pin returns: { success, user_id, display_name, role, token }
     const userId = data.user_id || data.username || pin;
 
+    // CRITICAL: Check if this is a different user on the same device
+    const previousUser = readCurrentUser();
+    if (previousUser && previousUser.userId && previousUser.userId !== userId) {
+      console.warn(`[Login] User switch detected on device ${deviceId}: ${previousUser.userId} → ${userId}`);
+      console.log('[Login] Previous user data will remain isolated in per-user localStorage keys');
+    }
+
     const userPayload = {
       userId: userId,
       displayName: data.display_name || userId,
       role: data.role || 'picker',
       token: data.token || null,
-      lastLoginAt: new Date().toISOString()
+      lastLoginAt: new Date().toISOString(),
+      deviceId: deviceId  // Track which device this login came from
     };
 
     // Save unified identity
@@ -97,6 +105,8 @@
     // Mirror compatibility keys
     localStorage.setItem('wqt_operator_id', userId);
     localStorage.setItem('wqt_username', userId);
+
+    console.log(`[Login] ✓ User ${userId} logged in successfully on device ${deviceId.slice(0, 8)}`);
 
     return userPayload;
   }
@@ -134,12 +144,23 @@
     // /api/auth/register returns: { success, username, display_name, role }
     const userId = data.username || pin;
 
+    // CRITICAL: This is a brand new user - they should have ZERO history
+    const previousUser = readCurrentUser();
+    if (previousUser && previousUser.userId) {
+      console.warn(`[Register] New user ${userId} created on device with previous user ${previousUser.userId}`);
+      console.log('[Register] New user will have empty history (per-user isolation)');
+    } else {
+      console.log(`[Register] ✓ New user ${userId} created - fresh account with zero history`);
+    }
+
     const userPayload = {
       userId: userId,
       displayName: data.display_name || userId,
       role: data.role || 'picker',
       token: data.token || null,
-      lastLoginAt: new Date().toISOString()
+      lastLoginAt: new Date().toISOString(),
+      deviceId: deviceId,
+      isNewAccount: true  // Flag to indicate this is a fresh registration
     };
 
     saveCurrentUser(userPayload);

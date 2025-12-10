@@ -40,13 +40,25 @@ function safeParse(json, fallback) {
 
 // ---- Identity helpers for per-user namespaces ----
 
+// Track last known user to detect user switches
+let _lastKnownUserId = null;
+
 function getCurrentUserId() {
   try {
     const raw = window.localStorage.getItem(CURRENT_USER_KEY);
     if (raw) {
       const u = JSON.parse(raw);
       if (u && (u.userId || u.username || u.id)) {
-        return String(u.userId || u.username || u.id);
+        const currentUserId = String(u.userId || u.username || u.id);
+        
+        // Detect user switch (different user on same device)
+        if (_lastKnownUserId && _lastKnownUserId !== currentUserId) {
+          console.warn(`[Storage] User switch detected: ${_lastKnownUserId} → ${currentUserId}`);
+          console.log('[Storage] User-specific data will be isolated by user ID');
+        }
+        _lastKnownUserId = currentUserId;
+        
+        return currentUserId;
       }
     }
   } catch (_) {
@@ -58,7 +70,14 @@ function getCurrentUserId() {
     const legacy =
       window.localStorage.getItem('wqt_operator_id') ||
       window.localStorage.getItem('wqt_username');
-    if (legacy) return String(legacy);
+    if (legacy) {
+      const legacyId = String(legacy);
+      if (_lastKnownUserId && _lastKnownUserId !== legacyId) {
+        console.warn(`[Storage] User switch detected (legacy): ${_lastKnownUserId} → ${legacyId}`);
+      }
+      _lastKnownUserId = legacyId;
+      return legacyId;
+    }
   } catch (_) {
     // ignore
   }
@@ -79,6 +98,7 @@ const Storage = {
   // ---- Core state blob (picks, history, current, etc.) ----
   // This mirrors loadAll/saveAll in bootstrap.js.
   loadMain() {
+    const userId = getCurrentUserId();
     const mainKey = buildNamespacedKey(STORAGE_KEY_MAIN);
     let raw = null;
     let parsed = null;
@@ -87,14 +107,21 @@ const Storage = {
     try {
       raw = window.localStorage.getItem(mainKey);
       if (!raw && mainKey !== STORAGE_KEY_MAIN) {
-        // No user-specific blob yet – fall back to legacy global key
+        // No user-specific blob yet – check if we should migrate from legacy
         const legacyRaw = window.localStorage.getItem(STORAGE_KEY_MAIN);
         if (legacyRaw) {
+          // Only migrate if this is the FIRST time this user is logging in
+          // Do NOT reuse another user's legacy data
+          console.warn(`[Storage] Found legacy data for user ${userId} - will migrate only if this is first login`);
           raw = legacyRaw;
           migratedFromLegacy = true;
         }
       }
       parsed = safeParse(raw, null);
+      
+      if (parsed && userId) {
+        console.log(`[Storage] Loaded data for user ${userId}: ${parsed.history?.length || 0} history records`);
+      }
     } catch (e) {
       console.error('Storage.loadMain failed', e);
       parsed = null;

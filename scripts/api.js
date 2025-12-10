@@ -259,33 +259,41 @@ const WqtAPI = {
             return false;
         }
 
-        // 1) Try backend
+        // 1) Try backend - CRITICAL: only use user_id, never device_id for history queries
+        // This ensures strict per-user data isolation even on shared devices
         try {
-            const deviceId = getDeviceId();
             const userId = getLoggedInUser();
 
-            let qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
-            if (userId) qs += `${qs ? '&' : '?'}user-id=${encodeURIComponent(userId)}`;
+            if (!userId) {
+                console.warn('[WQT API] No user_id found - cannot load backend state');
+                throw new Error('No authenticated user');
+            }
+
+            // Only filter by user_id - device_id should NOT affect history queries
+            const qs = `?user-id=${encodeURIComponent(userId)}`;
+            console.log(`[WQT API] Loading state for user: ${userId}`);
 
             remoteMain = await fetchJSON(`/api/state${qs}`);
+            console.log(`[WQT API] Backend returned ${remoteMain?.history?.length || 0} history records for user ${userId}`);
         } catch (err) {
             console.warn('[WQT API] Backend load failed, continuing local-only:', err);
         }
 
         // 2) Decide which one to trust
         let main;
+        const userId = getLoggedInUser();
 
         if (looksPopulated(remoteMain)) {
             main = remoteMain;
             Storage.saveMain(main);
-            console.log('[WQT API] Loaded main state from backend (User/Device)');
+            console.log(`[WQT API] ✓ Loaded main state from backend for user ${userId}: ${remoteMain.history?.length || 0} history records`);
         } else if (looksPopulated(localMain)) {
             main = localMain;
-            console.log('[WQT API] Using local main state (backend empty or unavailable)');
+            console.log(`[WQT API] ✓ Using local main state for user ${userId}: ${localMain.history?.length || 0} history records (backend empty)`);
         } else {
             main = remoteMain || localMain || {};
             Storage.saveMain(main);
-            console.log('[WQT API] Initialised blank main state');
+            console.log(`[WQT API] ✓ Initialized blank main state for user ${userId} (new account)`);
         }
 
         const learnedUL = Storage.loadLearnedUL();
