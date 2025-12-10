@@ -20,11 +20,9 @@ function resetEtaSmoother(){
 function refreshSummaryChips(main) {
   const lrEl = document.getElementById('live-rate-value');
   const psEl = document.getElementById('perf-score-value');
-  const pacEl = document.getElementById('pac-value');
   
   if (!lrEl) console.warn("Live Rate element not found");
   if (!psEl) console.warn("Perf Score element not found");
-  if (!pacEl) console.warn("PAC element not found");
   if (!lrEl || !psEl) return;
 
   // Live Rate: use the same computation as the Live Rate modal
@@ -51,37 +49,6 @@ function refreshSummaryChips(main) {
     perfScore != null && isFinite(perfScore)
       ? `${Math.round(perfScore)} pts/h`
       : '—';
-
-  // PAC: Perf Score ÷ Live Rate (effort vs raw performance correction ratio)
-  if (pacEl) {
-    let pac = null;
-    
-    // Only compute PAC when both values are valid
-    if (perfScore != null && isFinite(perfScore) && perfScore > 0 &&
-        liveRate != null && isFinite(liveRate) && liveRate > 0) {
-      pac = perfScore / liveRate;
-    }
-    
-    // Remove all PAC color classes first
-    pacEl.classList.remove('pac-strong', 'pac-balanced', 'pac-low');
-    
-    if (pac != null && isFinite(pac) && pac >= 0) {
-      // Display PAC rounded to 2 decimal places
-      pacEl.textContent = pac.toFixed(2);
-      
-      // Apply color bands
-      if (pac >= 1.30) {
-        pacEl.classList.add('pac-strong');
-      } else if (pac >= 0.90) {
-        pacEl.classList.add('pac-balanced');
-      } else {
-        pacEl.classList.add('pac-low');
-      }
-    } else {
-      // Invalid PAC
-      pacEl.textContent = '—';
-    }
-  }
 }
 
 // Patch updateSummary to also refresh the summary chips
