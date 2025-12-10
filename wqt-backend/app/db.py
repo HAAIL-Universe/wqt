@@ -30,6 +30,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_pin_value(pin: str) -> str:
+    # Bcrypt has a 72-byte limit; enforce upstream but guard defensively
+    if len(pin) > 72:
+        raise ValueError("PIN too long for bcrypt (max 72 bytes)")
     return pwd_context.hash(pin)
 
 

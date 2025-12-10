@@ -428,8 +428,8 @@ class AuthPayload(BaseModel):
 @app.post("/api/auth/register")
 async def api_register(payload: AuthPayload) -> Dict[str, Any]:
     # Basic validation
-    if len(payload.pin) < 4:
-        return {"success": False, "message": "PIN must be 4 digits"}
+    if len(payload.pin) < 4 or len(payload.pin) > 32:
+        return {"success": False, "message": "PIN must be between 4 and 32 characters"}
 
     clean_user = payload.username.strip()
     # Prefer provided full_name, else fall back to username
@@ -477,6 +477,8 @@ async def api_register(payload: AuthPayload) -> Dict[str, Any]:
 @app.post("/api/auth/login")
 async def api_login(payload: AuthPayload) -> Dict[str, Any]:
     clean_user = payload.username.strip()
+    if len(payload.pin) < 4 or len(payload.pin) > 32:
+        return {"success": False, "message": "Invalid PIN"}
     valid = verify_user(clean_user, payload.pin)
     if not valid:
         return {"success": False, "message": "Invalid username or PIN"}
@@ -551,6 +553,8 @@ async def auth_login_pin(payload: PinLoginPayload) -> Dict[str, Any]:
     pin = payload.pin_code.strip()
     if not pin:
         return {"success": False, "message": "PIN required"}
+    if len(pin) < 4 or len(pin) > 32:
+        return {"success": False, "message": "PIN must be between 4 and 32 characters"}
 
     username = pin
     valid = verify_user(username, pin)

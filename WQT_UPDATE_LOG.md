@@ -14,3 +14,7 @@ This entry starts the continuous, authoritative update record maintained by Code
 - Refined `create_user` to return detailed outcomes (`db_not_initialised`, `username_exists`, `db_error`) and added robust commit rollback; `verify_user` logs when DB is uninitialised.
 - Registration now validates roles against a strict whitelist (`picker`, `operative`, `supervisor`, `gm`) and surfaces precise errors for conflicts and DB issues.
 - Maintained hashed-only PIN handling for new users; role spoofing and silent failures are blocked.
+
+## 2025-12-10 — Bcrypt guardrails and dependency
+- Added explicit `bcrypt==4.0.1` dependency to stabilise passlib backend on Render.
+- Enforced PIN length bounds (4–32 chars) across register/login flows to avoid bcrypt 72-byte failures; hashing now defensively raises on over-length input.
