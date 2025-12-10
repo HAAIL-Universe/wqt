@@ -141,37 +141,22 @@ async def get_state(
          migrated into the user key when found.
       3) Global / legacy fallback from storage.load_main().
     """
-    # Build keys
-    primary_key: Optional[str] = f"user:{current_user.username}" if current_user else device_id
-    legacy_key: Optional[str] = device_id if device_id else None
+    # Build key strictly from authenticated user; do NOT migrate device state into new users
+    primary_key: Optional[str] = f"user:{current_user.username}" if current_user else None
 
     raw: Optional[dict] = None
 
     print(f"AUTH_DEBUG: current_user.id={current_user.username} requesting state")
 
-    # 1) Try the primary key (user:<PIN> or bare device_id if no user)
+    # Only load per-user payload; avoid legacy device migration to prevent cross-user bleed
     if primary_key:
         raw = load_device_state(primary_key)
 
-    # 2) Fallback: legacy device-only state, then migrate → user:<PIN>
-    if raw is None and legacy_key and legacy_key != primary_key:
-        legacy_raw = load_device_state(legacy_key)
-        if legacy_raw:
-            raw = legacy_raw
-            try:
-                # Only migrate when we *know* primary_key is real
-                if primary_key:
-                    save_device_state(primary_key, legacy_raw)
-            except Exception:
-                # Migration failure should not break load
-                pass
-
-    # 3) If we found anything, return it as a MainState
     if raw is not None:
         return MainState(**raw)
 
-    # 4) Final fallback: let storage decide (global JSON or blank state)
-    return load_main(device_id=None)
+    # Fresh user: return an empty state (no history bleed)
+    return MainState(version="3.3.55")
 
 @app.post("/api/state", response_model=MainState)
 async def set_state(

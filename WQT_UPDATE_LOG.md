@@ -18,3 +18,6 @@ This entry starts the continuous, authoritative update record maintained by Code
 ## 2025-12-10 — Bcrypt guardrails and dependency
 - Added explicit `bcrypt==4.0.1` dependency to stabilise passlib backend on Render.
 - Enforced PIN length bounds (4–32 chars) across register/login flows to avoid bcrypt 72-byte failures; hashing now defensively raises on over-length input.
+
+## 2025-12-10 — State isolation for new users
+- Disabled legacy device→user state migration in `/api/state`; authenticated users now load only their own per-user state and get a blank state if none exists, preventing cross-user history bleed when sharing devices.
