@@ -56,12 +56,8 @@ function updateSummary(){
   const chipVal  = document.getElementById('chipRateVal');
 
   if (chipVal) chipVal.textContent = live ? (live + ' u/h') : '—';
-  if (chipRate) {
-    chipRate.classList.remove('good','warn','bad');
-    if (live >= 300)      chipRate.classList.add('good');
-    else if (live >= 249) chipRate.classList.add('warn');
-    else                  chipRate.classList.add('bad');
-  }
+  // Header colour is now per-side; keep container neutral
+  if (chipRate) chipRate.classList.remove('good','warn','bad','ok','amber','red');
 
   const totalEl = document.getElementById('chipTotalVal');
   if (totalEl) totalEl.textContent = totalUnits;

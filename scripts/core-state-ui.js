@@ -13,6 +13,17 @@ let codesHelperEntries = []; // Local-only codes helper entries
 // Persisted active shift metadata (shift_session id, timestamps)
 const ACTIVE_SHIFT_META_KEY = 'wqt_active_shift_meta';
 
+// Perf Score baseline: aligns with existing day-level perf thresholds (300 pts/h)
+const PERF_TARGET_PTS_PER_HOUR = 300;
+
+// Status helper for the dual summary chip halves
+const SUMMARY_STATUS_CLASSES = ['status-green','status-amber','status-red'];
+function setSummarySideStatus(el, status){
+  if (!el) return;
+  SUMMARY_STATUS_CLASSES.forEach(cls => el.classList.remove(cls));
+  if (status) el.classList.add(status);
+}
+
 function loadActiveShiftMeta(){
   try {
     const raw = localStorage.getItem(ACTIVE_SHIFT_META_KEY);
@@ -56,6 +67,8 @@ function resetEtaSmoother(){
 function refreshSummaryChips(main) {
   const lrEl = document.getElementById('live-rate-value');
   const psEl = document.getElementById('perf-score-value');
+  const liveSide = document.querySelector('#chipRate .summary-chip-side-left');
+  const perfSide = document.querySelector('#chipRate .summary-chip-side-right');
   
   if (!lrEl) console.warn("Live Rate element not found");
   if (!psEl) console.warn("Perf Score element not found");
@@ -75,6 +88,14 @@ function refreshSummaryChips(main) {
       ? `${Math.round(liveRate)} u/h`
       : '—';
 
+  let liveStatus = null;
+  if (liveRate != null && isFinite(liveRate)) {
+    if (liveRate >= 250) liveStatus = 'status-green';
+    else if (liveRate >= 200) liveStatus = 'status-amber';
+    else liveStatus = 'status-red';
+  }
+  setSummarySideStatus(liveSide, liveStatus);
+
   // Performance Score: per hour for today's shift
   let perfScore = null;
   if (typeof computePerformancePointsPerHourToday === 'function') {
@@ -85,6 +106,16 @@ function refreshSummaryChips(main) {
     perfScore != null && isFinite(perfScore)
       ? `${Math.round(perfScore)} pts/h`
       : '—';
+
+  const perfTarget = PERF_TARGET_PTS_PER_HOUR;
+  let perfStatus = null;
+  if (perfTarget > 0 && perfScore != null && isFinite(perfScore)) {
+    const delta = (perfScore - perfTarget) / perfTarget;
+    if (delta >= 0) perfStatus = 'status-green';
+    else if (delta >= -0.03) perfStatus = 'status-amber';
+    else perfStatus = 'status-red';
+  }
+  setSummarySideStatus(perfSide, perfStatus);
 }
 
 // Patch updateSummary to also refresh the summary chips
