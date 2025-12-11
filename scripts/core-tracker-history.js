@@ -44,6 +44,45 @@ function computePerformancePointsPerHourToday() {
 if (typeof window !== 'undefined') {
   window.computePerformancePointsPerHourToday = computePerformancePointsPerHourToday;
 }
+
+// ---- Shift recovery guard bypass (server-active shift found on load) ----
+function shiftIsoToHHMM(iso){
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${hh}:${mm}`;
+  } catch (_) { return ''; }
+}
+
+function setShiftRecoveryMode(on){
+  if (typeof window === 'undefined') return;
+  window.__SHIFT_RECOVERY_ACTIVE = !!on;
+}
+
+function isShiftRecoveryMode(){
+  return (typeof window !== 'undefined') && window.__SHIFT_RECOVERY_ACTIVE === true;
+}
+
+if (typeof window !== 'undefined') {
+  window.enableShiftRecoveryMode = (meta)=>{
+    setShiftRecoveryMode(true);
+    // Seed startTime hint if we lack one, using server shift start
+    if (meta?.started_at && typeof window !== 'undefined') {
+      const existingStart = window.startTime || '';
+      if (!existingStart) {
+        const hhmm = shiftIsoToHHMM(meta.started_at);
+        if (hhmm) {
+          window.startTime = hhmm;
+          try { startTime = hhmm; } catch (_) {}
+        }
+      }
+    }
+  };
+  window.clearShiftRecoveryMode = () => setShiftRecoveryMode(false);
+  window.isShiftRecoveryMode = isShiftRecoveryMode;
+}
 // --- Performance Score Calculation ---
 // Computes performance score for today/shift: (units + locations*2) / active minutes
 // Uses ACTIVE time only (excludes all logged downtime: breaks, wraps, delays)
@@ -2766,10 +2805,12 @@ function computeDowntimes(picksArr, shiftBreaksArr){
 
 // ====== End Shift → archive into History ======
 async function endShift(){
-  if (current){
+  const recoveryMode = isShiftRecoveryMode?.() === true;
+
+  if (!recoveryMode && current){
     return alert('Complete or undo the current order before ending the shift.');
   }
-  if (!picks.length){
+  if (!recoveryMode && !picks.length){
     return alert('No completed orders to archive.');
   }
 
@@ -2778,6 +2819,12 @@ async function endShift(){
   // Shift length: null-safe
   const tLenEl = document.getElementById('tLen');
   const shiftLen = parseFloat(tLenEl?.value || '9');
+
+  // Resolve active shift meta early for recovery fallback data
+  let activeMeta = typeof getActiveShiftMeta === 'function' ? getActiveShiftMeta() : null;
+  let shiftId = activeMeta?.id;
+
+  let effectiveStartHHMM = startTime || shiftIsoToHHMM(activeMeta?.started_at || activeMeta?.start_time) || '';
 
   const totalUnits = picks.reduce((a,b)=> a + b.units, 0);
   const totalLocations = picks.reduce((a,b)=> a + (b.locations || 0), 0);
@@ -2796,7 +2843,7 @@ async function endShift(){
 
   // Worked & scheduled minutes to the minute (used by OT / weekly tiles)
   const toMin       = (hhmm)=> Math.round(hm(hhmm) * 60);
-  const workedMin   = (startTime && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(startTime)) : 0;
+  let workedMin   = (effectiveStartHHMM && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(effectiveStartHHMM)) : 0;
   const scheduledMin= Math.round((shiftLen || 9) * 60);
 
   // Compute dailyPerf as average of perfPerHour from all orders
@@ -2809,9 +2856,32 @@ async function endShift(){
     }
   }
 
+  // Resolve active shift id from persisted meta or backend
+  if (!shiftId && window.WqtAPI?.fetchActiveShiftSession) {
+    try {
+      const server = await WqtAPI.fetchActiveShiftSession();
+      const meta = server?.shift || null;
+      if (meta) {
+        activeMeta = persistActiveShiftMeta?.(meta) || meta;
+        shiftId = activeMeta?.id;
+        if (!effectiveStartHHMM) {
+          effectiveStartHHMM = shiftIsoToHHMM(activeMeta?.started_at || activeMeta?.start_time) || effectiveStartHHMM;
+          workedMin = (effectiveStartHHMM && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(effectiveStartHHMM)) : workedMin;
+        }
+      }
+    } catch (err) {
+      console.warn('[endShift] Failed to pull active shift from server', err);
+    }
+  }
+
+  if (!shiftId) {
+    showToast?.('Server has no active shift for you. Refresh or start a new shift.');
+    return;
+  }
+
   const snapshot = {
     date:        dateStr,
-    start:       startTime || '',
+    start:       effectiveStartHHMM,
     end:         endHHMM || '',
     shiftLen,
     totalUnits,
@@ -2827,28 +2897,6 @@ async function endShift(){
     workedMin,
     scheduledMin
   };
-
-  // Resolve active shift id from persisted meta or backend
-  let activeMeta = typeof getActiveShiftMeta === 'function' ? getActiveShiftMeta() : null;
-  let shiftId = activeMeta?.id;
-
-  if (!shiftId && window.WqtAPI?.fetchActiveShiftSession) {
-    try {
-      const server = await WqtAPI.fetchActiveShiftSession();
-      const meta = server?.shift || null;
-      if (meta) {
-        activeMeta = persistActiveShiftMeta?.(meta) || meta;
-        shiftId = activeMeta?.id;
-      }
-    } catch (err) {
-      console.warn('[endShift] Failed to pull active shift from server', err);
-    }
-  }
-
-  if (!shiftId) {
-    showToast?.('Server has no active shift for you. Refresh or start a new shift.');
-    return;
-  }
 
   // Server-first end request
   try {
@@ -2872,6 +2920,7 @@ async function endShift(){
   renderWeeklySummary();
 
   clearActiveShiftMeta?.();
+  clearShiftRecoveryMode?.();
 
   // Clear all shift state now that backend confirmed end
   if (typeof exitShiftNoArchive === 'function') {

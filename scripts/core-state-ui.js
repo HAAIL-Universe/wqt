@@ -1112,6 +1112,9 @@ function exitShiftNoArchive(){
     operativeActive = null;
   }
 
+  // Clear any recovery bypass once state is reset
+  try { clearShiftRecoveryMode?.(); } catch (_) {}
+
   // Clear side-channel localStorage keys
   try {
     localStorage.setItem('shiftActive', '0');

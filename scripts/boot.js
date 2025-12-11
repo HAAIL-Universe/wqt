@@ -106,6 +106,9 @@ function showShiftReconcileModal(serverShift){
   const existing = document.getElementById('shiftReconcileModal');
   if (existing) existing.remove();
 
+  // Activate recovery mode so guards don't block termination
+  try { enableShiftRecoveryMode?.(serverShift); } catch (_) {}
+
   const overlay = document.createElement('div');
   overlay.id = 'shiftReconcileModal';
   overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:9999;';
@@ -132,6 +135,7 @@ function showShiftReconcileModal(serverShift){
     try { localStorage.setItem('shiftActive','1'); } catch (_){ }
     persistActiveShiftMeta?.(serverShift || null);
     try { beginShift?.(); } catch(_){ }
+    try { clearShiftRecoveryMode?.(); } catch(_){}
     overlay.remove();
   };
 
@@ -154,6 +158,7 @@ function showShiftReconcileModal(serverShift){
       console.error('[Reconcile] Failed to end server shift', err);
       showToast?.('Could not end shift on server. Try again.');
     } finally {
+      try { clearShiftRecoveryMode?.(); } catch(_){}
       overlay.remove();
     }
   };
@@ -219,6 +224,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
           const localActive = hadShift || localStorage.getItem('shiftActive') === '1';
           if (serverShift && !localActive) {
+            try { enableShiftRecoveryMode?.(serverShift); } catch(_){}
             showShiftReconcileModal(serverShift);
           } else if (!serverShift && localActive) {
             // Local thought it was active, server does not → reset to clean slate
