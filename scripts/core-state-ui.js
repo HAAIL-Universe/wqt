@@ -18,10 +18,21 @@ const PERF_TARGET_PTS_PER_HOUR = 300;
 
 // Status helper for the dual summary chip halves
 const SUMMARY_STATUS_CLASSES = ['status-green','status-amber','status-red'];
+const SUMMARY_STATUS_BG = {
+  'status-green': 'rgba(34, 197, 94, 0.18)',
+  'status-amber': 'rgba(251, 191, 36, 0.18)',
+  'status-red':   'rgba(239, 68, 68, 0.18)'
+};
 function setSummarySideStatus(el, status){
   if (!el) return;
   SUMMARY_STATUS_CLASSES.forEach(cls => el.classList.remove(cls));
   if (status) el.classList.add(status);
+}
+function setChipGradientVar(which, status){
+  const chip = document.getElementById('chipRate');
+  if (!chip) return;
+  const color = SUMMARY_STATUS_BG[status] || 'rgba(255,255,255,0.06)';
+  chip.style.setProperty(which, color);
 }
 
 // Tiny arrow/circle indicator for Perf Score trajectory
@@ -91,8 +102,8 @@ function resetEtaSmoother(){
 function refreshSummaryChips(main) {
   const lrEl = document.getElementById('live-rate-value');
   const psEl = document.getElementById('perf-score-value');
-  const liveSide = document.querySelector('#chipRate .summary-chip-side-left');
-  const perfSide = document.querySelector('#chipRate .summary-chip-side-right');
+  const liveSide = document.querySelector('#chipRate .summary-chip-live');
+  const perfSide = document.querySelector('#chipRate .summary-chip-perf');
   
   if (!lrEl) console.warn("Live Rate element not found");
   if (!psEl) console.warn("Perf Score element not found");
@@ -105,7 +116,7 @@ function refreshSummaryChips(main) {
     liveRate = computeLiveRateSnapshot();
   }
   
-  console.debug("LiveRate for chip:", liveRate, "state:", main);
+  console.debug('[SummaryChip] LiveRate', { liveRate, state: main });
   
   lrEl.textContent =
     liveRate != null && isFinite(liveRate) && liveRate > 0
@@ -119,6 +130,8 @@ function refreshSummaryChips(main) {
     else liveStatus = 'status-red';
   }
   setSummarySideStatus(liveSide, liveStatus);
+  setChipGradientVar('--live-chip-bg', liveStatus);
+  console.debug('[SummaryChip] Live color', { liveRate, liveStatus });
 
   // Performance Score: per hour for today's shift
   let perfScore = null;
@@ -136,11 +149,13 @@ function refreshSummaryChips(main) {
   let perfStatus = null;
   if (perfTarget > 0 && perfScore != null && isFinite(perfScore)) {
     perfScoreDelta = (perfScore - perfTarget) / perfTarget;
-    if (perfScoreDelta >= 0) perfStatus = 'status-green';
-    else if (perfScoreDelta >= -0.03) perfStatus = 'status-amber';
-    else perfStatus = 'status-red';
+    if (perfScoreDelta > 0.03) perfStatus = 'status-green';
+    else if (perfScoreDelta < -0.03) perfStatus = 'status-red';
+    else perfStatus = 'status-amber';
   }
   setSummarySideStatus(perfSide, perfStatus);
+  setChipGradientVar('--perf-chip-bg', perfStatus);
+  console.debug('[SummaryChip] Perf color', { perfScore, perfScoreDelta, perfStatus });
   renderPerfScoreTrend(perfScoreDelta, perfStatus);
   window.perfScoreDelta = perfScoreDelta;
 }

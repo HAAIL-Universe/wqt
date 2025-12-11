@@ -21,8 +21,10 @@
   <div id="liveBanner" class="rateBanner hidden">
     <div id="chipRate" class="rateChip summary-chip summary-chip-dual">
       <div class="summary-chip-side summary-chip-side-left">
-        <div class="summary-chip-label">Live Rate</div>
-        <div id="live-rate-value" class="summary-chip-value">—</div>
+        <div class="summary-chip-inner summary-chip-live">
+          <div class="summary-chip-label">Live Rate</div>
+          <div id="live-rate-value" class="summary-chip-value">—</div>
+        </div>
       </div>
 
       <div class="summary-chip-divider"></div>
@@ -35,11 +37,13 @@
       <div class="summary-chip-divider"></div>
 
       <div class="summary-chip-side summary-chip-side-right">
-        <div class="summary-chip-label perf-score-label">
-          <span id="perf-score-trend" class="perf-score-trend" aria-hidden="true"></span>
-          <span>Perf Score</span>
+        <div class="summary-chip-inner summary-chip-perf">
+          <div class="summary-chip-label perf-score-label">
+            <span id="perf-score-trend" class="perf-score-trend" aria-hidden="true"></span>
+            <span>Perf Score</span>
+          </div>
+          <div id="perf-score-value" class="summary-chip-value">—</div>
         </div>
-        <div id="perf-score-value" class="summary-chip-value">—</div>
       </div>
     </div>
   </div>

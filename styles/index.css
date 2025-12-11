@@ -4,6 +4,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
+  background: linear-gradient(90deg,
+    var(--live-chip-bg, rgba(255,255,255,0.06)) 0%,
+    var(--live-chip-bg, rgba(255,255,255,0.06)) 50%,
+    var(--perf-chip-bg, rgba(255,255,255,0.06)) 50%,
+    var(--perf-chip-bg, rgba(255,255,255,0.06)) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    0 10px 30px rgba(0,0,0,0.45);
 }
 
 .kpi-total-units {
@@ -19,6 +27,17 @@
   flex-direction: column;
   justify-content: center;
   flex: 1 1 0;
+}
+
+.summary-chip-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  width: 100%;
+  padding: 0;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.08);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
 }
 
 .summary-chip-side-left {
@@ -100,29 +119,32 @@
   margin-top: 2px;
 }
 
-.summary-chip-side.status-green {
-  background-color: rgba(34, 197, 94, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.45);
-  border-radius: 12px;
+.summary-chip-inner.status-green {
+  --chip-bg: rgba(34, 197, 94, 0.18);
+  --chip-border: rgba(34, 197, 94, 0.45);
+  background-color: var(--chip-bg);
+  box-shadow: inset 0 0 0 1px var(--chip-border);
 }
 
-.summary-chip-side.status-amber {
-  background-color: rgba(251, 191, 36, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.40);
-  border-radius: 12px;
+.summary-chip-inner.status-amber {
+  --chip-bg: rgba(251, 191, 36, 0.18);
+  --chip-border: rgba(251, 191, 36, 0.40);
+  background-color: var(--chip-bg);
+  box-shadow: inset 0 0 0 1px var(--chip-border);
 }
 
-.summary-chip-side.status-red {
-  background-color: rgba(239, 68, 68, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.42);
-  border-radius: 12px;
+.summary-chip-inner.status-red {
+  --chip-bg: rgba(239, 68, 68, 0.18);
+  --chip-border: rgba(239, 68, 68, 0.42);
+  background-color: var(--chip-bg);
+  box-shadow: inset 0 0 0 1px var(--chip-border);
 }
 
-.summary-chip-side.status-green .perf-score-trend,
+.summary-chip-inner.status-green .perf-score-trend,
 .perf-score-trend.status-green { color: #22c55e; }
-.summary-chip-side.status-amber .perf-score-trend,
+.summary-chip-inner.status-amber .perf-score-trend,
 .perf-score-trend.status-amber { color: #fbbf24; }
-.summary-chip-side.status-red .perf-score-trend,
+.summary-chip-inner.status-red .perf-score-trend,
 .perf-score-trend.status-red { color: #ef4444; }
 
 /* Legacy row-based layout (kept for compatibility) */
