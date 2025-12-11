@@ -74,6 +74,9 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_rate_uh FLOAT;"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_pin TEXT;"))
             conn.execute(text("ALTER TABLE warehouse_locations ADD COLUMN IF NOT EXISTS is_empty BOOLEAN NOT NULL DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS duration_minutes INTEGER;"))
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS active_minutes INTEGER;"))
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS summary_json TEXT;"))
     except Exception:
         # If ALTER fails (e.g., non-Postgres or permission issues), ignore —
         # admins can run the migration manually in the DB.
@@ -143,6 +146,9 @@ class ShiftSession(Base):
     ended_at = Column(DateTime(timezone=True), nullable=True)
     total_units = Column(Integer, nullable=True)
     avg_rate = Column(Float, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
+    active_minutes = Column(Integer, nullable=True)
+    summary_json = Column(Text, nullable=True)
 
 
 class OrderRecord(Base):
@@ -705,6 +711,128 @@ def set_location_empty_state(
 # --- Shift helpers ---
 
 
+def _hhmm_to_minutes(hhmm: Optional[str]) -> Optional[int]:
+    if not hhmm or ":" not in hhmm:
+        return None
+    try:
+        h, m = [int(x) for x in hhmm.split(":")[:2]]
+        return h * 60 + m
+    except Exception:
+        return None
+
+
+def _minutes_diff(start_hhmm: Optional[str], end_hhmm: Optional[str]) -> Optional[int]:
+    s = _hhmm_to_minutes(start_hhmm)
+    e = _hhmm_to_minutes(end_hhmm)
+    if s is None or e is None:
+        return None
+    diff = e - s
+    return diff if diff >= 0 else None
+
+
+def _compute_active_minutes_from_pick(pick: Dict[str, Any]) -> int:
+    """Compute active minutes for a single pick using the same rules as frontend."""
+    try:
+        start = pick.get("start")
+        close = pick.get("close") or pick.get("closed")
+        base = _minutes_diff(start, close)
+        if base is None:
+            return 0
+
+        excl = 0
+        try:
+            if isinstance(pick.get("log"), dict):
+                breaks = pick["log"].get("breaks") or []
+                wraps = pick["log"].get("wraps") or []
+                excl += sum((b.get("minutes") or 0) for b in breaks if isinstance(b, dict))
+                excl += sum(int((w.get("durationMs") or 0) / 60000) for w in wraps if isinstance(w, dict))
+        except Exception:
+            pass
+
+        excl += int(pick.get("excl") or 0)
+        active = max(0, base - excl)
+        return active
+    except Exception:
+        return 0
+
+
+def _compute_shift_stats(
+    summary: Optional[Dict[str, Any]],
+    started_at: Optional[datetime],
+    ended_at: datetime,
+    provided_total_units: Optional[int],
+    provided_avg_rate: Optional[float],
+) -> Dict[str, Any]:
+    summary = summary or {}
+    picks = summary.get("picks") if isinstance(summary, dict) else None
+    picks_list = picks if isinstance(picks, list) else []
+
+    total_units = provided_total_units
+    if total_units is None:
+        try:
+            total_units = sum(int(p.get("units") or 0) for p in picks_list)
+        except Exception:
+            total_units = None
+
+    active_minutes = None
+    try:
+        active_minutes = sum(_compute_active_minutes_from_pick(p) for p in picks_list)
+    except Exception:
+        active_minutes = None
+
+    duration_minutes = None
+    try:
+        if started_at:
+            duration = ended_at - started_at
+            duration_minutes = int(duration.total_seconds() / 60)
+    except Exception:
+        duration_minutes = None
+
+    avg_rate = provided_avg_rate
+    if avg_rate is None and active_minutes and active_minutes > 0 and total_units is not None:
+        avg_rate = float(total_units) / (active_minutes / 60.0)
+
+    return {
+        "total_units": total_units,
+        "active_minutes": active_minutes,
+        "duration_minutes": duration_minutes,
+        "avg_rate": avg_rate,
+    }
+
+
+def serialize_shift_session(shift: ShiftSession) -> Dict[str, Any]:
+    return {
+        "id": shift.id,
+        "operator_id": shift.operator_id,
+        "device_id": shift.device_id,
+        "operator_name": shift.operator_name,
+        "site": shift.site,
+        "shift_type": shift.shift_type,
+        "started_at": shift.started_at.isoformat() if shift.started_at else None,
+        "ended_at": shift.ended_at.isoformat() if shift.ended_at else None,
+        "total_units": shift.total_units,
+        "avg_rate": shift.avg_rate,
+        "duration_minutes": shift.duration_minutes,
+        "active_minutes": shift.active_minutes,
+    }
+
+
+def get_active_shift_for_operator(operator_id: str) -> Optional[Dict[str, Any]]:
+    if engine is None:
+        return None
+    session = get_session()
+    try:
+        shift = (
+            session.query(ShiftSession)
+            .filter(ShiftSession.operator_id == operator_id, ShiftSession.ended_at.is_(None))
+            .order_by(ShiftSession.started_at.desc())
+            .first()
+        )
+        return serialize_shift_session(shift) if shift else None
+    finally:
+        session.close()
+
+
 def start_shift(
     operator_id: str,
     device_id: Optional[str] = None,
@@ -716,6 +844,30 @@ def start_shift(
         return 0
     session = get_session()
     try:
+        existing = (
+            session.query(ShiftSession)
+            .filter(ShiftSession.operator_id == operator_id, ShiftSession.ended_at.is_(None))
+            .order_by(ShiftSession.started_at.desc())
+            .first()
+        )
+        if existing:
+            updated = False
+            if device_id and not existing.device_id:
+                existing.device_id = device_id
+                updated = True
+            if operator_name and not existing.operator_name:
+                existing.operator_name = operator_name
+                updated = True
+            if shift_type and not existing.shift_type:
+                existing.shift_type = shift_type
+                updated = True
+            if site and not existing.site:
+                existing.site = site
+                updated = True
+            if updated:
+                session.commit()
+            return existing.id or 0
+
         shift = ShiftSession(
             operator_id=operator_id,
             device_id=device_id,
@@ -732,22 +884,57 @@ def start_shift(
 
 
 def end_shift(
-    shift_id: int,
+    operator_id: str,
+    shift_id: Optional[int] = None,
     total_units: Optional[int] = None,
     avg_rate: Optional[float] = None,
-) -> None:
+    summary: Optional[Dict[str, Any]] = None,
+    ended_at: Optional[datetime] = None,
+) -> Dict[str, Any]:
     if engine is None:
-        return
+        raise ValueError("Database not initialised")
+
     session = get_session()
     try:
-        shift = session.get(ShiftSession, shift_id)
-        if shift:
-            shift.ended_at = datetime.now(timezone.utc)
-            if total_units is not None:
-                shift.total_units = total_units
-            if avg_rate is not None:
-                shift.avg_rate = avg_rate
-            session.commit()
+        target: Optional[ShiftSession] = None
+        if shift_id:
+            target = session.get(ShiftSession, shift_id)
+        if target is None:
+            target = (
+                session.query(ShiftSession)
+                .filter(ShiftSession.operator_id == operator_id, ShiftSession.ended_at.is_(None))
+                .order_by(ShiftSession.started_at.desc())
+                .first()
+            )
+
+        if target is None:
+            raise ValueError("No active shift found to close")
+
+        if target.operator_id != operator_id:
+            raise ValueError("Shift does not belong to operator")
+
+        ts_end = ended_at or datetime.now(timezone.utc)
+
+        stats = _compute_shift_stats(summary, target.started_at, ts_end, total_units, avg_rate)
+
+        target.ended_at = ts_end
+        if stats.get("total_units") is not None:
+            target.total_units = stats["total_units"]
+        if stats.get("avg_rate") is not None:
+            target.avg_rate = stats["avg_rate"]
+        if stats.get("duration_minutes") is not None:
+            target.duration_minutes = stats["duration_minutes"]
+        if stats.get("active_minutes") is not None:
+            target.active_minutes = stats["active_minutes"]
+        if summary is not None:
+            try:
+                target.summary_json = json.dumps(summary)
+            except Exception:
+                target.summary_json = None
+
+        session.commit()
+        session.refresh(target)
+        return serialize_shift_session(target)
     finally:
         session.close()
 

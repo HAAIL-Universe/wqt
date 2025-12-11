@@ -344,7 +344,7 @@ function closeContractModal(){
 }
 
 // Apply a chosen contracted start time, log lateness, move into S2
-function applyContractedStart(hh){
+async function applyContractedStart(hh){
   closeContractModal();
 
   // Normalize input: allow "11" or "11:00"
@@ -388,6 +388,22 @@ function applyContractedStart(hh){
     };
     localStorage.setItem(LATE_LOG_KEY, JSON.stringify(obj));
   } catch(e) {}
+
+  // Try to start server session before entering S2
+  try {
+    const started = await (window.WqtAPI?.startShiftSession?.({
+      startHHMM: effectiveHM,
+      shiftLengthHours: chosenLen,
+    }));
+    const meta = (started && started.shift) ? started.shift : started;
+    persistActiveShiftMeta?.(meta || null);
+    localStorage.setItem('shiftActive','1');
+  } catch (err) {
+    console.error('[ShiftStart] Failed to start shift on server', err);
+    showToast?.('Could not start shift on server. Check connection and retry.');
+    startTime = '';
+    return;
+  }
 
   // Show S2 (customer selection) view
   beginShift();
@@ -2749,7 +2765,7 @@ function computeDowntimes(picksArr, shiftBreaksArr){
 }
 
 // ====== End Shift → archive into History ======
-function endShift(){
+async function endShift(){
   if (current){
     return alert('Complete or undo the current order before ending the shift.');
   }
@@ -2812,38 +2828,52 @@ function endShift(){
     scheduledMin
   };
 
+  // Resolve active shift id from persisted meta or backend
+  let activeMeta = typeof getActiveShiftMeta === 'function' ? getActiveShiftMeta() : null;
+  let shiftId = activeMeta?.id;
+
+  if (!shiftId && window.WqtAPI?.fetchActiveShiftSession) {
+    try {
+      const server = await WqtAPI.fetchActiveShiftSession();
+      const meta = server?.shift || null;
+      if (meta) {
+        activeMeta = persistActiveShiftMeta?.(meta) || meta;
+        shiftId = activeMeta?.id;
+      }
+    } catch (err) {
+      console.warn('[endShift] Failed to pull active shift from server', err);
+    }
+  }
+
+  if (!shiftId) {
+    showToast?.('Server has no active shift for you. Refresh or start a new shift.');
+    return;
+  }
+
+  // Server-first end request
+  try {
+    await WqtAPI.endShiftSession({
+      shiftId,
+      totalUnits,
+      avgRate: snapshot.dayRate,
+      summary: snapshot,
+      endTime: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[endShift] Backend end failed', err);
+    showToast?.('Could not end shift on server. Please retry when online.');
+    return;
+  }
+
+  // Local archive follows server success
   historyDays.push(snapshot);
   saveAll();
   renderHistory();
   renderWeeklySummary();
 
-  // ====== OFFLINE RECOVERY: Enqueue shift archive operation ======
-  // Build an END_SHIFT_ARCHIVE operation for the pending queue
-  if (window.Storage && typeof Storage.enqueuePendingOp === 'function' && 
-      window.WqtAPI && typeof WqtAPI.uuidv4 === 'function') {
-    try {
-      const archiveOp = {
-        id: WqtAPI.uuidv4(),
-        type: 'END_SHIFT_ARCHIVE',
-        payload: snapshot,
-        created_at: new Date().toISOString()
-      };
-      Storage.enqueuePendingOp(archiveOp);
-      console.log('[endShift] Enqueued END_SHIFT_ARCHIVE operation');
-      
-      // Attempt immediate sync (will fail silently if offline)
-      if (typeof WqtAPI.syncPendingOps === 'function') {
-        WqtAPI.syncPendingOps().catch(err => {
-          console.warn('[endShift] Immediate sync failed (will retry when online):', err);
-        });
-      }
-    } catch (err) {
-      console.warn('[endShift] Failed to enqueue archive operation:', err);
-    }
-  }
+  clearActiveShiftMeta?.();
 
-  // ====== CRITICAL: Clear all shift state after archive ======
-  // Call exitShiftNoArchive to wipe in-memory state and UI
+  // Clear all shift state now that backend confirmed end
   if (typeof exitShiftNoArchive === 'function') {
     exitShiftNoArchive();
   }
@@ -2868,6 +2898,11 @@ function endShift(){
   updateExitShiftVisibility?.();
   if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
 }
+
+// Manual test matrix:
+// 1) Start shift on Device A, end it → log into Device B and verify server reports no active shift and UI shows start modal.
+// 2) Start shift, go offline, try End Shift → expect toast error and shift remains active until back online.
+// 3) Log in fresh with a server-active shift → reconciliation modal offers Resume or End-now paths and UI follows server choice.
 
 // ====== Clear today (keep shift active, nuke orders + logs) ======
 // ====== Clear today (keep shift active, nuke orders + logs) ======

@@ -10,6 +10,41 @@ let lastRenderedETAmin = null; // last value we actually showed (for 1m threshol
 let stockAuditRows = [];   // Ephemeral rows for Stock Audit pad (not persisted)
 let codesHelperEntries = []; // Local-only codes helper entries
 
+// Persisted active shift metadata (shift_session id, timestamps)
+const ACTIVE_SHIFT_META_KEY = 'wqt_active_shift_meta';
+
+function loadActiveShiftMeta(){
+  try {
+    const raw = localStorage.getItem(ACTIVE_SHIFT_META_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function persistActiveShiftMeta(meta){
+  try {
+    if (meta) {
+      localStorage.setItem(ACTIVE_SHIFT_META_KEY, JSON.stringify(meta));
+    } else {
+      localStorage.removeItem(ACTIVE_SHIFT_META_KEY);
+    }
+  } catch (_) {}
+
+  window.activeShiftSession = meta || null;
+  return meta || null;
+}
+
+function clearActiveShiftMeta(){
+  persistActiveShiftMeta(null);
+}
+
+if (typeof window !== 'undefined') {
+  window.getActiveShiftMeta = loadActiveShiftMeta;
+  window.persistActiveShiftMeta = persistActiveShiftMeta;
+  window.clearActiveShiftMeta = clearActiveShiftMeta;
+}
+
 // Reset predictive ETA smoothing buffer
 function resetEtaSmoother(){
   etaSmooth = [];
@@ -1056,6 +1091,7 @@ function exitShiftNoArchive(){
     localStorage.removeItem('sharedBlock');
     localStorage.removeItem('sharedDockOpen');
     localStorage.removeItem('sharedMySum');
+    clearActiveShiftMeta?.();
     console.log('[exitShiftNoArchive] Cleared all shift-specific localStorage keys');
   } catch(e) {
     console.warn('[exitShiftNoArchive] Failed to clear some localStorage keys:', e);

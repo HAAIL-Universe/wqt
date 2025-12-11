@@ -21,3 +21,9 @@ This entry starts the continuous, authoritative update record maintained by Code
 
 ## 2025-12-10 — State isolation for new users
 - Disabled legacy device→user state migration in `/api/state`; authenticated users now load only their own per-user state and get a blank state if none exists, preventing cross-user history bleed when sharing devices.
+
+## 2025-12-11 — Server-authoritative shift lifecycle
+- Made shift start/end server-first: frontend now creates shift sessions via `/api/shifts/start`, persists the returned `shift_id`, and ends shifts only after `/api/shifts/end` succeeds; local state is cleared/archive only after backend confirmation, with clear error handling when offline.
+- Added backend active-shift discovery (`/api/shifts/active`), reconciliation modal on load/login, and strict mismatch handling (resume server shift or end it immediately) to prevent split-brain states across devices.
+- Extended `shift_sessions` to store duration, active minutes, and archived summaries with logging around start/end for observability; end-shift endpoint now validates ownership and records computed stats.
+- Supervisor/GM views can rely on server truth via the new active-shift endpoint; manual test paths added for cross-device end-of-shift, offline end attempts, and fresh-login reconciliation.

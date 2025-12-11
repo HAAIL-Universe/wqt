@@ -585,6 +585,55 @@ const WqtAPI = {
         Storage.setFlag(StorageKeys.SHIFT_ACTIVE, !!active);
     },
 
+    async fetchActiveShiftSession() {
+        const deviceId = getDeviceId();
+        const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+        return fetchJSON(`/api/shifts/active${qs}`);
+    },
+
+    async startShiftSession(opts = {}) {
+        const deviceId = getDeviceId();
+        const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+
+        const identity = getLoggedInUserIdentity();
+        if (!identity || !identity.userId) {
+            throw new Error('Missing authenticated user for shift start');
+        }
+        const body = {
+            operator_id: identity?.userId || '',
+            operator_name: identity?.displayName || identity?.userId || null,
+            site: opts.site || null,
+            shift_type: opts.shiftType || null,
+            start_hhmm: opts.startHHMM || opts.start_hhmm || null,
+            shift_length_hours: opts.shiftLengthHours || null,
+        };
+
+        return fetchJSON(`/api/shifts/start${qs}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    },
+
+    async endShiftSession(opts = {}) {
+        const deviceId = getDeviceId();
+        const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+
+        const body = {
+            shift_id: opts.shiftId || opts.id || null,
+            total_units: opts.totalUnits ?? null,
+            avg_rate: opts.avgRate ?? null,
+            summary: opts.summary || null,
+            end_time: opts.endTime || null,
+        };
+
+        return fetchJSON(`/api/shifts/end${qs}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    },
+
     async getCurrentOrder() {
         return Storage.getJSON(StorageKeys.CURRENT_ORDER, null);
     },

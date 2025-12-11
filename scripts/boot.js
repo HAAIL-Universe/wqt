@@ -88,6 +88,91 @@ function logoutAndReset() {
   window.location.href = 'login.html';
 }
 
+// Convert ISO timestamp to HH:MM local for reconciliation flows
+function isoToHHMM(iso){
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `${hh}:${mm}`;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Minimal reconciliation modal when backend shows an active shift but local UI does not
+function showShiftReconcileModal(serverShift){
+  const existing = document.getElementById('shiftReconcileModal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'shiftReconcileModal';
+  overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:9999;';
+
+  const card = document.createElement('div');
+  card.style.cssText = 'background:#0b1220;color:#f8fafc;max-width:420px;padding:20px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.4);font-family:Inter,system-ui,sans-serif;';
+  const title = document.createElement('h3');
+  title.textContent = 'Active shift found on server';
+  title.style.marginTop = '0';
+
+  const body = document.createElement('p');
+  const startedHM = isoToHHMM(serverShift?.started_at) || 'unknown';
+  body.textContent = `Server shows an active shift started at ${startedHM}. Resume it here or end it on the server.`;
+
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:12px;justify-content:flex-end;margin-top:18px;';
+
+  const resumeBtn = document.createElement('button');
+  resumeBtn.textContent = 'Resume shift';
+  resumeBtn.className = 'btn';
+  resumeBtn.onclick = () => {
+    const hhmm = isoToHHMM(serverShift?.started_at) || nowHHMM();
+    window.startTime = hhmm;
+    try { localStorage.setItem('shiftActive','1'); } catch (_){ }
+    persistActiveShiftMeta?.(serverShift || null);
+    try { beginShift?.(); } catch(_){ }
+    overlay.remove();
+  };
+
+  const endBtn = document.createElement('button');
+  endBtn.textContent = 'End it now';
+  endBtn.className = 'btn ghost';
+  endBtn.onclick = async () => {
+    try {
+      await window.WqtAPI?.endShiftSession?.({
+        shiftId: serverShift?.id,
+        summary: { start: isoToHHMM(serverShift?.started_at) || '', end: nowHHMM(), picks: [] },
+        totalUnits: 0,
+        avgRate: null,
+        endTime: new Date().toISOString(),
+      });
+      clearActiveShiftMeta?.();
+      exitShiftNoArchive?.();
+      showToast?.('Shift closed on server');
+    } catch (err) {
+      console.error('[Reconcile] Failed to end server shift', err);
+      showToast?.('Could not end shift on server. Try again.');
+    } finally {
+      overlay.remove();
+    }
+  };
+
+  btnRow.appendChild(resumeBtn);
+  btnRow.appendChild(endBtn);
+
+  card.appendChild(title);
+  card.appendChild(body);
+  card.appendChild(btnRow);
+  overlay.appendChild(card);
+
+  overlay.addEventListener('click', (e)=>{
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.body.appendChild(overlay);
+}
+
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
@@ -124,6 +209,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const hadShift = !!startTime;
       const hadOpen  = !!(current && Number.isFinite(current.total));
+
+      // ── 1b) Reconcile with backend shift session state ──────────
+      try {
+        if (window.WqtAPI?.fetchActiveShiftSession) {
+          const res = await WqtAPI.fetchActiveShiftSession();
+          const serverShift = res?.shift || null;
+          persistActiveShiftMeta?.(serverShift || null);
+
+          const localActive = hadShift || localStorage.getItem('shiftActive') === '1';
+          if (serverShift && !localActive) {
+            showShiftReconcileModal(serverShift);
+          } else if (!serverShift && localActive) {
+            // Local thought it was active, server does not → reset to clean slate
+            exitShiftNoArchive?.();
+            showTab?.('tracker');
+            openContractedStartPicker?.();
+          }
+        }
+      } catch (err) {
+        console.warn('[Boot] Active shift check failed:', err);
+      }
 
       // ── 2) Build customer dropdowns (safe post-restore) ───────────
       buildDropdown('oDD','oCust','oOther','o');

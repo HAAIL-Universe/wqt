@@ -18,6 +18,7 @@ from .db import (
     get_usage_summary,
     start_shift,
     end_shift,
+    get_active_shift_for_operator,
     get_recent_shifts,
     get_all_device_states,
     send_admin_message,
@@ -104,6 +105,130 @@ def get_current_user(
 
     print(f"AUTH_DEBUG: current_user.id={user.id} username={user.username} role={user.role}")
     return user
+
+
+# -------------------------------------------------------------------
+# Admin logging helpers
+# -------------------------------------------------------------------
+def _safe_int(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _trim_text(value: str, limit: int = 200) -> str:
+    if not value:
+        return ""
+    return value if len(value) <= limit else value[: limit - 3] + "..."
+
+
+def _get_wrap_progress(state: MainState, current: Dict[str, Any]) -> Dict[str, Optional[int]]:
+    wraps = []
+    for candidate in (state.tempWraps, current.get("wraps"), (current.get("log") or {}).get("wraps")):
+        if candidate:
+            wraps = candidate
+            break
+
+    latest = wraps[-1] if wraps else None
+
+    units_done = _safe_int(current.get("done"))
+    units_left = _safe_int(current.get("left"))
+    units_total = _safe_int(current.get("total") or current.get("units"))
+
+    if isinstance(latest, dict):
+        units_done = _safe_int(latest.get("done")) or units_done
+        units_left = _safe_int(latest.get("left")) or units_left
+        units_total = _safe_int(latest.get("total")) or units_total
+
+    if units_total is not None and units_done is not None and units_left is None:
+        units_left = max(units_total - units_done, 0)
+
+    return {"done": units_done, "left": units_left, "total": units_total}
+
+
+def summarize_state_save(state: MainState) -> Dict[str, Any]:
+    """
+    Build a concise, human-friendly summary for STATE_SAVE events so the
+    admin log shows what changed instead of a generic "Save State" entry.
+    """
+
+    current: Dict[str, Any] = state.current or {}
+    summary_label = "state_snapshot"
+    parts: List[str] = []
+
+    operator_display = current.get("operator_name") or current.get("operator_role")
+    operator_id = current.get("operator_id")
+    if operator_display:
+        parts.append(f"user={operator_display}")
+    elif operator_id:
+        parts.append(f"user_id={operator_id}")
+
+    order_name: Optional[str] = None
+    progress = _get_wrap_progress(state, current)
+    locations = _safe_int(current.get("locations") or (current.get("log") or {}).get("locations"))
+
+    active_break = current.get("active_break")
+    if isinstance(active_break, dict):
+        summary_label = "shift_break"
+        label = "lunch" if active_break.get("type") == "L" else "break"
+        break_bits = [f"type={label}"]
+        if active_break.get("startHHMM"):
+            break_bits.append(f"start={active_break.get('startHHMM')}")
+        target_sec = _safe_int(active_break.get("targetSec"))
+        if target_sec:
+            break_bits.append(f"target={int(target_sec / 60)}m")
+        parts.append(", ".join(break_bits))
+    elif current.get("name") or progress["total"] is not None or progress["done"] is not None:
+        summary_label = "order_update"
+        order_name = current.get("name") or current.get("order_name") or "order"
+        order_bits = [f"order={order_name}"]
+        if progress["done"] is not None and progress["total"] is not None:
+            order_bits.append(f"units={progress['done']}/{progress['total']}")
+        elif progress["done"] is not None:
+            order_bits.append(f"units_done={progress['done']}")
+        if progress["left"] is not None:
+            order_bits.append(f"left={progress['left']}")
+        if locations is not None:
+            order_bits.append(f"locations={locations}")
+        if current.get("shared"):
+            order_bits.append("shared=true")
+        parts.append(", ".join(order_bits))
+    elif state.picks:
+        summary_label = "recent_pick"
+        last_pick = state.picks[-1] or {}
+        order_name = last_pick.get("name") or last_pick.get("order_name") or "pick"
+        pick_bits = [f"order={order_name}"]
+        pick_units = _safe_int(last_pick.get("units") or last_pick.get("total"))
+        pick_locations = _safe_int(last_pick.get("locations"))
+        if pick_units is not None:
+            pick_bits.append(f"units={pick_units}")
+        if pick_locations is not None:
+            pick_bits.append(f"locations={pick_locations}")
+        parts.append(", ".join(pick_bits))
+    elif state.startTime:
+        summary_label = "shift_state"
+        shift_bits = [f"start={state.startTime}"]
+        if state.history:
+            shift_bits.append(f"history_days={len(state.history)}")
+        parts.append(", ".join(shift_bits))
+
+    summary_text = f"{summary_label}: " + "; ".join(parts) if parts else summary_label
+
+    return {
+        "summary": _trim_text(summary_text, 200),
+        "summary_type": summary_label,
+        "summary_parts": parts[:4],
+        "operator_name": operator_display,
+        "operator_id": operator_id,
+        "order_name": order_name,
+        "units_done": progress.get("done"),
+        "units_total": progress.get("total"),
+        "units_left": progress.get("left"),
+        "locations": locations,
+        "start_time": state.startTime or None,
+        "saved_at": state.savedAt or None,
+    }
 
 # -------------------------------------------------------------------
 # CORS
@@ -253,6 +378,9 @@ async def set_state(
         elif order_name:
             detail["current_name"] = order_name
 
+    # Provide a concise summary string for the admin log
+    detail.update(summarize_state_save(state))
+
     log_usage_event("STATE_SAVE", detail)
 
     print(f"HISTORY_DEBUG: state save for user_id={current_user.username} device_id={device_id}")
@@ -324,12 +452,16 @@ class ShiftStartPayload(BaseModel):
     operator_name: Optional[str] = None
     site: Optional[str] = None
     shift_type: Optional[str] = None
+    start_hhmm: Optional[str] = None
+    shift_length_hours: Optional[float] = None
 
 
 class ShiftEndPayload(BaseModel):
-    shift_id: int
+    shift_id: Optional[int] = None
     total_units: Optional[int] = None
     avg_rate: Optional[float] = None
+    summary: Optional[Dict[str, Any]] = None
+    end_time: Optional[str] = None
 
 
 @app.post("/api/shifts/start")
@@ -350,12 +482,17 @@ async def api_shift_start(
         shift_type=payload.shift_type,
     )
 
+    active_shift = get_active_shift_for_operator(current_user.username)
+
     detail: Dict[str, Any] = {
         "shift_id": shift_id,
         "operator_id": current_user.username,
         "operator_name": payload.operator_name,
         "site": payload.site,
         "shift_type": payload.shift_type,
+        "start_hhmm": payload.start_hhmm,
+        "shift_length_hours": payload.shift_length_hours,
+        "already_active": bool(active_shift and active_shift.get("ended_at") is None and active_shift.get("id") == shift_id),
     }
     if device_id:
         detail["device_id"] = device_id
@@ -368,7 +505,23 @@ async def api_shift_start(
         "note": "Shift start bound to authenticated user",
     })
 
-    return {"shift_id": shift_id}
+    return {"shift_id": shift_id, "shift": active_shift}
+
+
+@app.get("/api/shifts/active")
+async def api_shift_active(
+    device_id: Optional[str] = Query(default=None, alias="device-id"),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    active_shift = get_active_shift_for_operator(current_user.username)
+    return {
+        "active": bool(active_shift),
+        "shift": active_shift,
+        "device_id": device_id,
+    }
 
 
 @app.post("/api/shifts/end")
@@ -380,23 +533,46 @@ async def api_shift_end(
     if not current_user:
         raise HTTPException(status_code=401, detail="Missing user identity")
 
-    end_shift(
-        shift_id=payload.shift_id,
-        total_units=payload.total_units,
-        avg_rate=payload.avg_rate,
-    )
+    parsed_end = None
+    if payload.end_time:
+        try:
+            parsed_end = datetime.fromisoformat(payload.end_time)
+        except Exception:
+            parsed_end = None
+
+    try:
+        closed_shift = end_shift(
+            operator_id=current_user.username,
+            shift_id=payload.shift_id,
+            total_units=payload.total_units,
+            avg_rate=payload.avg_rate,
+            summary=payload.summary,
+            ended_at=parsed_end,
+        )
+    except ValueError as exc:
+        log_usage_event(
+            "SHIFT_END_ERROR",
+            {
+                "shift_id": payload.shift_id,
+                "operator_id": current_user.username,
+                "device_id": device_id,
+                "error": str(exc),
+            },
+        )
+        raise HTTPException(status_code=404, detail=str(exc))
 
     detail: Dict[str, Any] = {
-        "shift_id": payload.shift_id,
+        "shift_id": closed_shift.get("id"),
         "total_units": payload.total_units,
         "avg_rate": payload.avg_rate,
+        "operator_id": current_user.username,
     }
     if device_id:
         detail["device_id"] = device_id
 
-    log_usage_event("SHIFT_END", detail)
+    log_usage_event("SHIFT_END", {**detail, "ended_at": closed_shift.get("ended_at")})
 
-    return {"status": "ok"}
+    return {"status": "ok", "shift": closed_shift}
 
 
 @app.get("/api/shifts/recent")
