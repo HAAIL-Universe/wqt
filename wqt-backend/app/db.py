@@ -228,6 +228,22 @@ class OrderEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
+class PerfSample(Base):
+    """
+    Per-shift Perf Score samples (pts/h) captured over time for charting.
+    """
+
+    __tablename__ = "perf_samples"
+
+    id = Column(Integer, primary_key=True, index=True)
+    operator_id = Column(Text, nullable=False, index=True)
+    shift_id = Column(Integer, ForeignKey("shift_sessions.id"), nullable=True, index=True)
+    device_id = Column(Text, nullable=True, index=True)
+    perf_score = Column(Float, nullable=True)
+    sample_time = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
 # --- User Authentication Table ---
 
 
@@ -963,6 +979,62 @@ def get_recent_shifts(limit: int = 50, operator_id: Optional[str] = None) -> Lis
             }
             for s in q
         ]
+    finally:
+        session.close()
+
+
+def log_perf_sample(
+    operator_id: str,
+    shift_id: Optional[int],
+    perf_score: Optional[float],
+    sample_time: Optional[datetime] = None,
+    device_id: Optional[str] = None,
+) -> bool:
+    if engine is None:
+        return False
+
+    session = get_session()
+    try:
+        ts = sample_time or datetime.now(timezone.utc)
+        sample = PerfSample(
+            operator_id=operator_id,
+            shift_id=shift_id,
+            device_id=device_id,
+            perf_score=perf_score,
+            sample_time=ts,
+        )
+        session.add(sample)
+        session.commit()
+        return True
+    except Exception as exc:
+        session.rollback()
+        print(f"[PERF_SAMPLE_ERROR] failed to log perf sample: {exc}")
+        return False
+    finally:
+        session.close()
+
+
+def get_perf_samples_for_shift(operator_id: str, shift_id: Optional[int]) -> List[Dict[str, Any]]:
+    if engine is None:
+        return []
+
+    session = get_session()
+    try:
+        q = session.query(PerfSample).filter(PerfSample.operator_id == operator_id)
+        if shift_id is not None:
+            q = q.filter(PerfSample.shift_id == shift_id)
+        q = q.order_by(PerfSample.sample_time.asc())
+
+        samples: List[Dict[str, Any]] = []
+        for s in q:
+            samples.append(
+                {
+                    "timestamp": s.sample_time.isoformat() if s.sample_time else None,
+                    "perfScore": s.perf_score,
+                    "shift_id": s.shift_id,
+                }
+            )
+        return samples
     finally:
         session.close()
 

@@ -13,6 +13,11 @@ let codesHelperEntries = []; // Local-only codes helper entries
 // Persisted active shift metadata (shift_session id, timestamps)
 const ACTIVE_SHIFT_META_KEY = 'wqt_active_shift_meta';
 
+// Perf Score sampling (per-shift)
+const PERF_SAMPLE_MIN_MS = 60000; // throttle logging to backend
+let perfSampleLastAt = 0;
+let perfSampleLastVal = null;
+
 // Perf Score baseline: aligns with existing day-level perf thresholds (300 pts/h)
 const PERF_TARGET_PTS_PER_HOUR = 300;
 
@@ -33,6 +38,28 @@ function setChipGradientVar(which, status){
   if (!chip) return;
   const color = SUMMARY_STATUS_BG[status] || 'rgba(255,255,255,0.06)';
   chip.style.setProperty(which, color);
+}
+
+function maybeLogPerfSample(perfScore){
+  if (!Number.isFinite(perfScore)) return;
+  if (!window.WqtAPI || typeof window.WqtAPI.logPerfScoreSample !== 'function') return;
+
+  const now = Date.now();
+  const changed = perfSampleLastVal === null || Math.abs(perfScore - perfSampleLastVal) >= 0.5;
+  if (perfSampleLastAt && now - perfSampleLastAt < PERF_SAMPLE_MIN_MS && !changed) return;
+
+  const meta = (typeof getActiveShiftMeta === 'function') ? getActiveShiftMeta() : null;
+  const shiftId = meta?.id;
+  if (!shiftId) return;
+
+  perfSampleLastAt = now;
+  perfSampleLastVal = perfScore;
+
+  WqtAPI.logPerfScoreSample({
+    shiftId,
+    perfScore,
+    timestamp: new Date().toISOString(),
+  }).catch(err => console.warn('[PerfSample] log failed', err));
 }
 
 // Tiny arrow/circle indicator for Perf Score trajectory
@@ -158,6 +185,7 @@ function refreshSummaryChips(main) {
   console.debug('[SummaryChip] Perf color', { perfScore, perfScoreDelta, perfStatus });
   renderPerfScoreTrend(perfScoreDelta, perfStatus);
   window.perfScoreDelta = perfScoreDelta;
+  maybeLogPerfSample(perfScore);
 }
 
 // Patch updateSummary to also refresh the summary chips

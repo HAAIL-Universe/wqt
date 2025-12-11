@@ -40,6 +40,8 @@ from .db import (
     set_location_empty_state,
     get_session,
     WarehouseLocation,
+    log_perf_sample,
+    get_perf_samples_for_shift,
 )
 
 app = FastAPI(title="WQT Backend v1")
@@ -464,6 +466,12 @@ class ShiftEndPayload(BaseModel):
     end_time: Optional[str] = None
 
 
+class PerfSamplePayload(BaseModel):
+    shift_id: Optional[int] = None
+    perf_score: float
+    timestamp: Optional[str] = None
+
+
 @app.post("/api/shifts/start")
 async def api_shift_start(
     payload: ShiftStartPayload,
@@ -583,6 +591,92 @@ async def api_shifts_recent(
     if not current_user:
         raise HTTPException(status_code=401, detail="Missing user identity")
     return get_recent_shifts(limit=limit, operator_id=current_user.username)
+
+
+# -------------------------------------------------------------------
+# Perf Score time series (per-shift)
+# -------------------------------------------------------------------
+@app.post("/api/perf/samples")
+async def api_perf_sample(
+    payload: PerfSamplePayload,
+    device_id: Optional[str] = Query(default=None, alias="device-id"),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    shift_id = payload.shift_id
+    active_shift = None
+    if shift_id is None:
+        active_shift = get_active_shift_for_operator(current_user.username)
+        shift_id = active_shift.get("id") if active_shift else None
+
+    if shift_id is None:
+        raise HTTPException(status_code=404, detail="No active shift to log Perf Score against")
+
+    sample_time = None
+    if payload.timestamp:
+        try:
+            sample_time = datetime.fromisoformat(payload.timestamp)
+            if sample_time.tzinfo is None:
+                sample_time = sample_time.replace(tzinfo=datetime.now().astimezone().tzinfo)
+        except Exception:
+            sample_time = None
+
+    ok = log_perf_sample(
+        operator_id=current_user.username,
+        shift_id=shift_id,
+        perf_score=payload.perf_score,
+        sample_time=sample_time,
+        device_id=device_id,
+    )
+
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to log Perf Score sample")
+
+    log_usage_event(
+        "PERF_SAMPLE_WRITE",
+        {
+            "operator_id": current_user.username,
+            "shift_id": shift_id,
+            "perf_score": payload.perf_score,
+            "device_id": device_id,
+        },
+    )
+
+    return {"status": "ok", "shift_id": shift_id}
+
+
+@app.get("/api/perf/samples")
+async def api_perf_samples(
+    shift_id: Optional[int] = Query(default=None, alias="shift-id"),
+    device_id: Optional[str] = Query(default=None, alias="device-id"),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+
+    resolved_shift_id = shift_id
+    if resolved_shift_id is None:
+        active_shift = get_active_shift_for_operator(current_user.username)
+        resolved_shift_id = active_shift.get("id") if active_shift else None
+
+    if resolved_shift_id is None:
+        return {"shift_id": None, "samples": []}
+
+    samples = get_perf_samples_for_shift(current_user.username, resolved_shift_id)
+
+    log_usage_event(
+        "PERF_SAMPLE_READ",
+        {
+            "operator_id": current_user.username,
+            "shift_id": resolved_shift_id,
+            "device_id": device_id,
+            "count": len(samples),
+        },
+    )
+
+    return {"shift_id": resolved_shift_id, "samples": samples}
 
 
 # -------------------------------------------------------------------

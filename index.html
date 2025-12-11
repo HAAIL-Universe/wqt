@@ -617,6 +617,10 @@
             Picking finished
           </button>
 
+          <button class="btn" id="btnPerfHistory" type="button" onclick="openPerfHistoryModal()">
+            Perf History
+          </button>
+
           <button class="btn" id="btnEndShift" onclick="endShift()">
             End shift &amp; archive
           </button>
@@ -695,6 +699,26 @@
         </div>
 
         <div id="overlayStatus" class="hint" style="margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <div id="perfHistoryModal" class="modal" style="display:none;">
+      <div class="modal-content" style="max-width:760px;">
+        <div class="hdr" style="display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="margin:0;">Perf Score – Today’s Trajectory</h3>
+          <button class="btn ghost slim" type="button" onclick="closePerfHistoryModal()">✖</button>
+        </div>
+
+        <div id="perfHistoryBody" class="fld" style="min-height:260px;">
+          <div id="perfHistoryMessage" class="hint">Loading…</div>
+          <div id="perfHistoryChartWrap" style="display:none; margin-top:6px;">
+            <svg id="perfHistoryChart" viewBox="0 0 720 320" role="img" aria-label="Perf Score chart" style="width:100%; height:320px;"></svg>
+          </div>
+        </div>
+
+        <div class="actions" style="justify-content:flex-end; gap:8px;">
+          <button class="btn ghost" type="button" onclick="closePerfHistoryModal()">Close</button>
+        </div>
       </div>
     </div>
   </section>

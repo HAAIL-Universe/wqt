@@ -634,6 +634,37 @@ const WqtAPI = {
         });
     },
 
+    async logPerfScoreSample(opts = {}) {
+        const deviceId = getDeviceId();
+        const qs = deviceId ? `?device-id=${encodeURIComponent(deviceId)}` : '';
+
+        if (!Number.isFinite(opts.perfScore)) {
+            throw new Error('perfScore is required');
+        }
+
+        const body = {
+            shift_id: opts.shiftId || null,
+            perf_score: opts.perfScore,
+            timestamp: opts.timestamp || null,
+        };
+
+        return fetchJSON(`/api/perf/samples${qs}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    },
+
+    async fetchPerfScoreSamples(opts = {}) {
+        const deviceId = getDeviceId();
+        const params = [];
+        if (opts.shiftId) params.push(`shift-id=${encodeURIComponent(opts.shiftId)}`);
+        if (deviceId) params.push(`device-id=${encodeURIComponent(deviceId)}`);
+        const qs = params.length ? `?${params.join('&')}` : '';
+
+        return fetchJSON(`/api/perf/samples${qs}`);
+    },
+
     async getCurrentOrder() {
         return Storage.getJSON(StorageKeys.CURRENT_ORDER, null);
     },

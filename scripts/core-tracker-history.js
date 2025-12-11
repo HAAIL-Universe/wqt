@@ -3228,3 +3228,149 @@ function clearAllCustom(){
   reloadDropdowns();
   showToast?.('All custom customers cleared');
 }
+
+// ====== Perf Score History modal ======
+function openPerfHistoryModal(){
+  const modal = document.getElementById('perfHistoryModal');
+  const msg = document.getElementById('perfHistoryMessage');
+  const wrap = document.getElementById('perfHistoryChartWrap');
+  if (!modal) return;
+  if (msg) msg.textContent = 'Loading…';
+  if (wrap) wrap.style.display = 'none';
+  modal.style.display = 'flex';
+  fetchPerfHistory();
+}
+
+function closePerfHistoryModal(){
+  const modal = document.getElementById('perfHistoryModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function fetchPerfHistory(){
+  const msg = document.getElementById('perfHistoryMessage');
+  const wrap = document.getElementById('perfHistoryChartWrap');
+  const svg = document.getElementById('perfHistoryChart');
+  if (msg) msg.textContent = 'Loading…';
+  if (wrap) wrap.style.display = 'none';
+  if (svg) svg.innerHTML = '';
+
+  const meta = (typeof getActiveShiftMeta === 'function') ? getActiveShiftMeta() : null;
+  const shiftId = meta?.id || null;
+
+  if (!window.WqtAPI || typeof window.WqtAPI.fetchPerfScoreSamples !== 'function') {
+    if (msg) msg.textContent = 'Backend not configured for Perf Score history.';
+    return;
+  }
+
+  try {
+    const res = await WqtAPI.fetchPerfScoreSamples({ shiftId });
+    const samples = (res && Array.isArray(res.samples)) ? res.samples : [];
+
+    if (!samples.length) {
+      if (msg) msg.textContent = 'No Perf Score history yet for this shift.';
+      return;
+    }
+
+    const startIso = meta?.started_at || meta?.start_time || samples[0]?.timestamp || null;
+    renderPerfHistoryChart(samples, startIso);
+    if (wrap) wrap.style.display = 'block';
+    if (msg) msg.textContent = '';
+  } catch (err) {
+    console.error('[PerfHistory] fetch failed', err);
+    if (msg) msg.textContent = 'Could not load Perf Score history right now.';
+  }
+}
+
+function renderPerfHistoryChart(rawSamples, shiftStartIso){
+  const svg = document.getElementById('perfHistoryChart');
+  if (!svg) return null;
+
+  const parsed = (rawSamples || [])
+    .map(s => ({
+      ts: Date.parse(s.timestamp || ''),
+      val: Number(s.perfScore),
+    }))
+    .filter(s => Number.isFinite(s.ts) && Number.isFinite(s.val))
+    .sort((a,b)=> a.ts - b.ts);
+
+  if (!parsed.length) return null;
+
+  const width = 720;
+  const height = 320;
+  const padL = 56, padR = 20, padT = 16, padB = 34;
+  const plotW = width - padL - padR;
+  const plotH = height - padT - padB;
+
+  const startMs = Number.isFinite(Date.parse(shiftStartIso || ''))
+    ? Date.parse(shiftStartIso)
+    : parsed[0].ts;
+  const endMs = Date.now();
+  const span = Math.max(1, endMs - startMs);
+
+  const values = parsed.map(p => p.val);
+  const minVal = Math.min(...values);
+  const maxVal = Math.max(...values);
+  const yPadding = Math.max(5, (maxVal - minVal) * 0.1);
+  const yMin = minVal - yPadding;
+  const yMax = maxVal + yPadding;
+  const ySpan = Math.max(1, yMax - yMin);
+
+  const toX = (ts)=> padL + ((ts - startMs) / span) * plotW;
+  const toY = (val)=> padT + (1 - ((val - yMin) / ySpan)) * plotH;
+
+  const points = parsed.map(p => `${toX(p.ts)},${toY(p.val)}`).join(' ');
+
+  // Build 30-minute ticks from shift start to now
+  const ticks = [];
+  const step = 30 * 60 * 1000;
+  const firstTick = Math.ceil(startMs / step) * step;
+  for (let t = firstTick; t <= endMs + 1; t += step) {
+    ticks.push(t);
+  }
+
+  const tickLines = ticks.map(t => {
+    const x = toX(t);
+    return `<line class="grid" x1="${x}" y1="${padT}" x2="${x}" y2="${height - padB}" />`;
+  }).join('');
+
+  const tickLabels = ticks.map(t => {
+    const x = toX(t);
+    const d = new Date(t);
+    const hh = String(d.getHours()).padStart(2,'0');
+    const mm = String(d.getMinutes()).padStart(2,'0');
+    return `<text x="${x}" y="${height - 8}" fill="rgba(255,255,255,0.7)" font-size="11" text-anchor="middle">${hh}:${mm}</text>`;
+  }).join('');
+
+  const yTicks = [yMin, (yMin + yMax) / 2, yMax];
+  const yLines = yTicks.map(v => {
+    const y = toY(v);
+    return `<line class="grid" x1="${padL}" y1="${y}" x2="${width - padR}" y2="${y}" />`;
+  }).join('');
+  const yLabels = yTicks.map(v => {
+    const y = toY(v);
+    return `<text x="${padL - 8}" y="${y + 4}" fill="rgba(255,255,255,0.7)" font-size="11" text-anchor="end">${Math.round(v)}</text>`;
+  }).join('');
+
+  const latest = parsed[parsed.length - 1];
+  const perfTarget = (typeof PERF_TARGET_PTS_PER_HOUR === 'number') ? PERF_TARGET_PTS_PER_HOUR : 300;
+  const delta = Number.isFinite(latest.val) && perfTarget > 0 ? (latest.val - perfTarget) / perfTarget : 0;
+  const perfColor = delta > 0.03 ? '#22c55e' : (delta < -0.03 ? '#ef4444' : '#fbbf24');
+  svg.style.setProperty('--perf-line', perfColor);
+
+  const dots = parsed.map(p => `<circle class="dot" cx="${toX(p.ts)}" cy="${toY(p.val)}" r="3" />`).join('');
+
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.innerHTML = `
+    <rect x="0" y="0" width="${width}" height="${height}" fill="none" />
+    <line class="axis" x1="${padL}" y1="${height - padB}" x2="${width - padR}" y2="${height - padB}" />
+    <line class="axis" x1="${padL}" y1="${padT}" x2="${padL}" y2="${height - padB}" />
+    ${tickLines}
+    ${yLines}
+    <polyline class="line" points="${points}" />
+    ${dots}
+    ${tickLabels}
+    ${yLabels}
+  `;
+
+  return perfColor;
+}

@@ -147,6 +147,11 @@
 .summary-chip-inner.status-red .perf-score-trend,
 .perf-score-trend.status-red { color: #ef4444; }
 
+#perfHistoryChart .axis { stroke: rgba(255,255,255,0.25); stroke-width: 1; }
+#perfHistoryChart .grid { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+#perfHistoryChart .line { fill: none; stroke: var(--perf-line, #22c55e); stroke-width: 2; }
+#perfHistoryChart .dot { fill: var(--perf-line, #22c55e); }
+
 /* Legacy row-based layout (kept for compatibility) */
 .summary-chip-row {
   display: flex;
