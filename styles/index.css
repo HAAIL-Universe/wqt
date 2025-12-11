@@ -29,6 +29,22 @@
   align-items: flex-end;
 }
 
+.perf-score-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.perf-score-trend {
+  width: 12px;
+  font-size: 0.8rem;
+  line-height: 1;
+  text-align: center;
+  display: none;
+}
+
 .summary-chip-divider {
   width: 1px;
   margin: 0 12px;
@@ -101,6 +117,13 @@
   box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.42);
   border-radius: 12px;
 }
+
+.summary-chip-side.status-green .perf-score-trend,
+.perf-score-trend.status-green { color: #22c55e; }
+.summary-chip-side.status-amber .perf-score-trend,
+.perf-score-trend.status-amber { color: #fbbf24; }
+.summary-chip-side.status-red .perf-score-trend,
+.perf-score-trend.status-red { color: #ef4444; }
 
 /* Legacy row-based layout (kept for compatibility) */
 .summary-chip-row {

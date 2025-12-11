@@ -24,6 +24,30 @@ function setSummarySideStatus(el, status){
   if (status) el.classList.add(status);
 }
 
+// Tiny arrow/circle indicator for Perf Score trajectory
+function renderPerfScoreTrend(delta, status){
+  const trendEl = document.getElementById('perf-score-trend');
+  if (!trendEl) return;
+
+  SUMMARY_STATUS_CLASSES.forEach(cls => trendEl.classList.remove(cls));
+
+  if (!Number.isFinite(delta)) {
+    trendEl.style.display = 'none';
+    trendEl.textContent = '';
+    return;
+  }
+
+  let glyph = '●';
+  if (delta > 0.03)      glyph = '▲';
+  else if (delta < -0.03) glyph = '▼';
+
+  trendEl.textContent = glyph;
+  trendEl.style.display = 'inline-block';
+
+  // Keep the icon color synced with the PerfScore status side
+  if (status) trendEl.classList.add(status);
+}
+
 function loadActiveShiftMeta(){
   try {
     const raw = localStorage.getItem(ACTIVE_SHIFT_META_KEY);
@@ -98,6 +122,7 @@ function refreshSummaryChips(main) {
 
   // Performance Score: per hour for today's shift
   let perfScore = null;
+  let perfScoreDelta = null;
   if (typeof computePerformancePointsPerHourToday === 'function') {
     perfScore = computePerformancePointsPerHourToday();
   }
@@ -110,12 +135,14 @@ function refreshSummaryChips(main) {
   const perfTarget = PERF_TARGET_PTS_PER_HOUR;
   let perfStatus = null;
   if (perfTarget > 0 && perfScore != null && isFinite(perfScore)) {
-    const delta = (perfScore - perfTarget) / perfTarget;
-    if (delta >= 0) perfStatus = 'status-green';
-    else if (delta >= -0.03) perfStatus = 'status-amber';
+    perfScoreDelta = (perfScore - perfTarget) / perfTarget;
+    if (perfScoreDelta >= 0) perfStatus = 'status-green';
+    else if (perfScoreDelta >= -0.03) perfStatus = 'status-amber';
     else perfStatus = 'status-red';
   }
   setSummarySideStatus(perfSide, perfStatus);
+  renderPerfScoreTrend(perfScoreDelta, perfStatus);
+  window.perfScoreDelta = perfScoreDelta;
 }
 
 // Patch updateSummary to also refresh the summary chips
