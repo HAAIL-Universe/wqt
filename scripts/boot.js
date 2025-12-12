@@ -230,7 +230,8 @@ document.addEventListener('DOMContentLoaded', function () {
             // Local thought it was active, server does not → reset to clean slate
             exitShiftNoArchive?.();
             showTab?.('tracker');
-            openContractedStartPicker?.();
+            // No modal, no user interaction; optionally re-init startTime
+            if (!window.startTime) window.startTime = nowHHMM();
           }
         }
       } catch (err) {
@@ -280,21 +281,15 @@ document.addEventListener('DOMContentLoaded', function () {
       applyProGate();
 
       // ── 5) Shift/Order shell visibility based on restored flags ───
-      const shift  = document.getElementById('shiftCard');
+
       const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
+      const shiftLog = document.getElementById('shiftLogCard');
 
-      if (hadShift && window.archived !== true) {
-        if (shift)  shift.style.display  = 'none';
-        if (active) active.style.display = 'block';
-        if (done)   done.style.display   = (picks.length ? 'block' : 'none');
-      } else {
-        // No shift yet → hide order-only controls by default
-        ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
-          const el = document.getElementById(id);
-          if (el) el.style.display = 'none';
-        });
-      }
+      // Always show tracker cards immediately, regardless of shift state
+      if (active) active.style.display = 'block';
+      if (done)   done.style.display   = (picks.length ? 'block' : 'none');
+      if (shiftLog) shiftLog.style.display = 'block';
 
       renderShiftPanel?.();
 

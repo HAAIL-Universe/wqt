@@ -203,10 +203,7 @@ window._chosenShiftLen = null;
 window._chosenStartHHMM = null;
 
 // Close the contracted-start modal
-function closeContractModal(){
-  const modal = document.getElementById('contractModal');
-  if (modal) modal.style.display = 'none';
-}
+
 
 // Snap a HH:MM value forward to the next 15-minute block
 function snapForwardQuarter(hhmm) {
@@ -241,18 +238,12 @@ function getEffectiveLiveEndHHMM(){
 // === SharedPad Persistence + Auto-Hide Helpers ===
 
 // Open dynamic start picker with chosen shift length (e.g. 9h / 10h)
-function openDynamicStartPicker(len){
-  // Store today’s chosen shift length in the hidden field; no long-term preference
-  const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(len || 9);
-  openContractedStartPicker();
+  // Contracted start picker removed; no-op
+  return;
 }
 
 // Apply contracted start logic and log lateness for the day
-function applyContractedStart(hhmm){
-  closeContractModal();
 
-  // Use stored preference for shift length or default 9h
   const prefLen = getShiftPref() || 9;
   const lenEl = document.getElementById('tLen');
   if (lenEl) lenEl.value = String(prefLen);
@@ -652,7 +643,10 @@ function toggleOperative(){
 // Start an Operative block (non-picking work)
 // NOTE: shift must be started; we do not auto-start a shift here.
 function startOperative(){
-  if (!startTime) { showToast('Start your shift first'); return; }
+  if (!startTime) {
+    startTime = nowHHMM();
+    beginShift?.();
+  }
   if (operativeActive) return;
 
   // ensure log exists
@@ -1359,11 +1353,23 @@ function clearStartHint(){
 function getShiftPref(){
   const v = localStorage.getItem(SHIFT_PREF);
   const n = parseInt(v, 10);
-  return (n === 9 || n === 10) ? n : null;
+  return (Number.isFinite(n) && n > 0) ? n : 9;
 }
 function setShiftPref(n){
-  if (n === 9 || n === 10) localStorage.setItem(SHIFT_PREF, String(n));
+  n = parseInt(n, 10);
+  if (Number.isFinite(n) && n > 0) localStorage.setItem(SHIFT_PREF, String(n));
 }
+
+// Wire contracted-hours input in Pro Tools modal
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('contractedHoursInput');
+  if (input) {
+    input.value = getShiftPref();
+    input.addEventListener('change', function() {
+      setShiftPref(input.value);
+    });
+  }
+});
 
 // ---- Lateness logging ----
 const LATE_LOG_KEY = 'wqt.lateLog'; // { "YYYY-MM-DD": {contracted, actual, lateMin, shiftLen} }
@@ -2266,9 +2272,8 @@ function updCalcGate() {
   if (digits.endsWith(OPER_UNLOCK_CODE) && digits.length >= OPER_UNLOCK_CODE.length) {
     inp.value = '';
     if (!startTime) {
-      showToast('Start your shift first');
-      // openContractedStartPicker?.();  // optional
-      return;
+      startTime = nowHHMM();
+      beginShift?.();
     }
     openOperativeModal();
     return;

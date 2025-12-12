@@ -48,8 +48,7 @@ function updateSummary(){
     ? Math.round(totalUnits / (e - s))
     : 0;
 
-  const tLenEl  = document.getElementById('tLen');
-  const shiftLen= parseFloat(tLenEl?.value || '9');
+  const shiftLen = (typeof getShiftPref === 'function' ? getShiftPref() : 9);
   const dayAvg  = shiftLen > 0 ? Math.round(totalUnits / shiftLen) : 0; // kept for future tiles if needed
 
   const chipRate = document.getElementById('chipRate');

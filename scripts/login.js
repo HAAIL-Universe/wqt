@@ -199,10 +199,13 @@
   }
 
   function gotoWqtApp(role) {
-    // Role-based redirect: supervisors → super.html, pickers → index.html
+    // Explicit role-based redirect
     if (role === 'supervisor') {
       window.location.href = 'super.html';
+    } else if (role === 'picker' || role === 'operative') {
+      window.location.href = 'index.html';
     } else {
+      // Defensive: unknown roles go to index.html
       window.location.href = 'index.html';
     }
   }

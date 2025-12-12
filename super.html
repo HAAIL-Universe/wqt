@@ -7,6 +7,12 @@
   <link rel="stylesheet" href="styles/index.css">
 </head>
 <body>
+<script>
+  // Inline authentication guard: redirect to login if not authenticated
+  if (!localStorage.WQT_CURRENT_USER) {
+    window.location.href = 'login.html';
+  }
+</script>
 <div class="wrap" style="padding:2rem;">
   <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
     <h1 style="margin:0; font-size:2rem;">Supervisor Dashboard</h1>
