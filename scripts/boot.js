@@ -101,6 +101,31 @@ function isoToHHMM(iso){
   }
 }
 
+function logHydrationState(stage){
+  try {
+    const sharedOpen = localStorage.getItem('sharedDockOpen');
+    const sharedMySum = localStorage.getItem('sharedMySum');
+    const sharedBlock = localStorage.getItem('sharedBlock');
+    const currentOrderPersisted = !!localStorage.getItem('currentOrder');
+
+    const snapshot = {
+      stage,
+      shiftActive: !!startTime,
+      archived: window.archived === true,
+      activeOrder: !!(current && Number.isFinite(current.total)),
+      picksCount: Array.isArray(picks) ? picks.length : 0,
+      sharedActive: !!(current && current.shared),
+      sharedPersisted: { sharedOpen, sharedMySum, sharedBlock, currentOrderPersisted },
+      breakDraft: !!breakDraft,
+      operativeActive: !!operativeActive,
+    };
+
+    console.info('[TrackerHydrate]', snapshot);
+  } catch (err) {
+    console.warn('[TrackerHydrate] log failed', err);
+  }
+}
+
 // Minimal reconciliation modal when backend shows an active shift but local UI does not
 function showShiftReconcileModal(serverShift){
   const existing = document.getElementById('shiftReconcileModal');
@@ -296,6 +321,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
       }
 
+      logHydrationState?.('post-restore-shell');
+
       renderShiftPanel?.();
 
       // ── 6) Decide header: progress vs new-order form ──────────────
@@ -331,6 +358,8 @@ document.addEventListener('DOMContentLoaded', function () {
         setElapsedChipClickable?.(false);
       }
 
+      logHydrationState?.('post-header-decision');
+
       // ── 7) Heavy renders AFTER state/UI decision (prevents flips) ─
       renderHistory();
       renderWeeklySummary();
@@ -338,6 +367,8 @@ document.addEventListener('DOMContentLoaded', function () {
       renderDone();
       renderULayerChips();
       renderShiftPanel?.();
+
+      logHydrationState?.('post-heavy-renders');
 
       // ── 8) Start button validation (order of entry agnostic) ──────
       ['oTotal','oOther','order-locations'].forEach(id=>{

@@ -27,3 +27,8 @@ This entry starts the continuous, authoritative update record maintained by Code
 - Added backend active-shift discovery (`/api/shifts/active`), reconciliation modal on load/login, and strict mismatch handling (resume server shift or end it immediately) to prevent split-brain states across devices.
 - Extended `shift_sessions` to store duration, active minutes, and archived summaries with logging around start/end for observability; end-shift endpoint now validates ownership and records computed stats.
 - Supervisor/GM views can rely on server truth via the new active-shift endpoint; manual test paths added for cross-device end-of-shift, offline end attempts, and fresh-login reconciliation.
+
+## 2025-12-12 — Tracker UI gating + hydration logging
+- Tightened tracker visibility rules: Completed Orders stays hidden while an active order exists; shared pick bar only appears when a shared order is active and clears stale persisted flags otherwise.
+- Added `logHydrationState(stage)` to capture shift/order/shared persistence snapshots during boot (post-restore shell, post-header decision, post-heavy renders) for debugging stale state restores.
+- Standardized button focus-visible styling to the neon accent ring and removed the stray red outline so keyboard focus is visible but consistent with the theme.
