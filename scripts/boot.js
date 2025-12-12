@@ -238,7 +238,6 @@ document.addEventListener('DOMContentLoaded', function () {
             // Local thought it was active, server does not → reset to clean slate
             exitShiftNoArchive?.();
             showTab?.('tracker');
-            openContractedStartPicker?.();
           }
         }
       } catch (err) {
@@ -292,17 +291,15 @@ document.addEventListener('DOMContentLoaded', function () {
       const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
 
-      if (hadShift && window.archived !== true) {
-        if (shift)  shift.style.display  = 'none';
-        if (active) active.style.display = 'block';
-        if (done)   done.style.display   = (picks.length ? 'block' : 'none');
-      } else {
-        // No shift yet → hide order-only controls by default
-        ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
-          const el = document.getElementById(id);
-          if (el) el.style.display = 'none';
-        });
-      }
+      // Always hide shiftCard and show activeOrderCard (tracker UI) after login
+      if (shift)  shift.style.display  = 'none';
+      if (active) active.style.display = 'block';
+      if (done)   done.style.display   = (picks.length ? 'block' : 'none');
+      // No shift yet → hide order-only controls by default
+      ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
 
       renderShiftPanel?.();
 
