@@ -1086,20 +1086,22 @@ function earlyRestore(){
       console.warn('Shared session rehydrate failed', e);
     }
 
-    // ── 4. Shared dock: always show pad when in a shared order ──
-    const isShared = !!(window.current && window.current.shared);
-
-    if (isShared) {
-      // Keep bar open + bottom padding consistent
+    // ── 4. Shared dock: only show pad when backend/session confirms shared pick is active ──
+    let sharedPickActive = false;
+    let sharedPickSource = 'cache';
+    // Authoritative check: must have current.shared true AND session/shift confirms
+    if (window.current && window.current.shared && window.activeShiftSession && window.activeShiftSession.sharedActive) {
+      sharedPickActive = true;
+      sharedPickSource = 'API';
+    }
+    // If not confirmed, forcibly clear any persisted shared pick flags
+    if (sharedPickActive) {
       persistSharedPadOpen(true);
       try { localStorage.setItem('sharedDockOpen','1'); } catch(e){}
-
-      // Rebuild shared progress + predictive ETA if we have a live total
       if (current && Number.isFinite(+current.total)) {
         const total = +current.total;
         const left  = Math.max(0, total - (window.sharedMySum || 0));
         window._sharedProgressLeft = left;
-
         try {
           updateLeftLabel?.(left);
           const pct = total ? ((total - left) / total) * 100 : 0;
@@ -1107,25 +1109,32 @@ function earlyRestore(){
           const pctEl = document.getElementById('progPct');
           if (pctEl) pctEl.textContent = Math.round(pct) + '%';
         } catch(e){}
-
         try {
           const rateUh = Math.round(orderLiveRate?.() || getLiveRateUh?.() || 0);
           predictiveReset?.(left, rateUh);
           predictiveStart?.();
         } catch(e){}
       }
-
       try { updateSharedDockInfo?.(); } catch(e){}
       setTimeout(() => document.getElementById('padUnits')?.focus(), 100);
-
     } else {
-      // Not in shared mode → bar should be hidden and preference reset
+      // Not truly active: forcibly clear all shared pick UI and flags
       persistSharedPadOpen(false);
-      try { localStorage.setItem('sharedDockOpen','0'); } catch(e){}
+      try {
+        localStorage.setItem('sharedDockOpen','0');
+        localStorage.removeItem('sharedMySum');
+        localStorage.removeItem('sharedBlock');
+        if (window.current && window.current.shared) delete window.current.shared;
+      } catch(e){}
       window.sharedMySum = 0;
       window.sharedBlock = 0;
       try { updateSharedDockInfo?.(); } catch(e){}
     }
+
+    // --- Debug log for hydration state ---
+    // Print activeOrder, sharedPickActive, and source of truth
+    // eslint-disable-next-line no-console
+    console.debug('[Hydration] activeOrder:', window.current, 'sharedPickActive:', sharedPickActive, 'source:', sharedPickSource);
 
     // ── 5. Ensure UI re-renders for any active order ──
     if (current && Number.isFinite(+current.total)) {

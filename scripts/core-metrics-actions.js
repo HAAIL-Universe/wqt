@@ -56,8 +56,42 @@ function updateSummary(){
   const chipVal  = document.getElementById('chipRateVal');
 
   if (chipVal) chipVal.textContent = live ? (live + ' u/h') : '—';
-  // Header colour is now per-side; keep container neutral
-  if (chipRate) chipRate.classList.remove('good','warn','bad','ok','amber','red');
+    // Remove any old status classes
+    if (chipRate) chipRate.classList.remove('good','warn','bad','ok','amber','red');
+
+    // Remove per-chip status backgrounds (Live/Perf) so chips are transparent
+    const liveChip = document.querySelector('.summary-chip-inner.summary-chip-live');
+    const perfChip = document.querySelector('.summary-chip-inner.summary-chip-perf');
+    if (liveChip) {
+      liveChip.classList.remove('status-green','status-amber','status-red');
+      liveChip.style.background = 'transparent';
+      liveChip.style.boxShadow = 'none';
+    }
+    if (perfChip) {
+      perfChip.classList.remove('status-green','status-amber','status-red');
+      perfChip.style.background = 'transparent';
+      perfChip.style.boxShadow = 'none';
+    }
+
+  // --- Dynamic gradient background for summary chip container ---
+  if (chipRate) {
+    // Compute status for Live and Perf
+    const liveStatus = getLiveStatusClass ? getLiveStatusClass(live) : 'status-green';
+    const perfScore = typeof getPerfScore === 'function' ? getPerfScore() : 0;
+    const perfStatus = getPerfStatusClass ? getPerfStatusClass(perfScore) : 'status-green';
+
+    // Map status to colour (should match CSS/JS mapping)
+    const statusToColor = {
+      'status-green': 'rgba(34, 197, 94, 0.18)',
+      'status-amber': 'rgba(251, 191, 36, 0.18)',
+      'status-red':   'rgba(239, 68, 68, 0.18)'
+    };
+    const leftColor = statusToColor[liveStatus] || 'rgba(255,255,255,0.06)';
+    const rightColor = statusToColor[perfStatus] || 'rgba(255,255,255,0.06)';
+    chipRate.style.background = `linear-gradient(90deg, ${leftColor} 0%, ${leftColor} 50%, ${rightColor} 50%, ${rightColor} 100%)`;
+    chipRate.style.border = '1px solid var(--line)';
+    chipRate.style.borderRadius = '12px';
+  }
 
   const totalEl = document.getElementById('chipTotalVal');
   if (totalEl) totalEl.textContent = totalUnits;
