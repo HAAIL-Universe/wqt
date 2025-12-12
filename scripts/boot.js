@@ -151,14 +151,6 @@ function showShiftReconcileModal(serverShift){
         avgRate: null,
         endTime: new Date().toISOString(),
       });
-      // Explicitly clear any local active order residue before exitShiftNoArchive
-      try {
-        if (typeof window !== 'undefined' && window.current) window.current = null;
-        localStorage.removeItem('currentOrder');
-        // Optionally: localStorage.removeItem('shiftActive');
-      } catch (e) {
-        console.warn('[Reconcile] Failed to clear local current/currentOrder:', e);
-      }
       clearActiveShiftMeta?.();
       exitShiftNoArchive?.();
       showToast?.('Shift closed on server');
@@ -238,6 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Local thought it was active, server does not → reset to clean slate
             exitShiftNoArchive?.();
             showTab?.('tracker');
+            openContractedStartPicker?.();
           }
         }
       } catch (err) {
@@ -291,15 +284,17 @@ document.addEventListener('DOMContentLoaded', function () {
       const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
 
-      // Always hide shiftCard and show activeOrderCard (tracker UI) after login
-      if (shift)  shift.style.display  = 'none';
-      if (active) active.style.display = 'block';
-      if (done)   done.style.display   = (picks.length ? 'block' : 'none');
-      // No shift yet → hide order-only controls by default
-      ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      });
+      if (hadShift && window.archived !== true) {
+        if (shift)  shift.style.display  = 'none';
+        if (active) active.style.display = 'block';
+        if (done)   done.style.display   = (picks.length ? 'block' : 'none');
+      } else {
+        // No shift yet → hide order-only controls by default
+        ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
+      }
 
       renderShiftPanel?.();
 

@@ -254,10 +254,13 @@ function startShift(lenHours){
     const lenEl = document.getElementById('tLen');
     if (lenEl) lenEl.value = String(applyLen);
 
+    // Defer actual start to the contracted time picker
+    openContractedStartPicker();
   } catch (e){
     // Safe fallback: still route through the picker
     const lenEl = document.getElementById('tLen');
     if (lenEl) lenEl.value = String(lenHours || 9);
+    openContractedStartPicker();
   }
 }
 
@@ -334,6 +337,77 @@ function hmTo12(hm){
     : `${hour12}:${String(M).padStart(2,'0')}${ap}`; // 11:43am
 }
 
+// Contracted start modal: build 6 hour buttons around current hour
+function openContractedStartPicker(){
+  const modal = document.getElementById('contractModal');
+  const list  = document.getElementById('contractHourList');
+  if (!modal || !list) return;
+
+  list.innerHTML = '';
+
+  // Base at the current hour (FLOOR) so offsets are stable
+  const now = new Date();
+  const mins = now.getMinutes();
+  const snapped = new Date(now);
+  snapped.setMinutes(0, 0, 0); // 11:20 -> 11:00, 11:45 -> 11:00
+
+  // Option B: if we're past the top of the hour, include +1h and highlight it.
+  // Keep exactly 6 buttons.
+  const justOnHour = (mins === 0);
+  const OFFSETS = justOnHour ? [-5, -4, -3, -2, -1, 0] : [-4, -3, -2, -1, 0, +1];
+  const HIGHLIGHT = justOnHour ? 0 : +1;
+
+  OFFSETS.forEach(off => {
+    const d = new Date(snapped);
+    d.setHours(d.getHours() + off);
+
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = '00';
+
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    if (off === HIGHLIGHT) btn.classList.add('ok'); // highlight per Option B
+    btn.type = 'button';
+    btn.textContent = to12hLabel(hh, mm);                // plain hour text
+    btn.onclick = () => applyContractedStart(`${hh}:${mm}`);
+    list.appendChild(btn);
+  });
+
+  modal.style.display = 'flex';
+}
+
+// Simple close for contracted-start modal
+function closeContractModal(){
+  const modal = document.getElementById('contractModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Apply a chosen contracted start time, log lateness, move into S2
+async function applyContractedStart(hh){
+  closeContractModal();
+
+  // Normalize input: allow "11" or "11:00"
+  let contractedHM;
+  if (typeof hh === 'string' && hh.includes(':')) {
+    contractedHM = hh.slice(0,5);                   // "HH:MM"
+  } else {
+    const H = parseInt(hh, 10);
+    const HH = Number.isFinite(H) ? String(H).padStart(2,'0') : '00';
+    contractedHM = `${HH}:00`;
+  }
+
+  // Read the shift length (9h or 10h) from the hidden field set by the button
+  const lenEl = document.getElementById('tLen');
+  const chosenLen = lenEl ? (parseInt(lenEl.value, 10) || 9) : 9;
+  if (lenEl) lenEl.value = String(chosenLen);
+
+  const actualHM  = nowHHMM();
+  const cMin = hmToMin(contractedHM);
+  const aMin = hmToMin(actualHM);
+
+  // Effective start: contracted if on-time/early; actual if late
+  const effectiveMin = (aMin <= cMin) ? cMin : aMin;
+  const effectiveHM  = minToHm(effectiveMin);
 
   // Live rate baseline
   startTime = effectiveHM;
@@ -569,24 +643,7 @@ function startOrder() {
   const total = parseInt((totalInput?.value || '0'), 10);
   const locations = parseInt((locsInput?.value || '0'), 10);
 
-  // Auto-initialize shift start if missing
-  if (!startTime) {
-    startTime = nowHHMM();
-    try {
-      localStorage.setItem('shiftActive', '1');
-    } catch (e) {}
-    // Ensure tLen is set
-    let tLenEl = document.getElementById('tLen');
-    let tLen = tLenEl ? parseInt(tLenEl.value, 10) : 9;
-    if (!tLen || isNaN(tLen)) tLen = 9;
-    if (tLenEl) tLenEl.value = String(tLen);
-    // Start server shift session and persist meta (non-blocking)
-    if (window.WqtAPI?.startShiftSession) {
-      window.WqtAPI.startShiftSession({ startHHMM: startTime, shiftLengthHours: tLen })
-        .then(meta => { if (meta) persistActiveShiftMeta?.(meta); })
-        .catch(()=>{});
-    }
-  }
+  if (!startTime) return alert('Set shift start before starting an order.');
   pickingCutoff = ""; // resume counting time if we start picking again
     // Onboarding trigger — order started
   Onboard.showHint("orderStarted", "Order started. Your timer is running. Log wraps as you go.");
