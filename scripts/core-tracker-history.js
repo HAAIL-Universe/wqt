@@ -127,6 +127,51 @@ function computePerformanceScoreForToday() {
 if (typeof window !== 'undefined') {
   window.computePerformanceScoreForToday = computePerformanceScoreForToday;
 }
+
+// Shared gating helpers used across boot + runtime
+function hasActiveOrderStrict(){
+  const shiftOn = !!startTime && window.archived !== true;
+  return !!(shiftOn && current && Number.isFinite(current.total));
+}
+
+function setCompletedCardVisibility(inOrder){
+  const card = document.getElementById('completedCard');
+  if (!card) return;
+  const hasDone = Array.isArray(picks) && picks.length > 0;
+  card.style.display = (!inOrder && hasDone && window.archived !== true) ? 'block' : 'none';
+}
+
+  // Keep container visibility in sync with active-order gate
+  setCompletedCardVisibility?.(hasActiveOrderStrict());
+
+function enforceSharedPadFromState(reason){
+  const sharedActive = !!(current && current.shared && startTime && window.archived !== true);
+  const stored = (typeof localStorage !== 'undefined') ? localStorage.getItem('sharedDockOpen') : null;
+  const wantsOpen = sharedActive && stored !== '0';
+
+  if (wantsOpen) {
+    persistSharedPadOpen?.(true);
+  } else {
+    persistSharedPadOpen?.(false);
+    hideSharedPad?.();
+    window.sharedMySum = 0;
+    window.sharedBlock = 0;
+    window._sharedProgressLeft = null;
+    try {
+      localStorage.setItem('sharedDockOpen','0');
+      localStorage.removeItem('sharedMySum');
+      localStorage.removeItem('sharedBlock');
+    } catch (_) {}
+  }
+
+  if (reason) {
+    console.debug('[SharedPad]', reason, {
+      sharedActive,
+      stored,
+      wantsOpen
+    });
+  }
+}
 // ================= Overlay Role UI =================
 function renderRoleChips() {
   const primaryChip  = document.getElementById('rolePrimaryChip');
@@ -505,6 +550,9 @@ function restoreActiveOrderUI() {
     el.style.display = on ? disp : 'none';
   };
 
+  setCompletedCardVisibility?.(inOrder);
+  enforceSharedPadFromState?.(inOrder ? 'active-order' : 'idle');
+
   if (inOrder) {
     // Swap headers
     if (hdrForm && hdrProg) {
@@ -725,6 +773,7 @@ function startOrder() {
     if (shiftCard)  shiftCard.style.display  = 'none';
     if (activeCard) activeCard.style.display = 'block';
     if (doneCard)   doneCard.style.display   = 'none';
+    setCompletedCardVisibility?.(true);
   })();
 
   
@@ -1231,8 +1280,7 @@ function completeOrder() {
 
   // Keep Completed Orders section visible and re-render it
   if (typeof renderDone === 'function') renderDone();
-  const completedCard = document.getElementById('completedCard');
-  if (completedCard) completedCard.style.display = 'block';
+  setCompletedCardVisibility?.(false);
 
   // Update chips and gated actions for "no active order"
   if (typeof updateSummary === 'function') updateSummary();
@@ -3020,6 +3068,7 @@ function clearToday(){
   if (shiftCard)  shiftCard.style.display  = 'none';
   if (activeCard) activeCard.style.display = 'block';
   if (doneCard)   doneCard.style.display   = 'none';
+  setCompletedCardVisibility?.(false);
 
   const hdrForm = document.getElementById('orderHeaderForm');
   const hdrProg = document.getElementById('orderHeaderProgress');
