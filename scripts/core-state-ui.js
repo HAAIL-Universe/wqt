@@ -1159,12 +1159,6 @@ function exitShiftNoArchive(){
   }
 
   // UI → Start Shift screen
-  const shiftCard  = document.getElementById('shiftCard');
-  const activeCard = document.getElementById('activeOrderCard');
-  const doneCard   = document.getElementById('completedCard');
-  if (shiftCard)  shiftCard.style.display  = 'block';
-  if (activeCard) activeCard.style.display = 'none';
-  if (doneCard)   doneCard.style.display   = 'none';
 
   const hdrForm = document.getElementById('orderHeaderForm');
   const hdrProg = document.getElementById('orderHeaderProgress');

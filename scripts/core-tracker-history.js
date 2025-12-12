@@ -719,12 +719,6 @@ function startOrder() {
 
   // Belt-and-braces card visibility
   (function ensureCards(){
-    const shiftCard  = document.getElementById('shiftCard');
-    const activeCard = document.getElementById('activeOrderCard');
-    const doneCard   = document.getElementById('completedCard');
-    if (shiftCard)  shiftCard.style.display  = 'none';
-    if (activeCard) activeCard.style.display = 'block';
-    if (doneCard)   doneCard.style.display   = 'none';
   })();
 
   
@@ -3014,12 +3008,6 @@ function clearToday(){
   } catch(e){}
 
   // UI → Active Shift, no open order: show New-Order header form
-  const shiftCard  = document.getElementById('shiftCard');
-  const activeCard = document.getElementById('activeOrderCard');
-  const doneCard   = document.getElementById('completedCard');
-  if (shiftCard)  shiftCard.style.display  = 'none';
-  if (activeCard) activeCard.style.display = 'block';
-  if (doneCard)   doneCard.style.display   = 'none';
 
   const hdrForm = document.getElementById('orderHeaderForm');
   const hdrProg = document.getElementById('orderHeaderProgress');
