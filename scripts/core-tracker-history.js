@@ -286,6 +286,29 @@ function snapToNearestHour(){
   return String(h).padStart(2,'0') + ':00';
 }
 
+// Deterministic rounding for shift start timestamps
+// Rules:
+// - If minutes <= FEW_MINUTES, snap back to the hour (e.g., 12:02 -> 12:00)
+// - Else if minutes in [45,59], round to the next full hour (e.g., 12:52 -> 13:00)
+// - Otherwise round down to nearest quarter-hour (00/15/30/45)
+// FEW_MINUTES chosen as 5 (keeps small early-minute tolerance)
+function roundShiftHMFromDate(d){
+  const FEW_MINUTES = 5; // configurable small constant
+  const hh = d.getHours();
+  const mm = d.getMinutes();
+  let outH = hh;
+  let outM = 0;
+  if (mm <= FEW_MINUTES) {
+    outM = 0;
+  } else if (mm >= 45) {
+    outM = 0;
+    outH = (hh + 1) % 24;
+  } else {
+    outM = Math.floor(mm / 15) * 15;
+  }
+  return String(outH).padStart(2,'0') + ':' + String(outM).padStart(2,'0');
+}
+
 // Entrypoint when user taps Start 9h / Start 10h
 function startShift(lenHours){
   try {
@@ -454,8 +477,15 @@ async function applyContractedStart(hh){
   const effectiveMin = (aMin <= cMin) ? cMin : aMin;
   const effectiveHM  = minToHm(effectiveMin);
 
-  // Live rate baseline
-  startTime = effectiveHM;
+  // Determine a deterministic, client-side rounded shift start based on current time.
+  // Rounding is applied once at shift creation and the rounded HH:MM is used for
+  // metrics and for the start request to the backend. We also keep a raw ISO timestamp
+  // in the persisted meta for diagnostics.
+  const rawNow = new Date();
+  const roundedHM = roundShiftHMFromDate(rawNow);
+
+  // Live rate baseline - use the rounded time
+  startTime = roundedHM;
 
   // Log lateness
   const lateMin = aMin - cMin;
@@ -476,12 +506,20 @@ async function applyContractedStart(hh){
   // Try to start server session before entering S2
   try {
     const started = await (window.WqtAPI?.startShiftSession?.({
-      startHHMM: effectiveHM,
+      // send the client-rounded start time to backend for deterministic metrics
+      startHHMM: roundedHM,
       shiftLengthHours: chosenLen,
     }));
     const meta = (started && started.shift) ? started.shift : started;
+    // augment meta with client-side diagnostics (raw + rounded)
+    try {
+      if (meta && typeof meta === 'object') {
+        meta.client_start_raw = rawNow.toISOString();
+        meta.client_start_rounded = roundedHM;
+      }
+    } catch(_) {}
     persistActiveShiftMeta?.(meta || null);
-    localStorage.setItem('shiftActive','1');
+    try { localStorage.setItem('shiftActive','1'); } catch(_){ }
   } catch (err) {
     console.error('[ShiftStart] Failed to start shift on server', err);
     showToast?.('Could not start shift on server. Check connection and retry.');

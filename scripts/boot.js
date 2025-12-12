@@ -594,7 +594,7 @@ function closeWrapModal(){
   }
 }
 
-function submitWrapLeft(){
+async function submitWrapLeft(){
   if (!current) return alert('Start an order first');
 
   const inp   = document.getElementById('wrapLeftInput');
@@ -678,8 +678,77 @@ function submitWrapLeft(){
   }
 
   // 5) Finish UI + pipeline
-  closeWrapModal();
+  // If the user explicitly entered 0, treat it as an intentional completion command.
+  if (v === 0) {
+    // Build archived snapshot similar to completeOrder() so we can call backend explicitly
+    try {
+      const closeHHMM = nowHHMM();
+      const totalUnits = current.total || 0;
+      const prevLeft = tempWraps.length ? tempWraps[tempWraps.length - 1].left : totalUnits;
+      const palletsCount = tempWraps.length || 1;
+      const exclMins = (current.breaks || []).reduce((a,b)=>a+(b.minutes||0),0);
 
+      // If there is a remaining lastLeft > 0, include a final wrap entry for the archive
+      const finalWraps = tempWraps.slice();
+      if (prevLeft > 0) {
+        finalWraps.push({ left: 0, done: prevLeft, t: closeHHMM, startTime: (current.wrapActive && current.wrapActive.startTime) || null, endTime: closeHHMM, durationMs: (current.wrapActive && ((Date.now() - (current.wrapActive.startTs || Date.now())))) || 0 });
+      }
+
+      const archived = {
+        name: current.name,
+        units: totalUnits,
+        locations: current.locations || 0,
+        pallets: palletsCount,
+        start: current.start,
+        close: closeHHMM,
+        excl: exclMins,
+        log: { wraps: finalWraps.slice(), breaks: (current.breaks || []).slice() }
+      };
+
+      // Close UI modal and run local completion flow
+      closeWrapModal();
+      // Ensure UI updates for wrap button and summary reflect the intent immediately
+      refreshWrapButton?.();
+
+      // Complete order locally (archives into picks and clears `current`)
+      try { completeOrder(); } catch(e){ console.error('[WrapComplete] local completeOrder failed', e); }
+
+      // Also POST the closed-order snapshot to backend explicitly and wait for response
+      let apiRes = null;
+      try {
+        if (window.WqtAPI && typeof window.WqtAPI.recordClosedOrder === 'function') {
+          apiRes = await window.WqtAPI.recordClosedOrder(archived);
+        }
+      } catch (err) {
+        console.warn('[WrapComplete] backend recordClosedOrder failed', err);
+      }
+
+      // Force full UI state refresh: clear any cached active-order, rehydrate, and rerender
+      try {
+        try { localStorage.removeItem('currentOrder'); } catch(_){}
+        try { if (window.WqtAPI && typeof window.WqtAPI.clearCurrentOrder === 'function') window.WqtAPI.clearCurrentOrder(); } catch(_){}
+        try { loadAll(); } catch(e){ console.warn('[WrapComplete] loadAll failed', e); }
+        try { renderDone?.(); } catch(_){}
+        try { updateSummary?.(); } catch(_){}
+        try { updateHeaderActions?.(); } catch(_){}
+        try { updateElapsedChip?.(); } catch(_){}
+      } catch(e){ console.warn('[WrapComplete] UI refresh failed', e); }
+
+      // If we still see a stale active order after refresh, emit a single debug log for diagnosis
+      if (window.current) {
+        console.debug('[WrapComplete][StaleState]', { submittedWrap: v, apiResponse: apiRes, postRefreshActiveOrder: window.current });
+      }
+
+      showToast?.('Order completed');
+      return;
+    } catch (e) {
+      console.error('[WrapComplete] Unexpected error', e);
+      // Fallback to normal path if something unexpected failed
+    }
+  }
+
+  // Normal non-completion wrap flow
+  closeWrapModal();
   refreshWrapButton?.();
   logWrap?.();                 // pushes into tempWraps
   updateSummary?.();           // now sees current._lastWrapLeft immediately
