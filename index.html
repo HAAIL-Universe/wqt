@@ -1169,12 +1169,26 @@
 
 <div id="toast" class="toast">Saved</div>
 
-<script src="scripts/storage.js"></script>
-<script src="scripts/api.js"></script>
-<script src="scripts/core-state-ui.js"></script>
-<script src="scripts/customer-selector-modal.js"></script>
-<script src="scripts/core-metrics-actions.js"></script>
-<script src="scripts/core-tracker-history.js"></script>
+<script>
+  // Capture the first script error early so boot can report which module threw
+  (function captureFirstScriptError(){
+    try {
+      window.__firstScriptError = null;
+      window.addEventListener('error', function(ev){
+        if (!window.__firstScriptError) window.__firstScriptError = ev.error || ev;
+      }, true);
+      window.addEventListener('unhandledrejection', function(ev){
+        if (!window.__firstScriptError) window.__firstScriptError = ev.reason || ev;
+      }, true);
+    } catch(_){}
+  })();
+</script>
+<script src="scripts/storage.js" defer></script>
+<script src="scripts/api.js" defer></script>
+<script src="scripts/core-state-ui.js" defer></script>
+<script src="scripts/customer-selector-modal.js" defer></script>
+<script src="scripts/core-metrics-actions.js" defer></script>
+<script src="scripts/core-tracker-history.js" defer></script>
 <script>
   // ====== Login gate (front-door auth) ======
   (function gateWqtByLogin() {
@@ -1221,6 +1235,6 @@
     }
   })();
 </script>
-<script src="scripts/boot.js"></script>
+<script src="scripts/boot.js" defer></script>
 </body>
 </html>

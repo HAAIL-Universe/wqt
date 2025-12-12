@@ -237,6 +237,85 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     }
 
+    // Detect if a global function is the boot-time stub created by storage.js
+    function isStubbed(name){
+      try {
+        const fn = globalThis[name];
+        return (typeof fn === 'function') && !!fn.__isStub;
+      } catch(_) { return false; }
+    }
+
+    // Module load audit: print a table of critical functions and their status.
+    (function moduleLoadAudit(){
+      try {
+        const map = {
+          renderShiftPanel: 'core-tracker-history.js',
+          renderHistory: 'core-tracker-history.js',
+          renderDone: 'core-tracker-history.js',
+          renderWeeklySummary: 'core-tracker-history.js',
+          startOrder: 'core-tracker-history.js',
+          openSharedStart: 'core-state-ui.js',
+          openBreakChoiceModal: 'core-tracker-history.js'
+        };
+
+        const rows = [];
+        const problems = [];
+
+        Object.keys(map).forEach((name)=>{
+          const file = map[name];
+          const fn = globalThis[name];
+          const t = typeof fn;
+          const stub = !!(fn && fn.__isStub);
+          // Detect whether the script tag is present (best-effort)
+          const scriptTag = Array.from(document.querySelectorAll('script[src]')).find(s=>s.getAttribute('src')?.includes(file));
+          const present = !!scriptTag;
+          rows.push({ name, file, type: t, isStub: stub, scriptIncluded: present });
+
+          if (t !== 'function' || stub) {
+            problems.push({ name, file, type: t, isStub: stub, scriptIncluded: present });
+          }
+        });
+
+        try { console.info('[ModuleAudit]'); console.table(rows); } catch(_){}
+
+        if (problems.length) {
+          // Pick first problem to surface as a user-visible toast
+          const p = problems[0];
+          let message = '';
+          // If module script tag missing, report missing module
+          if (!p.scriptIncluded) {
+            message = `Missing module: ${p.file} (${p.name} undefined)`;
+            console.warn('[ModuleAudit] ' + message);
+            showToast?.(message);
+          } else {
+            // Script present but missing/stubbed — maybe it threw during parsing.
+            const firstErr = window.__firstScriptError;
+            if (firstErr && firstErr.stack) {
+              // Try to find the file and line in the stack
+              const stack = String(firstErr.stack || '');
+              const re = new RegExp(p.file.replace(/[-/\\^$*+?.()|[\]{}]/g,'\\$&') + '[: ]?(\\d+):(\\d+)');
+              const m = stack.match(re);
+              if (m) {
+                message = `Module threw: ${p.file} (line ${m[1]})`;
+                console.error('[ModuleAudit] ' + message, firstErr);
+                showToast?.(message);
+              } else {
+                message = `Module present but ${p.name} missing or stubbed: ${p.file}`;
+                console.warn('[ModuleAudit] ' + message, firstErr);
+                showToast?.(message);
+              }
+            } else {
+              message = `Module present but ${p.name} missing or stubbed: ${p.file}`;
+              console.warn('[ModuleAudit] ' + message);
+              showToast?.(message);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[ModuleAudit] failed', e);
+      }
+    })();
+
     try {
       // Login now handled by front-door (login.html + WQT_CURRENT_USER).
       // If this script is running, gateWqtByLogin has already ensured a user.
@@ -363,17 +442,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
       logHydrationState?.('post-restore-shell');
 
-      // Safe call: renderShiftPanel may be defined in another file or may
-      // fail to parse; use typeof/globalThis guard so we don't ReferenceError.
-      const r = safeInvoke('renderShiftPanel');
-      if (r === null) {
-        // Critical piece missing — abort further rendering and present safe fallback.
+      // Safe call: ensure renderShiftPanel exists and is not a boot-time stub.
+      const shiftFn = globalThis['renderShiftPanel'];
+      if (!shiftFn || shiftFn.__isStub) {
         const msg = 'UI init failed: missing renderShiftPanel';
-        console.error('[Boot] ' + msg);
+        console.error('[Boot] ' + msg + (shiftFn && shiftFn.__isStub ? ' (stubbed)' : ''));
         showToast?.(msg);
         // Hide shift-related controls to present a safe state
-        try { document.getElementById('shiftCard')?.classList.add('hidden'); } catch(_){}
-        try { document.getElementById('activeOrderCard')?.style.display = 'none'; } catch(_){}
+        try { document.getElementById('shiftCard')?.classList.add('hidden'); } catch(_){ }
+        try { document.getElementById('activeOrderCard')?.style.display = 'none'; } catch(_){ }
         // stop boot early
         throw new Error(msg);
       }
@@ -421,12 +498,15 @@ document.addEventListener('DOMContentLoaded', function () {
       safeInvoke('renderDone');
       safeInvoke('renderULayerChips');
       // Repaint Shift Log accordion
-      const rr = safeInvoke('renderShiftPanel');
-      if (rr === null) {
+      const rrFn = globalThis['renderShiftPanel'];
+      if (!rrFn || rrFn.__isStub) {
         const msg = 'UI init failed during heavy renders: missing renderShiftPanel';
-        console.error('[Boot] ' + msg);
+        console.error('[Boot] ' + msg + (rrFn && rrFn.__isStub ? ' (stubbed)' : ''));
         showToast?.(msg);
         throw new Error(msg);
+      } else {
+        // Call the real implementation
+        try { rrFn(); } catch(e){ console.error('[Boot] renderShiftPanel threw', e); }
       }
 
       logHydrationState?.('post-heavy-renders');
@@ -524,6 +604,70 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // Persist to localStorage via legacy path
       safeInvoke('saveAll');
+
+      // ===== Finalize boot: mark hydrated, restore UI controls, and attach resilient handlers =====
+      try { window.__hydrated = true; } catch(_){ }
+
+      (function restoreActionControlsAfterBoot(){
+        try {
+          const ids = ['btnStart','btnSharedStart','btnBreakMenu'];
+          ids.forEach(id=>{
+            const el = document.getElementById(id);
+            if (!el) return;
+            const orig = el.dataset.origDisplay || '';
+            el.style.display = orig || '';
+            el.disabled = false;
+            delete el.dataset.origDisplay;
+          });
+        } catch(_){ }
+      })();
+
+      // Delegate bottom action clicks so handlers survive DOM replacements
+      (function bindBottomActionDelegation(){
+        try {
+          const bottom = document.querySelector('.bottom-actions');
+          if (!bottom) return;
+          // Keep track of which missing handlers we've already reported to avoid spam
+          const reportedMissing = new Set();
+          bottom.addEventListener('click', (e)=>{
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const id = btn.id || '(no-id)';
+            // Map button id -> handler name
+            const map = {
+              'btnStart': 'startOrder',
+              'btnSharedStart': 'openSharedStart',
+              'btnBreakMenu': 'openBreakChoiceModal'
+            };
+            const handlerName = map[id];
+            if (!handlerName) return;
+            e.preventDefault();
+            const fn = globalThis[handlerName];
+            if (typeof fn === 'function') {
+              try { fn(); } catch (err) { console.error('[Handler] Error running', handlerName, err); }
+            } else {
+              const key = handlerName + '::' + id;
+              if (!reportedMissing.has(key)) {
+                console.error('[HandlerMissing] Handler missing for button click:', { buttonId: id, expected: handlerName });
+                // show a single visible toast so the user knows something is not wired
+                showToast?.(`Handler missing: ${handlerName} (button: ${id})`);
+                reportedMissing.add(key);
+              }
+            }
+          });
+        } catch(_){ }
+      })();
+
+      // Single-line boot debug with requested key state
+      try {
+        console.info('[BootComplete]', {
+          hydrated: !!window.__hydrated,
+          role: window.WQT_CURRENT_USER?.role || null,
+          shiftActive: !!startTime,
+          activeOrderPresent: !!(current && Number.isFinite(current.total)),
+          sharedPickActive: !!(current && current.shared)
+        });
+      } catch(_){ }
 
       // NOTE: We do NOT auto-save to backend on load per offline recovery design.
       // MainState is only POSTed for explicit actions (start order, log wrap, etc.).

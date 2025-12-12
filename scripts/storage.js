@@ -40,7 +40,11 @@ const STORAGE_VERSION = '3.3.55'; // matches existing schema tag
     ];
     names.forEach(n=>{
       if (typeof globalThis[n] !== 'function') {
-        globalThis[n] = function(){ return null; };
+        // No-op stub: return true so callers can detect "present but noop"
+        // (returning null caused boot to treat the function as missing and abort)
+        const stub = function(){ return true; };
+        try { stub.__isStub = true; } catch(_){}
+        globalThis[n] = stub;
       }
     });
 
