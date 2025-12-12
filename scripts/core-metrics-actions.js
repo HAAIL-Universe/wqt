@@ -665,6 +665,21 @@ function ensureActionRowLayout(){
   left.style.gap      = '10px';
   right.style.display = 'flex';
   right.style.gap     = '10px';
+
+  // Ensure tracker action buttons use the base .btn visual style and are not left
+  // with 'bad' or 'warn' classes that create a persistent red outline.
+  [btnB, btnL, btnCE, btnDel, btnUn, document.getElementById('btnStart'), document.getElementById('btnSharedStart'), document.getElementById('btnBreakMenu')]
+    .filter(Boolean)
+    .forEach(b => {
+      try {
+        b.classList.remove('bad','warn');
+        // Ensure base btn class present
+        if (!b.classList.contains('btn')) b.classList.add('btn');
+      } catch(_) {}
+    });
+
+  // Prevent bottom action row from hiding content on small screens — add safe padding
+  try { document.body.style.paddingBottom = '96px'; } catch(_) {}
 }
 
 // Return score for a single order

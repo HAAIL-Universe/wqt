@@ -237,6 +237,15 @@ document.addEventListener('DOMContentLoaded', function () {
       loadCustomCodes();
       loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
 
+      // Debug: hydration snapshot for tracker verification
+      try {
+        const isHydrated = true; // loadAll() just ran
+        const activeOrderPresent = !!(current && Number.isFinite(current.total));
+        const completedCount = Array.isArray(picks) ? picks.length : 0;
+        const completedRendered = (!activeOrderPresent && !!startTime && window.archived !== true);
+        console.debug('[TrackerHydrate]', { isHydrated, activeOrderPresent, completedCount, completedRendered });
+      } catch (_) {}
+
       const hadShift = !!startTime;
       const hadOpen  = !!(current && Number.isFinite(current.total));
 

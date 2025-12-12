@@ -137,8 +137,10 @@ function hasActiveOrderStrict(){
 function setCompletedCardVisibility(inOrder){
   const card = document.getElementById('completedCard');
   if (!card) return;
-  const hasDone = Array.isArray(picks) && picks.length > 0;
-  card.style.display = (!inOrder && hasDone && window.archived !== true) ? 'block' : 'none';
+  // Show Completed Orders when there is no active order but a shift/session is active.
+  // If there are zero completed orders, the card still shows with a placeholder.
+  const shiftActive = !!startTime && window.archived !== true;
+  card.style.display = (!inOrder && shiftActive) ? 'block' : 'none';
 }
 
   // Keep container visibility in sync with active-order gate
@@ -2318,8 +2320,14 @@ function renderDone(){
   var tb = document.getElementById('doneBody');
   if (!tb) return;
   tb.innerHTML = '';
-
-  picks.forEach(function(o,i){
+  if (!Array.isArray(picks) || picks.length === 0) {
+    // No orders yet — show a friendly placeholder row (spans all columns)
+    const tr = document.createElement('tr');
+    tr.className = 'completed-row no-orders';
+    tr.innerHTML = '<td colspan="7" style="padding:12px; color:var(--text-muted); text-align:center;">No orders yet — start your first order to see it listed here.</td>';
+    tb.appendChild(tr);
+  } else {
+    picks.forEach(function(o,i){
     var s = hm(o.start), e = hm(o.close);
     
     // Calculate total break time
@@ -2453,7 +2461,10 @@ function renderDone(){
 
   const completedCard = document.getElementById('completedCard');
   if (completedCard) {
-    completedCard.style.display = picks.length ? 'block' : 'none';
+    // If a shift is active but there is no running order, ensure the card is visible
+    const inOrder = !!(current && Number.isFinite(current.total));
+    const shiftActive = !!startTime && window.archived !== true;
+    completedCard.style.display = (!inOrder && shiftActive) ? 'block' : (picks.length ? 'block' : 'none');
   }
 }
 
