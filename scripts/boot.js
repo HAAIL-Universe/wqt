@@ -151,6 +151,14 @@ function showShiftReconcileModal(serverShift){
         avgRate: null,
         endTime: new Date().toISOString(),
       });
+      // Explicitly clear any local active order residue before exitShiftNoArchive
+      try {
+        if (typeof window !== 'undefined' && window.current) window.current = null;
+        localStorage.removeItem('currentOrder');
+        // Optionally: localStorage.removeItem('shiftActive');
+      } catch (e) {
+        console.warn('[Reconcile] Failed to clear local current/currentOrder:', e);
+      }
       clearActiveShiftMeta?.();
       exitShiftNoArchive?.();
       showToast?.('Shift closed on server');

@@ -1117,8 +1117,24 @@ function openSharedPickModal(){
 }
 
 // Exit shift without archiving; return UI to Start state
-function exitShiftNoArchive(){
-  if (current) { alert('Complete or undo the current order before exiting the shift.'); return; }
+function exitShiftNoArchive() {
+  // If in shift recovery mode, forcibly clear current order and proceed
+  if (typeof isShiftRecoveryMode === 'function' && isShiftRecoveryMode?.() === true) {
+    // Clear current order and related localStorage
+    try {
+      current = null;
+      localStorage.removeItem('currentOrder');
+    } catch (e) {
+      console.warn('[exitShiftNoArchive] Recovery mode: failed to clear current order:', e);
+    }
+    // Continue with normal shift clearing below
+  } else {
+    // Normal mode: block if there is an active order
+    if (current) {
+      alert('Complete or undo the current order before exiting the shift.');
+      return;
+    }
+  }
   try { predictiveStop?.(); } catch(e){}
 
   // Clear shift session (no archive)
