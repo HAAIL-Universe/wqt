@@ -206,6 +206,37 @@ function showShiftReconcileModal(serverShift){
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
+    // Mark app as not-hydrated until boot completes successfully
+    try { window.__hydrated = false; } catch(_){}
+
+    // Hide/disable action buttons until hydration completes to avoid
+    // partial UI states (Start / Shared Pick must not appear early)
+    (function hideActionControlsDuringBoot(){
+      try {
+        const ids = ['btnStart','btnSharedStart','btnBreakMenu'];
+        ids.forEach(id=>{
+          const el = document.getElementById(id);
+          if (!el) return;
+          // remember original inline display for later (if any)
+          if (!el.dataset.origDisplay) el.dataset.origDisplay = el.style.display || '';
+          el.style.display = 'none';
+          el.disabled = true;
+        });
+      } catch(_){}
+    })();
+
+    // Helper to safely call potentially-missing global functions by name
+    function safeInvoke(name, ...args) {
+      try {
+        const fn = globalThis[name];
+        if (typeof fn === 'function') return fn(...args);
+        return null;
+      } catch (err) {
+        console.error('[safeInvoke] Error invoking', name, err);
+        return null;
+      }
+    }
+
     try {
       // Login now handled by front-door (login.html + WQT_CURRENT_USER).
       // If this script is running, gateWqtByLogin has already ensured a user.
@@ -332,7 +363,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
       logHydrationState?.('post-restore-shell');
 
-      renderShiftPanel?.();
+      // Safe call: renderShiftPanel may be defined in another file or may
+      // fail to parse; use typeof/globalThis guard so we don't ReferenceError.
+      const r = safeInvoke('renderShiftPanel');
+      if (r === null) {
+        // Critical piece missing — abort further rendering and present safe fallback.
+        const msg = 'UI init failed: missing renderShiftPanel';
+        console.error('[Boot] ' + msg);
+        showToast?.(msg);
+        // Hide shift-related controls to present a safe state
+        try { document.getElementById('shiftCard')?.classList.add('hidden'); } catch(_){}
+        try { document.getElementById('activeOrderCard')?.style.display = 'none'; } catch(_){}
+        // stop boot early
+        throw new Error(msg);
+      }
 
       // ── 6) Decide header: progress vs new-order form ──────────────
       if (hadOpen && window.archived !== true) {
@@ -370,12 +414,20 @@ document.addEventListener('DOMContentLoaded', function () {
       logHydrationState?.('post-header-decision');
 
       // ── 7) Heavy renders AFTER state/UI decision (prevents flips) ─
-      renderHistory();
-      renderWeeklySummary();
-      initWeekCardToggle();
-      renderDone();
-      renderULayerChips();
-      renderShiftPanel?.();
+      // Heavy renders — call guarded so missing definitions don't blow up
+      safeInvoke('renderHistory');
+      safeInvoke('renderWeeklySummary');
+      safeInvoke('initWeekCardToggle');
+      safeInvoke('renderDone');
+      safeInvoke('renderULayerChips');
+      // Repaint Shift Log accordion
+      const rr = safeInvoke('renderShiftPanel');
+      if (rr === null) {
+        const msg = 'UI init failed during heavy renders: missing renderShiftPanel';
+        console.error('[Boot] ' + msg);
+        showToast?.(msg);
+        throw new Error(msg);
+      }
 
       logHydrationState?.('post-heavy-renders');
 
@@ -468,10 +520,10 @@ document.addEventListener('DOMContentLoaded', function () {
       if (typeof renderRoleChips === 'function') renderRoleChips();
 
       // Wire Shared Pick bottom bar (padUnits / padSubmit) once DOM is ready
-      initSharedPad?.();
+      safeInvoke('initSharedPad');
 
       // Persist to localStorage via legacy path
-      saveAll?.();
+      safeInvoke('saveAll');
 
       // NOTE: We do NOT auto-save to backend on load per offline recovery design.
       // MainState is only POSTed for explicit actions (start order, log wrap, etc.).
@@ -750,9 +802,50 @@ async function submitWrapLeft(){
 
       showToast?.('Order completed');
       return;
-    } catch (e) {
-      console.error('[WrapComplete] Unexpected error', e);
-      // Fallback to normal path if something unexpected failed
+      // Mark hydration successful
+      try { window.__hydrated = true; } catch(_){}
+
+      // Restore action button visibility & enabled state based on saved values
+      (function restoreActionControlsAfterBoot(){
+        try {
+          const ids = ['btnStart','btnSharedStart','btnBreakMenu'];
+          ids.forEach(id=>{
+            const el = document.getElementById(id);
+            if (!el) return;
+            // restore original inline display (if any) — otherwise leave to existing logic
+            const orig = el.dataset.origDisplay || '';
+            el.style.display = orig || '';
+            el.disabled = false;
+            delete el.dataset.origDisplay;
+          });
+        } catch(_){}
+      })();
+
+      // Single-line boot debug with key state
+      try {
+        console.info('[BootComplete]', {
+          hydrated: !!window.__hydrated,
+          shiftActive: !!startTime,
+          activeOrderPresent: !!(current && Number.isFinite(current.total)),
+          completedOrdersCount: Array.isArray(picks) ? picks.length : 0
+        });
+      } catch(_){}
+
+    } catch (err) {
+      console.error(err);
+      showToast?.('Error on load: ' + (err.message || err));
+      // Known-good fallback: ensure no partial UI remains that could confuse users
+      try {
+        window.__hydrated = false;
+        document.getElementById('activeOrderCard')?.style.display = 'none';
+        document.getElementById('completedCard')?.style.display = 'none';
+        document.getElementById('shiftLogCard')?.style.display = 'none';
+        // hide bottom action buttons
+        ['btnStart','btnSharedStart','btnBreakMenu','btnDelay','btnUndo'].forEach(id=>{
+          const el = document.getElementById(id);
+          if (el) { try { el.style.display = 'none'; el.disabled = true; } catch(_){} }
+        });
+      } catch(_){}
     }
   }
 

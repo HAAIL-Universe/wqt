@@ -544,6 +544,12 @@ async function applyContractedStart(hh){
 
 // Enable/disable Start + Shared Start buttons based on customer + units
 function refreshStartButton(){
+  // Do not allow enabling Start/Shared buttons before hydration completes
+  if (typeof window !== 'undefined' && window.__hydrated === false) {
+    const b = document.getElementById('btnStart'); if (b) b.disabled = true;
+    const s = document.getElementById('btnSharedStart'); if (s) s.disabled = true;
+    return;
+  }
   const sel   = document.getElementById('oCust');
   const other = document.getElementById('oOther');
   const total = parseInt(document.getElementById('oTotal').value||'0',10);

@@ -29,6 +29,36 @@ const StorageKeys = {
 
 const STORAGE_VERSION = '3.3.55'; // matches existing schema tag
 
+// ======= Global stubs and helpers for robust boot/hydration =======
+// Provide safe no-op stubs for render functions that may be referenced
+// before their defining script executes (prevents ReferenceError).
+;(function ensureGlobalBootStubs(){
+  try {
+    const names = [
+      'renderShiftPanel', 'renderHistory', 'renderDone',
+      'renderWeeklySummary', 'renderULayerChips', 'initSharedPad', 'saveAll'
+    ];
+    names.forEach(n=>{
+      if (typeof globalThis[n] !== 'function') {
+        globalThis[n] = function(){ return null; };
+      }
+    });
+
+    if (typeof globalThis.safeInvoke !== 'function') {
+      globalThis.safeInvoke = function(name, ...args){
+        try {
+          const fn = globalThis[name];
+          if (typeof fn === 'function') return fn(...args);
+          return null;
+        } catch (err) {
+          console.error('[safeInvoke] Error invoking', name, err);
+          return null;
+        }
+      };
+    }
+  } catch (_) {}
+})();
+
 function safeParse(json, fallback) {
   try {
     if (!json) return fallback;
