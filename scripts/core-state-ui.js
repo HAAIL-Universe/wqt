@@ -143,6 +143,19 @@ function refreshSummaryChips(main) {
   setSummarySideStatus(perfSide, perfStatus);
   renderPerfScoreTrend(perfScoreDelta, perfStatus);
   window.perfScoreDelta = perfScoreDelta;
+
+  // === Set gradient colors on #chipRate ===
+  const chipRate = document.getElementById('chipRate');
+  if (chipRate) {
+    // Map status to RGBA color (same as old CSS)
+    const statusToColor = {
+      'status-green': 'rgba(34,197,94,0.18)',
+      'status-amber': 'rgba(251,191,36,0.18)',
+      'status-red': 'rgba(239,68,68,0.18)'
+    };
+    chipRate.style.setProperty('--lr-grad', statusToColor[liveStatus] || 'rgba(34,197,94,0.18)');
+    chipRate.style.setProperty('--ps-grad', statusToColor[perfStatus] || 'rgba(34,197,94,0.18)');
+  }
 }
 
 // Patch updateSummary to also refresh the summary chips

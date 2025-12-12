@@ -101,21 +101,21 @@
 }
 
 .summary-chip-side.status-green {
-  background-color: rgba(34, 197, 94, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.45);
-  border-radius: 12px;
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .summary-chip-side.status-amber {
-  background-color: rgba(251, 191, 36, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.40);
-  border-radius: 12px;
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .summary-chip-side.status-red {
-  background-color: rgba(239, 68, 68, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.42);
-  border-radius: 12px;
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .summary-chip-side.status-green .perf-score-trend,
@@ -451,6 +451,23 @@ h3, h4 {
 
 /* Make the Live Rate chip clearly clickable */
 #chipRate { cursor: pointer; transition: transform .08s ease; }
+#chipRate {
+  position: relative;
+  overflow: hidden;
+}
+#chipRate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, var(--lr-grad,rgba(34,197,94,0.18)) 0%, var(--lr-grad,rgba(34,197,94,0.18)) 50%, var(--ps-grad,rgba(34,197,94,0.18)) 50%, var(--ps-grad,rgba(34,197,94,0.18)) 100%);
+  /* fallback: both ends green, will be set by JS */
+}
+#chipRate > * {
+  position: relative;
+  z-index: 1;
+}
 #chipRate:active { transform: scale(0.97); }
 
 /* QC keypad tactile press + pointer */
