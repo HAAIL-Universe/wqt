@@ -210,101 +210,24 @@ function openSharedPickModal(){
   document.getElementById('sharedModal').style.display = 'flex';
 }
 
-// ─── Dynamic Start Picker (contracted start) ──────────────────────────────────
-// NOTE: these globals are used by the "contracted start" modal logic
-window._chosenShiftLen = null;
-window._chosenStartHHMM = null;
 
-// Close the contracted-start modal
-function closeContractModal(){
-  const modal = document.getElementById('contractModal');
-  if (modal) modal.style.display = 'none';
-}
-
-// Snap a HH:MM value forward to the next 15-minute block
-function snapForwardQuarter(hhmm) {
-  const h = hm(hhmm);                   // hours as float
-  if (isNaN(h)) return hhmm;
-  const minutes = Math.round(h * 60);   // integer minutes
-  const snapped = Math.ceil(minutes / 15) * 15; // snap forward
-  const HH = Math.floor(snapped / 60) % 24;
-  const MM = snapped % 60;
-  return (HH < 10 ? '0' : '') + HH + ':' + (MM < 10 ? '0' : '') + MM;
-}
-
-
-function getSnappedStartHHMM() {
-  return snapForwardQuarter(startTime || nowHHMM());
-}
-
-// Decide which HH:MM to treat as the "end" of picking
-function getEffectiveLiveEndHHMM(){
-  // If an order is running, live really means "now"
-  if (current && Number.isFinite(current.total)) {
-    return nowHHMM();
+// New: Start shift immediately (no contracted modal)
+function startShiftNow() {
+  // Set startTime to now
+  window.startTime = nowHHMM();
+  // Mark shift as active in localStorage
+  localStorage.setItem('shiftActive', '1');
+  // Persist shift meta (optional, for analytics)
+  if (typeof persistActiveShiftMeta === 'function') {
+    persistActiveShiftMeta({ start: window.startTime, startedAt: Date.now() });
   }
-  // If we've explicitly frozen picking (cleaning), stay at that time
-  if (pickingCutoff) return pickingCutoff;
-  // Otherwise, fall back to last closed order if we have one
-  if (lastClose) return lastClose;
-  // Last resort: now
-  return nowHHMM();
-}
-
-// === SharedPad Persistence + Auto-Hide Helpers ===
-
-// Open dynamic start picker with chosen shift length (e.g. 9h / 10h)
-function openDynamicStartPicker(len){
-  // Store today’s chosen shift length in the hidden field; no long-term preference
-  const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(len || 9);
-  openContractedStartPicker();
-}
-
-// Apply contracted start logic and log lateness for the day
-function applyContractedStart(hhmm){
-  closeContractModal();
-
-  // Use stored preference for shift length or default 9h
-  const prefLen = getShiftPref() || 9;
-  const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(prefLen);
-
-  // Backward compatible: numeric hour → HH:00, else use string
-  const contracted = (typeof hhmm === 'number')
-    ? ((hhmm<10?'0':'') + hhmm + ':00')
-    : String(hhmm);
-
-  const actual = nowHHMM();
-  const cMin = hmToMin(contracted);
-  const aMin = hmToMin(actual);
-
-  // Effective start = contracted if on-time/early; else actual if late
-  const effectiveMin = (aMin <= cMin) ? cMin : aMin;
-  const effectiveHM  = minToHm(effectiveMin);
-
-  // Baseline live rate anchor: shift "start"
-  startTime = effectiveHM;
-
-  // Lateness log (per-day record of contracted vs actual)
-  const lateMin = aMin - cMin;
-  try {
-    const day = new Date().toISOString().slice(0,10);
-    const raw = localStorage.getItem(LATE_LOG_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    obj[day] = { contracted, actual, effective: effectiveHM, lateMin, shiftLen: prefLen };
-    localStorage.setItem(LATE_LOG_KEY, JSON.stringify(obj));
-  } catch(e) {}
-
-  // Proceed to S2 and show note
-  beginShift();
+  // Call backend API if available
+  if (window.WqtAPI && typeof window.WqtAPI.startShiftSession === 'function') {
+    window.WqtAPI.startShiftSession();
+  }
+  // Proceed to main tracker UI
+  if (typeof beginShift === 'function') beginShift();
   if (typeof updateSummary === 'function') updateSummary();
-
-  // Human-readable lateness text for the pre-order note
-  let note = 'on time';
-  if (lateMin > 0)      note = `${lateMin}m late`;
-  else if (lateMin < 0) note = `${-lateMin}m early`;
-  showPreOrderNote?.(`Contracted ${hmTo12(contracted)} • Actual ${hmTo12(actual)} (${note})`);
 }
 
 // Open the Pro Settings modal (advanced config)
@@ -1651,27 +1574,13 @@ function showPreOrderNote(text){
   right.style.display = 'flex';
   right.style.gap     = '10px';
 
-  // Create/replace the note in LEFT group (first position)
-  let note = document.getElementById('contractNote');
-  if (!note){
-    note = document.createElement('div');
-    note.id = 'contractNote';
-    note.className = 'hint';
-  }
-  note.textContent = text;
 
-  if (note.parentElement !== left){
-    left.insertBefore(note, left.firstChild || null);
-  }
 }
 
-// Clear both the old start-hint and this pre-order note
-// NOTE: second definition of clearStartHint (overwrites earlier one)
+// Clear the old start-hint (contractNote logic removed)
 function clearStartHint(){
   const hint = document.getElementById('snapHint');
   if (hint) hint.textContent = '';
-  const cn = document.getElementById('contractNote');
-  if (cn && cn.parentNode) cn.parentNode.removeChild(cn);
 }
 
 // Minutes → "Xh Ym" / "Ym" style ETA string

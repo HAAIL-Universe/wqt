@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Operative — Warehouse QuickCalc & Tracker</title>
+<link rel="stylesheet" href="styles/index.css">
+</head>
+<body>
+<script>
+  // Role gate for operative.html
+  (function() {
+    try {
+      const user = JSON.parse(localStorage.getItem('WQT_CURRENT_USER'));
+      if (!user || !user.role) {
+        window.location.href = 'index.html';
+        return;
+      }
+      if (user.role !== 'operative') {
+        window.location.href = 'index.html';
+        return;
+      }
+    } catch (e) {
+      window.location.href = 'index.html';
+    }
+  })();
+</script>
+<div class="wrap">
+  <div class="tabs">
+    <button id="tabCalcBtn" class="tabbtn" type="button" onclick="showTab('calc')">QuickCalc</button>
+    <button id="tabTrackBtn" class="tabbtn active" type="button" onclick="showTab('tracker')">Tracker</button>
+    <button id="tabHistBtn" class="tabbtn" type="button" onclick="showTab('history')">
+      <span id="userTabLabel">History</span>
+    </button>
+    <button id="tabSupervisorBtn" class="tabbtn" type="button" onclick="showTab('supervisor')" style="display:none;">Supervisor</button>
+  </div>
+
+  <!-- ...existing code... -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Force default tab to Warehouse Map for operatives
+      showTab && showTab('warehouseMap');
+    });
+  </script>
+</body>
+</html>

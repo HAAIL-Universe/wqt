@@ -241,38 +241,16 @@ function snapToNearestHour(){
   return String(h).padStart(2,'0') + ':00';
 }
 
-// Entrypoint when user taps Start 9h / Start 10h
-function startShift(lenHours){
-  try {
-    // Persist one-time 9h/10h preference
-    const existing = getShiftPref();
-    const chosen = existing || (lenHours | 0);
-    if (!existing && (chosen === 9 || chosen === 10)) setShiftPref(chosen);
 
-    // Seed hidden length field for downstream logic
-    const applyLen = getShiftPref() || (lenHours || 9);
-    const lenEl = document.getElementById('tLen');
-    if (lenEl) lenEl.value = String(applyLen);
-
-    // Defer actual start to the contracted time picker
-    openContractedStartPicker();
-  } catch (e){
-    // Safe fallback: still route through the picker
-    const lenEl = document.getElementById('tLen');
-    if (lenEl) lenEl.value = String(lenHours || 9);
-    openContractedStartPicker();
-  }
-}
+// Removed: startShift and contracted start logic (now handled by startShiftNow in core-state-ui.js)
 
 // Transition into main tracker cards after a start time is determined
-function beginShift(){
-  if (!startTime) startTime = snapToNearestHour();
+function beginShift() {
+  // If no startTime, set to now
+  if (!window.startTime) window.startTime = nowHHMM();
   pickingCutoff = "";
-  // Clean any pre-shift hints/notes
   clearStartHint?.();
-  // Onboarding trigger — shift started
   Onboard.showHint("shiftStarted", "Shift started. You can now open a customer order.");
-  // Show tracker UI
   const shift = document.getElementById('shiftCard');
   const active = document.getElementById('activeOrderCard');
   const done = document.getElementById('completedCard');
@@ -281,36 +259,25 @@ function beginShift(){
   if (done)   done.style.display = 'block';
   const shiftLog = document.getElementById('shiftLogCard');
   if (shiftLog) shiftLog.style.display = 'block';
-  // Header form visible until an order starts
   const hdrForm = document.getElementById('orderHeaderForm');
   const hdrProg = document.getElementById('orderHeaderProgress');
   if (hdrForm) hdrForm.style.display = '';
   if (hdrProg) hdrProg.style.display = 'none';
-    // Onboarding trigger — explain order header
   Onboard.showHint("orderHeader", "Choose a customer and enter total units to begin an order.");
-
-  // Hide order-only buttons until active
   ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
     const el = document.getElementById(id); if (el) el.style.display = 'none';
   });
-
   const chipBox = document.getElementById('chipElapsed');
   if (chipBox) chipBox.style.display = 'none';
-
   renderDone();
   updateSummary?.();
-  if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
+  if (typeof refreshSummaryChips === 'function') refreshSummaryChips();
   updateDelayBtn?.();
   updateEndShiftVisibility?.();
   updateCloseEarlyVisibility?.();
   updateExitShiftVisibility?.();
-
-  // Ensure live banner appears on Tracker now that a shift is active
   if (typeof showTab === 'function') showTab('tracker');
-
   saveAll();
-
-  // Lock the bottom action row layout
   ensureActionRowLayout?.();
 }
 
@@ -337,125 +304,6 @@ function hmTo12(hm){
     : `${hour12}:${String(M).padStart(2,'0')}${ap}`; // 11:43am
 }
 
-// Contracted start modal: build 6 hour buttons around current hour
-function openContractedStartPicker(){
-  const modal = document.getElementById('contractModal');
-  const list  = document.getElementById('contractHourList');
-  if (!modal || !list) return;
-
-  list.innerHTML = '';
-
-  // Base at the current hour (FLOOR) so offsets are stable
-  const now = new Date();
-  const mins = now.getMinutes();
-  const snapped = new Date(now);
-  snapped.setMinutes(0, 0, 0); // 11:20 -> 11:00, 11:45 -> 11:00
-
-  // Option B: if we're past the top of the hour, include +1h and highlight it.
-  // Keep exactly 6 buttons.
-  const justOnHour = (mins === 0);
-  const OFFSETS = justOnHour ? [-5, -4, -3, -2, -1, 0] : [-4, -3, -2, -1, 0, +1];
-  const HIGHLIGHT = justOnHour ? 0 : +1;
-
-  OFFSETS.forEach(off => {
-    const d = new Date(snapped);
-    d.setHours(d.getHours() + off);
-
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = '00';
-
-    const btn = document.createElement('button');
-    btn.className = 'btn';
-    if (off === HIGHLIGHT) btn.classList.add('ok'); // highlight per Option B
-    btn.type = 'button';
-    btn.textContent = to12hLabel(hh, mm);                // plain hour text
-    btn.onclick = () => applyContractedStart(`${hh}:${mm}`);
-    list.appendChild(btn);
-  });
-
-  modal.style.display = 'flex';
-}
-
-// Simple close for contracted-start modal
-function closeContractModal(){
-  const modal = document.getElementById('contractModal');
-  if (modal) modal.style.display = 'none';
-}
-
-// Apply a chosen contracted start time, log lateness, move into S2
-async function applyContractedStart(hh){
-  closeContractModal();
-
-  // Normalize input: allow "11" or "11:00"
-  let contractedHM;
-  if (typeof hh === 'string' && hh.includes(':')) {
-    contractedHM = hh.slice(0,5);                   // "HH:MM"
-  } else {
-    const H = parseInt(hh, 10);
-    const HH = Number.isFinite(H) ? String(H).padStart(2,'0') : '00';
-    contractedHM = `${HH}:00`;
-  }
-
-  // Read the shift length (9h or 10h) from the hidden field set by the button
-  const lenEl = document.getElementById('tLen');
-  const chosenLen = lenEl ? (parseInt(lenEl.value, 10) || 9) : 9;
-  if (lenEl) lenEl.value = String(chosenLen);
-
-  const actualHM  = nowHHMM();
-  const cMin = hmToMin(contractedHM);
-  const aMin = hmToMin(actualHM);
-
-  // Effective start: contracted if on-time/early; actual if late
-  const effectiveMin = (aMin <= cMin) ? cMin : aMin;
-  const effectiveHM  = minToHm(effectiveMin);
-
-  // Live rate baseline
-  startTime = effectiveHM;
-
-  // Log lateness
-  const lateMin = aMin - cMin;
-  try {
-    const day = new Date().toISOString().slice(0,10);
-    const raw = localStorage.getItem(LATE_LOG_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    obj[day] = {
-      contracted: contractedHM,
-      actual: actualHM,
-      effective: effectiveHM,
-      lateMin,
-      shiftLen: chosenLen
-    };
-    localStorage.setItem(LATE_LOG_KEY, JSON.stringify(obj));
-  } catch(e) {}
-
-  // Try to start server session before entering S2
-  try {
-    const started = await (window.WqtAPI?.startShiftSession?.({
-      startHHMM: effectiveHM,
-      shiftLengthHours: chosenLen,
-    }));
-    const meta = (started && started.shift) ? started.shift : started;
-    persistActiveShiftMeta?.(meta || null);
-    localStorage.setItem('shiftActive','1');
-  } catch (err) {
-    console.error('[ShiftStart] Failed to start shift on server', err);
-    showToast?.('Could not start shift on server. Check connection and retry.');
-    startTime = '';
-    return;
-  }
-
-  // Show S2 (customer selection) view
-  beginShift();
-  if (typeof updateSummary === 'function') updateSummary();
-
-  // S2 note (left side near Log/Delay), formatted nicely
-  const contracted12 = hmTo12?.(contractedHM) || contractedHM;
-  const actual12     = hmTo12?.(actualHM)     || actualHM;
-  const noteText = lateMin > 0 ? `${lateMin}m late`
-                 : lateMin < 0 ? `${-lateMin}m early`
-                 : 'on time';
-  showPreOrderNote?.(`Contracted ${contracted12} • Actual ${actual12} (${noteText})`);
-}
 
 // Enable/disable Start + Shared Start buttons based on customer + units
 function refreshStartButton(){

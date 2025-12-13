@@ -199,11 +199,23 @@
   }
 
   function gotoWqtApp(role) {
-    // Role-based redirect: supervisors → super.html, pickers → index.html
-    if (role === 'supervisor') {
-      window.location.href = 'super.html';
-    } else {
-      window.location.href = 'index.html';
+    // Role-based redirect: supervisors → super.html, pickers → picker.html, operatives → operative.html, admins → admin.html
+    switch (role) {
+      case 'picker':
+        window.location.href = 'picker.html';
+        break;
+      case 'supervisor':
+        window.location.href = 'super.html';
+        break;
+      case 'admin':
+        window.location.href = 'admin.html';
+        break;
+      case 'operative':
+        window.location.href = 'operative.html';
+        break;
+      default:
+        console.warn('Unknown role for gotoWqtApp:', role, '- routing to picker.html');
+        window.location.href = 'picker.html';
     }
   }
 

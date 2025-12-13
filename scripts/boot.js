@@ -85,7 +85,7 @@ function logoutAndReset() {
   // localStorage.removeItem('wqt_device_id'); 
 
   // Redirect to login screen
-  window.location.href = 'login.html';
+  window.location.href = 'index.html';
 }
 
 // Convert ISO timestamp to HH:MM local for reconciliation flows
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Local thought it was active, server does not → reset to clean slate
             exitShiftNoArchive?.();
             showTab?.('tracker');
-            openContractedStartPicker?.();
+            startShiftNow?.();
           }
         }
       } catch (err) {

@@ -7,6 +7,24 @@
   <link rel="stylesheet" href="styles/index.css">
 </head>
 <body>
+<script>
+  // Role gate for super.html
+  (function() {
+    try {
+      const user = JSON.parse(localStorage.getItem('WQT_CURRENT_USER'));
+      if (!user || !user.role) {
+        window.location.href = 'index.html';
+        return;
+      }
+      if (user.role !== 'supervisor') {
+        window.location.href = 'index.html';
+        return;
+      }
+    } catch (e) {
+      window.location.href = 'index.html';
+    }
+  })();
+</script>
 <div class="wrap" style="padding:2rem;">
   <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
     <h1 style="margin:0; font-size:2rem;">Supervisor Dashboard</h1>

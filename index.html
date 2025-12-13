@@ -8,7 +8,83 @@
 <link rel="stylesheet" href="styles/index.css">
 </head>
 <body>
-<div class="wrap">
+<body class="login-page">
+  <!-- Matrix-style animated background -->
+  <canvas id="login-matrix-bg"></canvas>
+  <div class="login-wrap">
+    <div class="login-header">
+      <div class="login-title">Sign in to WQT</div>
+      <div id="online-badge">Checking…</div>
+    </div>
+
+    <div class="login-sub">
+      Enter your 5-digit warehouse code. This links metrics to your device and account.
+    </div>
+
+    <!-- Resume existing user block (shown if a cached user is present) -->
+    <div id="resume-block">
+      <div>Cached user on this device:</div>
+      <button id="resume-btn" class="btn ok" type="button">
+        Continue
+      </button>
+      <a id="switch-user-link" href="#" style="display:block; text-align:center;">Switch user</a>
+    </div>
+
+    <!-- Main login form -->
+    <form id="login-form" style="margin-top:10px;">
+      <div class="login-field">
+        <label for="pin-input">5-digit code</label>
+        <input
+          id="pin-input"
+          type="password"
+          inputmode="numeric"
+          maxlength="5"
+          autocomplete="one-time-code"
+          placeholder="e.g. 12345">
+      </div>
+
+      <!-- Register face (hidden until Create user is pressed) -->
+      <div id="register-fields" class="register-fields" style="display:none;">
+        <div class="login-field">
+          <label for="name-input">Your name</label>
+          <input
+            id="name-input"
+            type="text"
+            autocomplete="name"
+            placeholder="e.g. John Smith">
+        </div>
+
+        <div class="login-field">
+          <label>Job role</label>
+          <div class="role-buttons">
+            <button type="button" class="role-btn selected" data-role="picker">Picker</button>
+            <button type="button" class="role-btn" data-role="operative">Operative</button>
+            <button type="button" class="role-btn" data-role="supervisor">Supervisor</button>
+          </div>
+          <input id="role-input" type="hidden" value="picker">
+        </div>
+      </div>
+
+      <div class="login-actions">
+        <button id="login-btn" class="btn ok" type="submit">
+          Log in
+        </button>
+        <button id="register-btn" class="btn" type="button">
+          Create user
+        </button>
+      </div>
+    </form>
+
+    <div id="status"></div>
+    <div id="device-hint"></div>
+  </div>
+
+  <!-- Backend resolver (for getApiBase in login.js) -->
+  <script src="scripts/api.js"></script>
+  <!-- Front-door login logic -->
+  <script src="scripts/login.js"></script>
+</body>
+</html>
   <div class="tabs">
     <button id="tabCalcBtn" class="tabbtn" type="button" onclick="showTab('calc')">QuickCalc</button>
     <button id="tabTrackBtn" class="tabbtn active" type="button" onclick="showTab('tracker')">Tracker</button>
@@ -1173,14 +1249,14 @@
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) {
-        if (!onLoginPage) window.location.href = 'login.html';
+        if (!onLoginPage) window.location.href = 'index.html';
         return;
       }
 
       const user = JSON.parse(raw);
       if (!user || !user.userId) {
         localStorage.removeItem(KEY);
-        if (!onLoginPage) window.location.href = 'login.html';
+        if (!onLoginPage) window.location.href = 'index.html';
         return;
       }
 
@@ -1189,7 +1265,7 @@
     } catch (e) {
       console.warn('[Auth] Failed to read WQT_CURRENT_USER', e);
       localStorage.removeItem(KEY);
-      if (!onLoginPage) window.location.href = 'login.html';
+      if (!onLoginPage) window.location.href = 'index.html';
     }
   })();
 </script>
