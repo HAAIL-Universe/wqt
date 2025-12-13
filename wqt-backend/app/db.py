@@ -77,6 +77,12 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS duration_minutes INTEGER;"))
             conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS active_minutes INTEGER;"))
             conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS summary_json TEXT;"))
+            # Zone columns (best-effort)
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS zone_green_seconds INTEGER;"))
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS zone_amber_seconds INTEGER;"))
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS zone_red_seconds INTEGER;"))
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS zone_last TEXT;"))
+            conn.execute(text("ALTER TABLE shift_sessions ADD COLUMN IF NOT EXISTS zone_last_at TIMESTAMP WITH TIME ZONE;"))
     except Exception:
         # If ALTER fails (e.g., non-Postgres or permission issues), ignore —
         # admins can run the migration manually in the DB.
@@ -149,6 +155,12 @@ class ShiftSession(Base):
     duration_minutes = Column(Integer, nullable=True)
     active_minutes = Column(Integer, nullable=True)
     summary_json = Column(Text, nullable=True)
+    # Zone counters (already exist in Neon, add here)
+    zone_green_seconds = Column(Integer, nullable=True)
+    zone_amber_seconds = Column(Integer, nullable=True)
+    zone_red_seconds = Column(Integer, nullable=True)
+    zone_last = Column(Text, nullable=True)
+    zone_last_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class OrderRecord(Base):
@@ -792,12 +804,23 @@ def _compute_shift_stats(
     if avg_rate is None and active_minutes and active_minutes > 0 and total_units is not None:
         avg_rate = float(total_units) / (active_minutes / 60.0)
 
-    return {
+    stats = {
         "total_units": total_units,
         "active_minutes": active_minutes,
         "duration_minutes": duration_minutes,
         "avg_rate": avg_rate,
     }
+    # Pass through zone fields if present in summary
+    for k in [
+        "zone_green_seconds",
+        "zone_amber_seconds",
+        "zone_red_seconds",
+        "zone_last",
+        "zone_last_at"
+    ]:
+        if k in summary:
+            stats[k] = summary[k]
+    return stats
 
 
 def serialize_shift_session(shift: ShiftSession) -> Dict[str, Any]:
@@ -814,6 +837,12 @@ def serialize_shift_session(shift: ShiftSession) -> Dict[str, Any]:
         "avg_rate": shift.avg_rate,
         "duration_minutes": shift.duration_minutes,
         "active_minutes": shift.active_minutes,
+        # Expose zone fields for debugging/inspection
+        "zone_green_seconds": shift.zone_green_seconds,
+        "zone_amber_seconds": shift.zone_amber_seconds,
+        "zone_red_seconds": shift.zone_red_seconds,
+        "zone_last": shift.zone_last,
+        "zone_last_at": shift.zone_last_at.isoformat() if shift.zone_last_at else None,
     }
 
 
@@ -926,6 +955,24 @@ def end_shift(
             target.duration_minutes = stats["duration_minutes"]
         if stats.get("active_minutes") is not None:
             target.active_minutes = stats["active_minutes"]
+        # Copy zone fields if present
+        if "zone_green_seconds" in stats:
+            target.zone_green_seconds = stats["zone_green_seconds"]
+        if "zone_amber_seconds" in stats:
+            target.zone_amber_seconds = stats["zone_amber_seconds"]
+        if "zone_red_seconds" in stats:
+            target.zone_red_seconds = stats["zone_red_seconds"]
+        if "zone_last" in stats:
+            target.zone_last = stats["zone_last"]
+        if "zone_last_at" in stats:
+            # Parse ISO string if needed
+            zla = stats["zone_last_at"]
+            if isinstance(zla, str):
+                try:
+                    zla = datetime.fromisoformat(zla)
+                except Exception:
+                    zla = None
+            target.zone_last_at = zla
         if summary is not None:
             try:
                 target.summary_json = json.dumps(summary)

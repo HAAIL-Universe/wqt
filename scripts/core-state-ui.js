@@ -3,6 +3,14 @@
 // Closed orders (completed picks)
 let picks = [];         // closed orders
 
+// ====== Zone State (NEW) ======
+let zoneGreenSeconds = 0;
+let zoneAmberSeconds = 0;
+let zoneRedSeconds = 0;
+let zoneLast = null;
+let zoneLastAtISO = null;
+let _zoneTickerHandle = null;
+
 // ETA smoothing (GPS-style) – keeps predictive ETA from bouncing
 let etaSmooth = [];            // rolling window of recent order rates
 let lastETAmin = null;         // last computed (smoothed) ETA in minutes
@@ -87,6 +95,53 @@ function resetEtaSmoother(){
   lastRenderedETAmin = null;
 }
 // --- Unified Summary Chip Refresh (Live Rate + Perf Score) ---
+// Perf banding helper: returns {delta, status} for given perfScore and perfTarget
+function getPerfBanding(perfScore, perfTarget) {
+  let perfScoreDelta = null;
+  let perfStatus = null;
+  if (perfTarget > 0 && perfScore != null && isFinite(perfScore)) {
+    perfScoreDelta = (perfScore - perfTarget) / perfTarget;
+    if (perfScoreDelta >= 0) perfStatus = 'status-green';
+    else if (perfScoreDelta >= -0.03) perfStatus = 'status-amber';
+    else perfStatus = 'status-red';
+  }
+  return { perfScoreDelta, perfStatus };
+}
+
+// Zone ticker: tracks time spent in each perf band
+function startZoneTicker() {
+  if (_zoneTickerHandle) clearInterval(_zoneTickerHandle);
+  let lastTick = Date.now();
+  let lastStatus = null;
+  _zoneTickerHandle = setInterval(() => {
+    // Only tick if shift is active
+    if (!startTime || localStorage.getItem('shiftActive') !== '1') return;
+    // Use same perf logic as UI
+    let perfScore = null;
+    let perfTarget = PERF_TARGET_PTS_PER_HOUR;
+    if (typeof computePerformancePointsPerHourToday === 'function') {
+      perfScore = computePerformancePointsPerHourToday();
+    }
+    // If current order has a per-order target, prefer it (step 5 will improve this)
+    if (window.current && typeof window.current.perfTargetPtsPerHour === 'number') {
+      perfTarget = window.current.perfTargetPtsPerHour;
+    }
+    const { perfStatus } = getPerfBanding(perfScore, perfTarget);
+    const now = Date.now();
+    const elapsed = Math.max(1, Math.round((now - lastTick) / 1000));
+    lastTick = now;
+    // Increment the correct zone
+    if (perfStatus === 'status-green') zoneGreenSeconds += elapsed;
+    else if (perfStatus === 'status-amber') zoneAmberSeconds += elapsed;
+    else if (perfStatus === 'status-red') zoneRedSeconds += elapsed;
+    // Update last status/at if changed
+    if (perfStatus !== lastStatus) {
+      zoneLast = perfStatus;
+      zoneLastAtISO = new Date().toISOString();
+      lastStatus = perfStatus;
+    }
+  }, 1000);
+}
 // This function updates the dual summary chip using the same state and logic as the modal
 function refreshSummaryChips(main) {
   const lrEl = document.getElementById('live-rate-value');
@@ -120,26 +175,24 @@ function refreshSummaryChips(main) {
   }
   setSummarySideStatus(liveSide, liveStatus);
 
-  // Performance Score: per hour for today's shift
+  // Performance Score: per hour for today's shift or active order
   let perfScore = null;
-  let perfScoreDelta = null;
-  if (typeof computePerformancePointsPerHourToday === 'function') {
+  let perfTarget = PERF_TARGET_PTS_PER_HOUR;
+  if (window.current && typeof window.current.perfTargetPtsPerHour === 'number') {
+    perfTarget = window.current.perfTargetPtsPerHour;
+    if (typeof computeActiveOrderPerfPointsPerHour === 'function') {
+      perfScore = computeActiveOrderPerfPointsPerHour();
+    }
+  }
+  if (perfScore == null && typeof computePerformancePointsPerHourToday === 'function') {
     perfScore = computePerformancePointsPerHourToday();
   }
-  
   psEl.textContent =
     perfScore != null && isFinite(perfScore)
       ? `${Math.round(perfScore)} pts/h`
       : '—';
 
-  const perfTarget = PERF_TARGET_PTS_PER_HOUR;
-  let perfStatus = null;
-  if (perfTarget > 0 && perfScore != null && isFinite(perfScore)) {
-    perfScoreDelta = (perfScore - perfTarget) / perfTarget;
-    if (perfScoreDelta >= 0) perfStatus = 'status-green';
-    else if (perfScoreDelta >= -0.03) perfStatus = 'status-amber';
-    else perfStatus = 'status-red';
-  }
+  const { perfScoreDelta, perfStatus } = getPerfBanding(perfScore, perfTarget);
   setSummarySideStatus(perfSide, perfStatus);
   renderPerfScoreTrend(perfScoreDelta, perfStatus);
   window.perfScoreDelta = perfScoreDelta;
@@ -217,6 +270,14 @@ function startShiftNow() {
   window.startTime = nowHHMM();
   // Mark shift as active in localStorage
   localStorage.setItem('shiftActive', '1');
+  // Reset zone state at shift start
+  zoneGreenSeconds = 0;
+  zoneAmberSeconds = 0;
+  zoneRedSeconds = 0;
+  zoneLast = null;
+  zoneLastAtISO = null;
+  // Start zone ticker (stop any previous)
+  startZoneTicker();
   // Persist shift meta (optional, for analytics)
   if (typeof persistActiveShiftMeta === 'function') {
     persistActiveShiftMeta({ start: window.startTime, startedAt: Date.now() });
@@ -1066,6 +1127,17 @@ function exitShiftNoArchive(){
   shiftBreaks = [];
   startTime = '';
   pickingCutoff = '';
+  // Reset zone state
+  zoneGreenSeconds = 0;
+  zoneAmberSeconds = 0;
+  zoneRedSeconds = 0;
+  zoneLast = null;
+  zoneLastAtISO = null;
+  // Stop zone ticker if running
+  if (_zoneTickerHandle) {
+    clearInterval(_zoneTickerHandle);
+    _zoneTickerHandle = null;
+  }
 
   // ====== NEW: Clear shift-specific operational logs ======
   if (typeof operativeLog !== 'undefined') {
@@ -1839,6 +1911,12 @@ function loadAll(){
       shiftBreaks = Array.isArray(p.shiftBreaks) ? p.shiftBreaks : [];
       operativeLog    = Array.isArray(p.operativeLog) ? p.operativeLog : [];
       operativeActive = p.operativeActive || null;
+      // Restore zone state (default to 0/null)
+      zoneGreenSeconds = typeof p.zoneGreenSeconds === 'number' ? p.zoneGreenSeconds : 0;
+      zoneAmberSeconds = typeof p.zoneAmberSeconds === 'number' ? p.zoneAmberSeconds : 0;
+      zoneRedSeconds   = typeof p.zoneRedSeconds === 'number' ? p.zoneRedSeconds : 0;
+      zoneLast         = typeof p.zoneLast === 'string' ? p.zoneLast : null;
+      zoneLastAtISO    = typeof p.zoneLastAtISO === 'string' ? p.zoneLastAtISO : null;
       refreshOperativeChip();
       
       // DEBUG: Log history count for current user
@@ -1951,7 +2029,9 @@ function saveAll(){
       savedAt: new Date().toISOString(),
       picks, history: historyDays, current, tempWraps, startTime,
       lastClose, pickingCutoff, undoStack, proUnlocked,
-      shiftBreaks, operativeLog, operativeActive
+      shiftBreaks, operativeLog, operativeActive,
+      // Zone state
+      zoneGreenSeconds, zoneAmberSeconds, zoneRedSeconds, zoneLast, zoneLastAtISO
     };
 
     // Persist main state via Storage abstraction (handles per-user namespacing)

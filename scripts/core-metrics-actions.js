@@ -104,6 +104,28 @@ function updateElapsedChip() {
 }
 
 // ====== Live rate snapshot helpers ======
+// Helper: compute live perf points/hour for the active order
+function computeActiveOrderPerfPointsPerHour() {
+  if (!window.current || !window.current.start) return null;
+  const now = nowHHMM();
+  const s = hm(window.current.start), e = hm(now);
+  if (!(e > s)) return null;
+  // Units and locations done so far
+  const units = currentOrderUnitsDone();
+  const locations = window.current.locations || 0;
+  // Score so far
+  const score = units + 2 * locations;
+  // Exclude breaks and wraps
+  const exclMins = (window.current.breaks || []).reduce((a,b)=>a+(b.minutes||0),0);
+  const wrapMins = (Array.isArray(window.tempWraps) ? window.tempWraps : []).reduce((acc, w) => acc + ((w.durationMs || 0) / 60000), 0);
+  const activeHours = (e - s) - (exclMins + wrapMins) / 60;
+  if (activeHours <= 0) return null;
+  return score / activeHours;
+}
+
+if (typeof window !== 'undefined') {
+  window.computeActiveOrderPerfPointsPerHour = computeActiveOrderPerfPointsPerHour;
+}
 function computeLiveRateSnapshot(){
   return computeLiveSnapshot().live;
 }

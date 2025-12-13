@@ -1,4 +1,30 @@
 // --- Performance Points Per Hour Calculation ---
+
+// Helper: compute per-order perf target from history
+function computeOrderPerfTargetPtsPerHour(orderName, minCount = 3, maxCount = 5) {
+  if (!Array.isArray(historyDays) || !orderName) return null;
+  // Normalize name: uppercase, trim, collapse spaces, remove dashes/slashes
+  function norm(n) {
+    return String(n || '').toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
+  }
+  const targetNorm = norm(orderName);
+  // Find recent completed orders matching this name
+  const matches = [];
+  for (let i = historyDays.length - 1; i >= 0 && matches.length < maxCount; --i) {
+    const o = historyDays[i];
+    if (!o || !o.name) continue;
+    if (norm(o.name) === targetNorm && typeof o.perfPerHour === 'number' && o.perfPerHour > 0) {
+      matches.push(o.perfPerHour);
+    }
+  }
+  if (matches.length < minCount) return null;
+  // Average
+  return matches.reduce((a, b) => a + b, 0) / matches.length;
+}
+
+if (typeof window !== 'undefined') {
+  window.computeOrderPerfTargetPtsPerHour = computeOrderPerfTargetPtsPerHour;
+}
 // Computes (units + 2*locations) per hour for today/shift
 // Uses ACTIVE time only (excludes all logged downtime: breaks, wraps, delays)
 function computePerformancePointsPerHourToday() {
@@ -527,6 +553,10 @@ function startOrder() {
 
   const finalName = isOther ? otherVal : name;
 
+  // Compute per-order perf target from history
+  let perfTargetPtsPerHour = computeOrderPerfTargetPtsPerHour(finalName);
+  if (!perfTargetPtsPerHour) perfTargetPtsPerHour = (typeof PERF_TARGET_PTS_PER_HOUR !== 'undefined' ? PERF_TARGET_PTS_PER_HOUR : 300);
+
   // create order state
   current = {
     name: finalName,
@@ -540,6 +570,7 @@ function startOrder() {
     orderRateUh: null,
     fixedETA: null,
     shared: false,  // Shared mode flag (set in openSharedStart())
+    perfTargetPtsPerHour
   };
   tempWraps = [];
   undoStack = [{ type: 'start' }];
@@ -1017,6 +1048,13 @@ function completeOrder() {
   const exclMins     = (current.breaks || []).reduce((a,b)=>a+(b.minutes||0),0);
 
   // Archive into picks
+  // Compute perfPerHour for this order
+  let orderScore = unitsDone + 2 * (current.locations || 0);
+  // Compute active hours (excluding breaks and wraps)
+  let s = hm(current.start), e = hm(closeHHMM);
+  let wrapMins = tempWraps.reduce((acc, w) => acc + ((w.durationMs || 0) / 60000), 0);
+  let activeHours = (e > s) ? (e - s) - (exclMins + wrapMins) / 60 : 0;
+  let perfPerHour = (activeHours > 0) ? (orderScore / activeHours) : null;
   const archived = {
     name:    current.name,
     units:   unitsDone,
@@ -1025,7 +1063,9 @@ function completeOrder() {
     start:   current.start,
     close:   closeHHMM,
     excl:    exclMins,
-    log:     { wraps: tempWraps.slice(), breaks: (current.breaks || []).slice() }
+    log:     { wraps: tempWraps.slice(), breaks: (current.breaks || []).slice() },
+    perfPerHour,
+    perfTargetPtsPerHour: current.perfTargetPtsPerHour
   };
   picks.push(archived);
   lastClose = closeHHMM;
@@ -1984,9 +2024,16 @@ function submitCloseEarly(){
   const exclMins = (current.breaks || [])
     .reduce((a,b)=> a + (b.minutes || 0), 0);
 
+  // Compute perfPerHour for this order
+  let orderScore = unitsDone + 2 * (current.locations || 0);
+  let s = hm(current.start), e = hm(closeHHMM);
+  let wrapMins = tempWraps.reduce((acc, w) => acc + ((w.durationMs || 0) / 60000), 0);
+  let activeHours = (e > s) ? (e - s) - (exclMins + wrapMins) / 60 : 0;
+  let perfPerHour = (activeHours > 0) ? (orderScore / activeHours) : null;
   const archivedEarly = {
     name:        current.name,
     units:       unitsDone,
+    locations:   current.locations || 0,
     pallets:     palletsCnt,
     start:       current.start,
     close:       closeHHMM,
@@ -1997,7 +2044,9 @@ function submitCloseEarly(){
     log: {
       wraps:  tempWraps.slice(0),
       breaks: (current.breaks || []).slice(0)
-    }
+    },
+    perfPerHour,
+    perfTargetPtsPerHour: current.perfTargetPtsPerHour
   };
 
   picks.push(archivedEarly);
@@ -2737,7 +2786,13 @@ async function endShift(){
     operativeLog: (operativeLog || []).slice(0),
     // NEW fields used by weekly overtime calc
     workedMin,
-    scheduledMin
+    scheduledMin,
+    // Zone counters (NEW)
+    zone_green_seconds: typeof zoneGreenSeconds === 'number' ? Math.round(zoneGreenSeconds) : 0,
+    zone_amber_seconds: typeof zoneAmberSeconds === 'number' ? Math.round(zoneAmberSeconds) : 0,
+    zone_red_seconds:   typeof zoneRedSeconds === 'number' ? Math.round(zoneRedSeconds) : 0,
+    zone_last:          zoneLast || null,
+    zone_last_at:       zoneLastAtISO || null
   };
 
   // Server-first end request
