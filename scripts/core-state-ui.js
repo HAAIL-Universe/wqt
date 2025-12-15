@@ -263,48 +263,13 @@ function openDynamicStartPicker(len){
 
 // Apply contracted start logic and log lateness for the day
 function applyContractedStart(hhmm){
+  // Delegate to the correct implementation in core-tracker-history.js if present
+  if (typeof window.applyContractedStart === 'function' && window.applyContractedStart !== applyContractedStart) {
+    window.applyContractedStart(hhmm);
+    return;
+  }
+  // Fallback: close modal if no implementation is found
   closeContractModal();
-
-  // Use stored preference for shift length or default 9h
-  const prefLen = getShiftPref() || 9;
-  const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(prefLen);
-
-  // Backward compatible: numeric hour → HH:00, else use string
-  const contracted = (typeof hhmm === 'number')
-    ? ((hhmm<10?'0':'') + hhmm + ':00')
-    : String(hhmm);
-
-  const actual = nowHHMM();
-  const cMin = hmToMin(contracted);
-  const aMin = hmToMin(actual);
-
-  // Effective start = contracted if on-time/early; else actual if late
-  const effectiveMin = (aMin <= cMin) ? cMin : aMin;
-  const effectiveHM  = minToHm(effectiveMin);
-
-  // Baseline live rate anchor: shift "start"
-  startTime = effectiveHM;
-
-  // Lateness log (per-day record of contracted vs actual)
-  const lateMin = aMin - cMin;
-  try {
-    const day = new Date().toISOString().slice(0,10);
-    const raw = localStorage.getItem(LATE_LOG_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    obj[day] = { contracted, actual, effective: effectiveHM, lateMin, shiftLen: prefLen };
-    localStorage.setItem(LATE_LOG_KEY, JSON.stringify(obj));
-  } catch(e) {}
-
-  // Proceed to S2 and show note
-  beginShift();
-  if (typeof updateSummary === 'function') updateSummary();
-
-  // Human-readable lateness text for the pre-order note
-  let note = 'on time';
-  if (lateMin > 0)      note = `${lateMin}m late`;
-  else if (lateMin < 0) note = `${-lateMin}m early`;
-  showPreOrderNote?.(`Contracted ${hmTo12(contracted)} • Actual ${hmTo12(actual)} (${note})`);
 }
 
 // Open the Pro Settings modal (advanced config)
