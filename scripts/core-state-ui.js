@@ -2415,6 +2415,8 @@ function initUpdateBasePanel() {
 }
 
 function initUpdateBaysModal() {
+    // Also refresh pending count on modal open
+    refreshBayPendingCountUI();
   const btnUpdateBays = document.getElementById('btnUpdateBays');
   const updateBayModal = document.getElementById('updateBayModal');
   const updateBayCodeInput = document.getElementById('updateBayCodeInput');
@@ -2438,26 +2440,25 @@ function initUpdateBaysModal() {
     if (!updateBayCodeInput) return;
     const rawCode = updateBayCodeInput.value.trim();
     if (!rawCode) return;
-
-    const code = rawCode; // If DB stores prefixes, add normalization here.
-
-    try {
-      const res = await window?.WqtAPI?.toggleLocationEmpty?.(code);
-      if (res && res.success) {
-        const stateLabel = res.is_empty ? 'empty' : 'full';
-        showToast?.(`Marked ${rawCode} as ${stateLabel}`);
-        hideUpdateBayModal();
-        if (wmActiveAisle) {
-          selectAisle(wmActiveAisle);
-        }
-      } else {
-        showToast?.(res?.message || 'Location not found');
-      }
-    } catch (err) {
-      console.warn('[UpdateBays] Failed to toggle location', err);
-      showToast?.('Failed to update location');
-    }
+    const code = window.WqtStorage?.normalizeLocationCode?.(rawCode) || rawCode;
+    const isEmptyEl = document.getElementById('bayIsEmptyCheckbox');
+    const palletTypeEl = document.getElementById('bayPalletTypeSelect');
+    const is_empty = isEmptyEl ? !!isEmptyEl.checked : true;
+    const pallet_type = palletTypeEl ? palletTypeEl.value : 'UK';
+    const result = window.WqtStorage?.queueBayUpdate?.({ code, is_empty, pallet_type });
+    hideUpdateBayModal();
+    showToast?.(`Saved locally. Pending: ${result?.count ?? 1}`);
+    refreshBayPendingCountUI();
   };
+
+// --- Bay Outbox UI helpers ---
+function refreshBayPendingCountUI() {
+  const el = document.getElementById('bayPendingCount');
+  if (!el || !window.WqtStorage) return;
+  const n = window.WqtStorage.getBayOutboxCount?.() || 0;
+  el.textContent = `Pending: ${n}`;
+  el.style.display = n > 0 ? '' : 'none';
+}
 
   if (btnUpdateBays && !btnUpdateBays.dataset.wired) {
     btnUpdateBays.dataset.wired = '1';

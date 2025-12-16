@@ -702,6 +702,7 @@
         <div style="display:flex; gap:8px; align-items:center;" class="warehouse-map-actions">
           <button class="btn ghost" type="button" id="wmBackBtn" onclick="closeAisleDetail()" style="display:none;">← Back to Aisles</button>
           <button class="btn" type="button" id="btnUpdateBays">Update bays</button>
+          <span id="bayPendingCount" style="display:none; margin-left:4px; font-size:0.95em; color:#f59e42; background:#fffbe6; border-radius:6px; padding:2px 8px;">Pending: 0</span>
           <button class="btn" type="button" id="wmUpdateBaseBtn" style="display:none;" onclick="toggleUpdateBasePanel()">Update base</button>
           <button class="btn" type="button" id="btnSaveMap" onclick="saveWarehouseMap()">Save Map</button>
         </div>
@@ -769,6 +770,16 @@
         <div class="wm-field">
           <label for="updateBayCodeInput">Location code</label>
           <input id="updateBayCodeInput" type="text" placeholder="e.g. 3A-03-1L" />
+        </div>
+        <div class="wm-field" style="margin-top:8px;">
+          <label><input type="checkbox" id="bayIsEmptyCheckbox" /> Mark as empty</label>
+        </div>
+        <div class="wm-field" style="margin-top:8px;">
+          <label for="bayPalletTypeSelect">Pallet type</label>
+          <select id="bayPalletTypeSelect">
+            <option value="UK">UK</option>
+            <option value="EURO">Euro</option>
+          </select>
         </div>
         <div class="modal-actions" style="margin-top:10px; display:flex; gap:8px; justify-content:flex-end;">
           <button id="btnUpdateBaySubmit" class="btn">Submit</button>

@@ -1,3 +1,83 @@
+// ====== Bay Outbox (Offline-first warehouse map updates) ======
+const BAY_OUTBOX_KEY = 'wqt_bay_outbox_v1';
+
+function loadBayOutbox() {
+  try {
+    const raw = window.localStorage.getItem(BAY_OUTBOX_KEY);
+    const parsed = safeParse(raw, null);
+    if (parsed && parsed.version === 1 && parsed.pending_by_code) return parsed;
+  } catch (_) {}
+  return { version: 1, updated_at: null, pending_by_code: {} };
+}
+
+function saveBayOutbox(outbox) {
+  try {
+    outbox.version = 1;
+    outbox.updated_at = new Date().toISOString();
+    window.localStorage.setItem(BAY_OUTBOX_KEY, JSON.stringify(outbox));
+  } catch (_) {}
+}
+
+function normalizeLocationCode(code) {
+  if (!code || typeof code !== 'string') return '';
+  return code.trim().toUpperCase();
+}
+
+function generateEventId() {
+  // Simple UUID-ish: yyyymmddhhmmss + random
+  const now = new Date();
+  return (
+    now.getFullYear().toString() +
+    (now.getMonth()+1).toString().padStart(2,'0') +
+    now.getDate().toString().padStart(2,'0') +
+    now.getHours().toString().padStart(2,'0') +
+    now.getMinutes().toString().padStart(2,'0') +
+    now.getSeconds().toString().padStart(2,'0') +
+    '-' + Math.random().toString(36).slice(2,8)
+  );
+}
+
+function queueBayUpdate({ code, is_empty, pallet_type }) {
+  const outbox = loadBayOutbox();
+  const normCode = normalizeLocationCode(code);
+  if (!normCode) return { count: Object.keys(outbox.pending_by_code).length, queued_entry: null };
+  const entry = {
+    code: normCode,
+    is_empty: !!is_empty,
+    pallet_type: pallet_type === 'EURO' ? 'EURO' : 'UK',
+    ts: new Date().toISOString(),
+    event_id: generateEventId()
+  };
+  outbox.pending_by_code[normCode] = entry;
+  saveBayOutbox(outbox);
+  return { count: Object.keys(outbox.pending_by_code).length, queued_entry: entry };
+}
+
+function getBayOutboxCount() {
+  const outbox = loadBayOutbox();
+  return Object.keys(outbox.pending_by_code).length;
+}
+
+function listBayOutboxUpdates() {
+  const outbox = loadBayOutbox();
+  return Object.values(outbox.pending_by_code);
+}
+
+function clearBayOutbox() {
+  window.localStorage.removeItem(BAY_OUTBOX_KEY);
+}
+
+// Expose to window for use in core-state-ui.js
+if (typeof window !== 'undefined') {
+  window.WqtStorage = window.WqtStorage || {};
+  window.WqtStorage.loadBayOutbox = loadBayOutbox;
+  window.WqtStorage.saveBayOutbox = saveBayOutbox;
+  window.WqtStorage.normalizeLocationCode = normalizeLocationCode;
+  window.WqtStorage.queueBayUpdate = queueBayUpdate;
+  window.WqtStorage.getBayOutboxCount = getBayOutboxCount;
+  window.WqtStorage.listBayOutboxUpdates = listBayOutboxUpdates;
+  window.WqtStorage.clearBayOutbox = clearBayOutbox;
+}
 // /scripts/storage.js
 // Centralised localStorage wrapper for WQT.
 // This mirrors the *existing* QC-Tracker schema so we can
