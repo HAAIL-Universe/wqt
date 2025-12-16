@@ -1,3 +1,55 @@
+// Helper: Overlay outbox entries onto locations (pending edits win)
+function overlayOutbox(locations, outboxEntries) {
+  if (!Array.isArray(locations)) locations = [];
+  if (!Array.isArray(outboxEntries)) outboxEntries = [];
+  const byCode = {};
+  locations.forEach(loc => {
+    if (loc && loc.code) byCode[loc.code] = { ...loc };
+  });
+  outboxEntries.forEach(entry => {
+    if (entry && entry.code) {
+      // Overlay or add new
+      byCode[entry.code] = {
+        ...(byCode[entry.code] || {}),
+        ...entry,
+        // Outbox always sets is_empty, but preserve other fields if present
+      };
+    }
+  });
+  return Object.values(byCode);
+}
+
+// Helper: Load aisle locations from cache if offline, else from server
+async function loadAisleLocations(aisle, mappingMode) {
+  const warehouseId = getActiveWarehouseId();
+  const fetchFn = window?.WqtAPI?.fetchLocationsByAisle;
+  let locations = [];
+  let fromCache = false;
+  if (typeof fetchFn === 'function') {
+    try {
+      const res = await fetchFn(warehouseId, aisle, !mappingMode ? true : false);
+      if (Array.isArray(res?.locations)) {
+        locations = res.locations;
+        // Save to cache for offline use
+        if (window.WqtStorage?.saveWarehouseMapCache) {
+          const cache = window.WqtStorage.loadWarehouseMapCache();
+          res.locations.forEach(loc => {
+            if (loc && loc.code) cache.locations_by_code[loc.code] = { ...loc };
+          });
+          window.WqtStorage.saveWarehouseMapCache(cache);
+        }
+      }
+    } catch (err) {
+      fromCache = true;
+    }
+  } else {
+    fromCache = true;
+  }
+  if (fromCache && window.WqtStorage?.getLocationsForAisle) {
+    locations = window.WqtStorage.getLocationsForAisle(aisle);
+  }
+  return locations;
+}
 // ====== State ======
 
 // Closed orders (completed picks)
@@ -2705,7 +2757,45 @@ async function selectAisle(aisle) {
     console.warn('[Warehouse Map] Failed to load aisle locations', err);
     if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';
   }
+async function selectAisle(aisle) {
+  wmActiveAisle = aisle;
+  renderAisleChips();
+
+  const list = document.getElementById('wmAisleList');
+  if (list) list.innerHTML = '<div class="hint">Loading locations…</div>';
+
+  const warehouseId = getActiveWarehouseId();
+  const mappingMode = !!window.rowGeneratorUnlocked;
+  let locations = [];
+  try {
+    locations = await loadAisleLocations(aisle, mappingMode);
+  } catch (err) {
+    console.warn('[Warehouse Map] Failed to load aisle locations', err);
+    if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';
+    locations = [];
+  }
+  // Overlay outbox
+  let outbox = [];
+  if (window.WqtStorage?.listBayOutboxUpdates) {
+    outbox = window.WqtStorage.listBayOutboxUpdates();
+    // Only include outbox entries for this aisle
+    outbox = outbox.filter(e => e && e.code && (locations.some(l => l.code === e.code) || (e.aisle === aisle || (e.code && e.code[0] === aisle))));
+  }
+  const merged = overlayOutbox(locations, outbox);
+  renderAisleList(merged, { mappingMode });
 }
+function renderAisleList(locations, { mappingMode = false } = {}) {
+      // If this location is pending in outbox, visually indicate
+      let isPending = false;
+      if (window.WqtStorage?.listBayOutboxUpdates) {
+        const pending = window.WqtStorage.listBayOutboxUpdates();
+        isPending = pending.some(e => e && e.code === loc.code);
+      }
+      applyState(!!loc.is_empty);
+      if (isPending) {
+        row.classList.add('wm-loc-pending');
+        status.textContent += ' (Pending)';
+      }
 
 async function refreshWarehouseAisleBrowser() {
   const chips = document.getElementById('wmAisleChips');
