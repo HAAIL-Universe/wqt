@@ -2639,11 +2639,16 @@ function updateExitShiftVisibility(){
   const histTab = document.getElementById('tabHistory');
   const historyVisible = histTab ? !histTab.classList.contains('hidden') : false;
 
-  // "Active shift" if we either have a start time or the durable flag is on
-  const hasShiftFlag = !!startTime || localStorage.getItem('shiftActive') === '1';
+  // Use consolidated session state for consistent checks
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  
+  const hasShiftFlag = sessionState 
+    ? sessionState.hasActiveShift 
+    : (!!startTime || localStorage.getItem('shiftActive') === '1');
 
-  // Only allow Exit Shift when there are no completed orders to archive
-  const hasOrders = Array.isArray(picks) && picks.length > 0;
+  const hasOrders = sessionState 
+    ? sessionState.hasCompletedOrders 
+    : (Array.isArray(picks) && picks.length > 0);
 
   const show = historyVisible && hasShiftFlag && !hasOrders;
   btn.style.display = show ? 'inline-block' : 'none';
