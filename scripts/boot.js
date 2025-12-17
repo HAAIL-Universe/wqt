@@ -12,6 +12,56 @@ function getDeviceIdSafe() {
   }
 }
 
+// ====== Auth Guard Function (iOS PWA BFCache Protection) ======
+/**
+ * enforceAuthGate checks if user is logged in and redirects to login if not.
+ * Called on pageshow, visibilitychange, and boot to prevent BFCache resurrection
+ * of authenticated tracker UI after logout.
+ */
+function enforceAuthGate() {
+  try {
+    // Check forceLogin marker first (set during logout)
+    const forceLogin = localStorage.getItem('forceLogin');
+    if (forceLogin) {
+      console.log('[AuthGate] forceLogin marker detected - redirecting to login');
+      window.location.replace('login.html');
+      return;
+    }
+
+    // Check canonical auth state: WQT_CURRENT_USER with userId
+    const raw = localStorage.getItem('WQT_CURRENT_USER');
+    if (!raw) {
+      console.log('[AuthGate] No WQT_CURRENT_USER - redirecting to login');
+      window.location.replace('login.html');
+      return;
+    }
+
+    let user = null;
+    try {
+      user = JSON.parse(raw);
+    } catch (e) {
+      console.warn('[AuthGate] Failed to parse WQT_CURRENT_USER - redirecting to login');
+      localStorage.removeItem('WQT_CURRENT_USER');
+      window.location.replace('login.html');
+      return;
+    }
+
+    if (!user || !user.userId) {
+      console.log('[AuthGate] WQT_CURRENT_USER missing userId - redirecting to login');
+      localStorage.removeItem('WQT_CURRENT_USER');
+      window.location.replace('login.html');
+      return;
+    }
+
+    // User is logged in - allow page to continue
+    console.log('[AuthGate] User authenticated:', user.userId);
+  } catch (e) {
+    console.error('[AuthGate] Exception during auth check:', e);
+    // On error, redirect to login for safety
+    window.location.replace('login.html');
+  }
+}
+
 function logoutAndReset() {
   // ====== NEW: Clear in-memory shift state first ======
   // If exitShiftNoArchive exists, call it to wipe all shift-related state and UI
@@ -84,8 +134,11 @@ function logoutAndReset() {
   // OPTIONAL: reset device identity if you want fresh devices each time
   // localStorage.removeItem('wqt_device_id'); 
 
-  // Redirect to login screen
-  window.location.href = 'login.html';
+  // Set forceLogin marker to prevent BFCache resurrection
+  localStorage.setItem('forceLogin', Date.now().toString());
+
+  // Redirect to login screen (use replace to prevent back navigation)
+  window.location.replace('login.html');
 }
 
 // Convert ISO timestamp to HH:MM local for reconciliation flows
@@ -178,10 +231,28 @@ function showShiftReconcileModal(serverShift){
   document.body.appendChild(overlay);
 }
 
+// ====== iOS PWA BFCache Protection ======
+// Catch iOS BFCache restores with pageshow event
+window.addEventListener('pageshow', function(e) {
+  console.log('[BFCache] pageshow event fired, persisted:', e.persisted);
+  enforceAuthGate();
+});
+
+// Catch app switch/resume with visibilitychange
+document.addEventListener('visibilitychange', function() {
+  if (!document.hidden) {
+    console.log('[BFCache] page became visible - checking auth');
+    enforceAuthGate();
+  }
+});
+
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
     try {
+      // ── AUTH GATE: Check authentication before any boot logic ────────
+      enforceAuthGate();
+      
       // Login now handled by front-door (login.html + WQT_CURRENT_USER).
       // If this script is running, gateWqtByLogin has already ensured a user.
 

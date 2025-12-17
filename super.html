@@ -9,8 +9,11 @@
 <body>
 <script>
   // Inline authentication guard: redirect to login if not authenticated
-  if (!localStorage.WQT_CURRENT_USER) {
-    window.location.href = 'login.html';
+  // Check forceLogin marker first (iOS PWA BFCache protection)
+  if (localStorage.getItem('forceLogin')) {
+    window.location.replace('login.html');
+  } else if (!localStorage.WQT_CURRENT_USER) {
+    window.location.replace('login.html');
   }
 </script>
 <div class="wrap" style="padding:2rem;">

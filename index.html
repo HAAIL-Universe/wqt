@@ -1140,16 +1140,26 @@
     }
 
     try {
+      // Check forceLogin marker first (iOS PWA BFCache protection)
+      const forceLogin = localStorage.getItem('forceLogin');
+      if (forceLogin) {
+        if (!onLoginPage) {
+          console.log('[Auth] forceLogin marker detected - redirecting');
+          window.location.replace('login.html');
+        }
+        return;
+      }
+
       const raw = localStorage.getItem(KEY);
       if (!raw) {
-        if (!onLoginPage) window.location.href = 'login.html';
+        if (!onLoginPage) window.location.replace('login.html');
         return;
       }
 
       const user = JSON.parse(raw);
       if (!user || !user.userId) {
         localStorage.removeItem(KEY);
-        if (!onLoginPage) window.location.href = 'login.html';
+        if (!onLoginPage) window.location.replace('login.html');
         return;
       }
 
@@ -1158,7 +1168,7 @@
     } catch (e) {
       console.warn('[Auth] Failed to read WQT_CURRENT_USER', e);
       localStorage.removeItem(KEY);
-      if (!onLoginPage) window.location.href = 'login.html';
+      if (!onLoginPage) window.location.replace('login.html');
     }
   })();
 </script>

@@ -118,6 +118,9 @@
     // Save unified identity
     saveCurrentUser(userPayload);
 
+    // Clear forceLogin marker on successful login (iOS PWA BFCache fix)
+    localStorage.removeItem('forceLogin');
+
     // Mirror compatibility keys
     localStorage.setItem('wqt_operator_id', userId);
     localStorage.setItem('wqt_username', userId);
@@ -189,6 +192,10 @@
     }
 
     saveCurrentUser(userPayload);
+    
+    // Clear forceLogin marker on successful registration (iOS PWA BFCache fix)
+    localStorage.removeItem('forceLogin');
+    
     // Mirror legacy keys for consistency
     localStorage.setItem('wqt_operator_id', userId);
     localStorage.setItem('wqt_username', userId);
