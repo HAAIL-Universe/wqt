@@ -212,8 +212,12 @@ document.addEventListener('DOMContentLoaded', function () {
       loadCustomCodes();
       loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
 
-      const hadShift = !!startTime;
-      const hadOpen  = !!(current && Number.isFinite(current.total));
+      // ── 2b) Get consolidated session state for consistent hydration ──
+      const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+      
+      // Use session state if available, otherwise fall back to direct checks
+      const hadShift = sessionState ? sessionState.hasActiveShift : !!startTime;
+      const hadOpen  = sessionState ? sessionState.hasActiveOrder : !!(current && Number.isFinite(current.total));
 
       // ── 1b) Reconcile with backend shift session state ──────────
       try {

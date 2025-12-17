@@ -80,6 +80,91 @@ if (typeof window !== 'undefined') {
   window.clearActiveShiftMeta = clearActiveShiftMeta;
 }
 
+/**
+ * getSessionState() - Consolidated source of truth for active shift and order state
+ * 
+ * Consolidates all state checks from disparate sources:
+ * - In-memory state (current, startTime, picks)
+ * - localStorage flags (shiftActive, currentOrder)
+ * - Persisted shift metadata (wqt_active_shift_meta)
+ * 
+ * Returns a unified session state object for consistent gating logic.
+ */
+function getSessionState() {
+  const state = {
+    hasActiveShift: false,
+    hasActiveOrder: false,
+    hasCompletedOrders: false,
+    shiftMeta: null,
+    current: null,
+    startTime: null,
+    picks: [],
+  };
+
+  // 1. Check in-memory state
+  try {
+    if (typeof window !== 'undefined') {
+      state.startTime = window.startTime || (typeof startTime !== 'undefined' ? startTime : null);
+      state.current = window.current || (typeof current !== 'undefined' ? current : null);
+      state.picks = window.picks || (typeof picks !== 'undefined' && Array.isArray(picks) ? picks : []);
+    }
+  } catch (e) {
+    console.warn('[getSessionState] Failed to read in-memory state:', e);
+  }
+
+  // 2. Check localStorage flags
+  try {
+    const shiftActiveFlag = localStorage.getItem('shiftActive');
+    const currentOrderStr = localStorage.getItem('currentOrder');
+    
+    if (shiftActiveFlag === '1') {
+      state.hasActiveShift = true;
+    }
+    
+    if (currentOrderStr && !state.current) {
+      try {
+        const parsed = JSON.parse(currentOrderStr);
+        if (parsed && typeof parsed === 'object') {
+          state.current = parsed;
+        }
+      } catch (e) {
+        console.warn('[getSessionState] Failed to parse currentOrder from localStorage:', e);
+      }
+    }
+  } catch (e) {
+    console.warn('[getSessionState] Failed to read localStorage flags:', e);
+  }
+
+  // 3. Check persisted shift metadata
+  try {
+    state.shiftMeta = loadActiveShiftMeta();
+    if (state.shiftMeta && state.shiftMeta.id) {
+      state.hasActiveShift = true;
+    }
+  } catch (e) {
+    console.warn('[getSessionState] Failed to load shift metadata:', e);
+  }
+
+  // 4. Determine final state based on consolidated checks
+  if (state.startTime || state.shiftMeta) {
+    state.hasActiveShift = true;
+  }
+
+  if (state.current && Number.isFinite(state.current.total)) {
+    state.hasActiveOrder = true;
+  }
+
+  if (Array.isArray(state.picks) && state.picks.length > 0) {
+    state.hasCompletedOrders = true;
+  }
+
+  return state;
+}
+
+if (typeof window !== 'undefined') {
+  window.getSessionState = getSessionState;
+}
+
 // Reset predictive ETA smoothing buffer
 function resetEtaSmoother(){
   etaSmooth = [];
@@ -1112,7 +1197,14 @@ function openSharedPickModal(){
 
 // Exit shift without archiving; return UI to Start state
 function exitShiftNoArchive(){
-  if (current) { alert('Complete or undo the current order before exiting the shift.'); return; }
+  // Use consolidated session state for consistent gating
+  const sessionState = getSessionState();
+  
+  if (sessionState.hasActiveOrder) {
+    alert('Complete or undo the current order before exiting the shift.');
+    return;
+  }
+  
   try { predictiveStop?.(); } catch(e){}
 
   // Clear shift session (no archive)

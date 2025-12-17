@@ -2738,11 +2738,27 @@ function computeDowntimes(picksArr, shiftBreaksArr){
 async function endShift(){
   const recoveryMode = isShiftRecoveryMode?.() === true;
 
-  if (!recoveryMode && current){
-    return alert('Complete or undo the current order before ending the shift.');
-  }
-  if (!recoveryMode && !picks.length){
-    return alert('No completed orders to archive.');
+  // Use consolidated session state for consistent gating
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  
+  if (!recoveryMode) {
+    // Check for active order using session state
+    const hasActiveOrder = sessionState 
+      ? sessionState.hasActiveOrder 
+      : !!current;
+    
+    if (hasActiveOrder) {
+      return alert('Complete or undo the current order before ending the shift.');
+    }
+    
+    // Check for completed orders using session state
+    const hasCompletedOrders = sessionState 
+      ? sessionState.hasCompletedOrders 
+      : (Array.isArray(picks) && picks.length > 0);
+    
+    if (!hasCompletedOrders) {
+      return alert('No completed orders to archive.');
+    }
   }
 
   const dateStr = todayISO();
@@ -2888,8 +2904,14 @@ async function endShift(){
 function clearToday(){
   if (!confirm("Clear today's order data? Your shift will remain active.")) return;
 
-  // If there's no active shift, don't change layout – nothing to clear.
-  const hasShift = !!startTime || (localStorage.getItem('shiftActive') === '1');
+  // Use consolidated session state for consistent gating
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  
+  // Fallback to legacy checks if getSessionState is unavailable
+  const hasShift = sessionState 
+    ? sessionState.hasActiveShift 
+    : (!!startTime || localStorage.getItem('shiftActive') === '1');
+  
   if (!hasShift) {
     showToast?.("No active shift to clear.");
     return;
@@ -2998,8 +3020,14 @@ function clearToday(){
 
 // ====== Exit Shift (no archive) from History tab ======
 function exitShiftFromHistory(){
-  // If there is no active shift at all, nothing to do
-  const hasShiftFlag = !!startTime || localStorage.getItem('shiftActive') === '1';
+  // Use consolidated session state for consistent gating
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  
+  // Fallback to legacy checks if getSessionState is unavailable
+  const hasShiftFlag = sessionState 
+    ? sessionState.hasActiveShift 
+    : (!!startTime || localStorage.getItem('shiftActive') === '1');
+  
   if (!hasShiftFlag) {
     if (typeof showToast === 'function') {
       showToast('No active shift to exit.');
@@ -3010,8 +3038,23 @@ function exitShiftFromHistory(){
     return;
   }
 
+  // Check for active order using session state
+  if (sessionState && sessionState.hasActiveOrder) {
+    if (typeof showToast === 'function') {
+      showToast('Complete or undo the current order before exiting the shift.');
+    } else {
+      alert('Complete or undo the current order before exiting the shift.');
+    }
+    updateExitShiftVisibility?.();
+    return;
+  }
+
   // If we still have completed orders, force the user to either archive or clear first
-  if (Array.isArray(picks) && picks.length > 0) {
+  const hasCompletedOrders = sessionState 
+    ? sessionState.hasCompletedOrders 
+    : (Array.isArray(picks) && picks.length > 0);
+  
+  if (hasCompletedOrders) {
     if (typeof showToast === 'function') {
       showToast('You still have completed orders. Use "End Shift & Archive" or "Clear today\'s data" first.');
     } else {
