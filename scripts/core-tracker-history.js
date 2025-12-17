@@ -3057,9 +3057,6 @@ function exitShiftFromHistory(){
     updateExitShiftVisibility?.();
     return;
   }
-    updateExitShiftVisibility?.();
-    return;
-  }
 
   // If we still have completed orders, force the user to either archive or clear first
   const hasCompletedOrders = sessionState 
