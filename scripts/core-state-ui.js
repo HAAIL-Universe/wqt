@@ -102,6 +102,8 @@ function getSessionState() {
   };
 
   // 1. Check in-memory state
+  // Note: Check both window.variable and global variable for maximum compatibility
+  // across different execution contexts (browser global scope vs module scope)
   try {
     if (typeof window !== 'undefined') {
       state.startTime = window.startTime || (typeof startTime !== 'undefined' ? startTime : null);

@@ -3044,12 +3044,19 @@ function exitShiftFromHistory(){
   }
 
   // Check for active order using session state
-  if (sessionState && sessionState.hasActiveOrder) {
+  const hasActiveOrder = sessionState 
+    ? sessionState.hasActiveOrder 
+    : !!(current && Number.isFinite(current.total));
+  
+  if (hasActiveOrder) {
     if (typeof showToast === 'function') {
       showToast('Complete or undo the current order before exiting the shift.');
     } else {
       alert('Complete or undo the current order before exiting the shift.');
     }
+    updateExitShiftVisibility?.();
+    return;
+  }
     updateExitShiftVisibility?.();
     return;
   }
