@@ -150,8 +150,9 @@ function showShiftReconcileModal(serverShift){
     
     try { beginShift?.(); } catch(_){ }
     
-    // If we have an active order in memory, restore its UI
-    if (current && Number.isFinite(current?.total)) {
+    // If we have an active order in memory, restore its UI using canonical check
+    const resumeState = typeof getSessionState === 'function' ? getSessionState() : null;
+    if (resumeState?.activeOrder || (current && Number.isFinite(current?.total))) {
       console.log('[Resume] Active order detected, restoring UI:', {
         name: current.name,
         total: current.total

@@ -126,6 +126,33 @@ function clearActiveShiftMeta(){
   persistActiveShiftMeta(null);
 }
 
+// Quick "is there a sane current order?" guard
+function hasActiveOrder(){
+  return !!(current && current.start && current.name && (current.total|0) > 0);
+}
+
+// Canonical session state - single source of truth for shift/order status
+function getSessionState() {
+  const hasShift = !!startTime || (localStorage.getItem('shiftActive') === '1');
+  const hasOrder = hasActiveOrder();
+  
+  // Debug logging (can be gated by a flag if needed)
+  if (window.DEBUG_SESSION_STATE) {
+    console.log('[SessionState]', {
+      hasShift,
+      hasOrder,
+      startTime,
+      currentOrderExists: !!current,
+      currentOrderTotal: current?.total
+    });
+  }
+  
+  return {
+    activeShift: hasShift ? { startTime } : null,
+    activeOrder: hasOrder ? current : null
+  };
+}
+
 if (typeof window !== 'undefined') {
   window.getActiveShiftMeta = loadActiveShiftMeta;
   window.persistActiveShiftMeta = persistActiveShiftMeta;
@@ -1429,33 +1456,6 @@ const LS = {
   VERSION: 'wqt.v2'
 };
 // ====== Utils ======
-
-// Quick “is there a sane current order?” guard
-function hasActiveOrder(){
-  return !!(current && current.start && current.name && (current.total|0) > 0);
-}
-
-// Canonical session state - single source of truth for shift/order status
-function getSessionState() {
-  const hasShift = !!(startTime) || (localStorage.getItem('shiftActive') === '1');
-  const hasOrder = hasActiveOrder();
-  
-  // Debug logging (can be gated by a flag if needed)
-  if (window.DEBUG_SESSION_STATE) {
-    console.log('[SessionState]', {
-      hasShift,
-      hasOrder,
-      startTime,
-      currentOrderExists: !!current,
-      currentOrderTotal: current?.total
-    });
-  }
-  
-  return {
-    activeShift: hasShift ? { startTime } : null,
-    activeOrder: hasOrder ? current : null
-  };
-}
 
 
 // Toast message (small popup at bottom)
