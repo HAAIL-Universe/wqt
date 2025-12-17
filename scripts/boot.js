@@ -141,7 +141,26 @@ function showShiftReconcileModal(serverShift){
     window.startTime = hhmm;
     try { localStorage.setItem('shiftActive','1'); } catch (_){ }
     persistActiveShiftMeta?.(serverShift || null);
+    
+    console.log('[Resume] Resuming shift from server:', {
+      startTime: hhmm,
+      serverShiftId: serverShift?.id,
+      hasActiveOrder: !!(current && Number.isFinite(current?.total))
+    });
+    
     try { beginShift?.(); } catch(_){ }
+    
+    // If we have an active order in memory, restore its UI
+    if (current && Number.isFinite(current?.total)) {
+      console.log('[Resume] Active order detected, restoring UI:', {
+        name: current.name,
+        total: current.total
+      });
+      try { restoreActiveOrderUI?.(); } catch(e) {
+        console.warn('[Resume] Failed to restore active order UI:', e);
+      }
+    }
+    
     try { clearShiftRecoveryMode?.(); } catch(_){}
     overlay.remove();
   };
@@ -308,6 +327,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const hadShift = !!startTime;
       const hadOpen  = !!(current && Number.isFinite(current.total));
+
+      // Log session state at boot for debugging
+      console.log('[Boot] Session state after loadAll:', {
+        hadShift,
+        hadOpen,
+        startTime,
+        currentExists: !!current,
+        currentName: current?.name,
+        currentTotal: current?.total,
+        picksCount: picks?.length || 0,
+        shiftActiveFlag: localStorage.getItem('shiftActive')
+      });
 
       // ── 1b) Reconcile with backend shift session state ──────────
       try {
@@ -987,10 +1018,11 @@ window.addEventListener('focus', ensureAuthOnBoot);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) ensureAuthOnBoot(); });
 // Deterministic logout flow
 function requestLogout() {
-  // Check for open order, picks, or active shift
-  const hasOpenOrder = !!(window.current) || !!localStorage.getItem('currentOrder') || (window.Storage && typeof Storage.getJSON === 'function' && Storage.getJSON('currentOrder'));
+  // Use canonical session state check
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  const hasOpenOrder = sessionState ? !!sessionState.activeOrder : (!!(window.current) || !!localStorage.getItem('currentOrder'));
   const hasPicks = Array.isArray(window.picks) && window.picks.length > 0;
-  const hasActiveShift = !!window.startTime || localStorage.getItem('shiftActive') === '1' || (typeof getActiveShiftMeta === 'function' && getActiveShiftMeta());
+  const hasActiveShift = sessionState ? !!sessionState.activeShift : (!!window.startTime || localStorage.getItem('shiftActive') === '1');
 
   if (hasOpenOrder) {
     showLogoutBlockedModal('You have an open order. Please complete or discard the order before logging out.');
@@ -1053,9 +1085,13 @@ function showLogoutBlockedModal(msg) {
 }
 
 function performLogout() {
+  // Clear auth credentials only (don't destroy shift/order truth yet)
   localStorage.removeItem('WQT_CURRENT_USER');
   localStorage.removeItem('wqt_operator_id');
   localStorage.removeItem('wqt_username');
+  
+  // In-app routing: use replace to prevent back button resurrection
+  // This keeps us in the SPA and prevents navigation issues
   window.location.replace('login.html');
 }
 
