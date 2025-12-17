@@ -152,7 +152,7 @@ function getSessionState() {
     state.hasActiveShift = true;
   }
 
-  if (state.current && Number.isFinite(state.current.total)) {
+  if (state.current && state.current.total !== undefined && Number.isFinite(state.current.total)) {
     state.hasActiveOrder = true;
   }
 

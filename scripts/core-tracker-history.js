@@ -3046,7 +3046,7 @@ function exitShiftFromHistory(){
   // Check for active order using session state
   const hasActiveOrder = sessionState 
     ? sessionState.hasActiveOrder 
-    : !!(current && Number.isFinite(current.total));
+    : !!(current && current.total !== undefined && Number.isFinite(current.total));
   
   if (hasActiveOrder) {
     if (typeof showToast === 'function') {
