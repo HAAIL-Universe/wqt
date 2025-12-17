@@ -1202,9 +1202,21 @@ function exitShiftNoArchive(){
   // Use consolidated session state for consistent gating
   const sessionState = getSessionState();
   
-  if (sessionState.hasActiveOrder) {
+  // FIX: Allow silent clearing during boot reconciliation
+  // Check if we're in a boot/recovery context where alerts would block rendering
+  const isBootContext = typeof window !== 'undefined' && 
+    (window.__SHIFT_RECOVERY_ACTIVE === true || !document.hasFocus());
+  
+  if (sessionState.hasActiveOrder && !isBootContext) {
+    // Only alert if user is actively interacting (not during boot)
     alert('Complete or undo the current order before exiting the shift.');
     return;
+  }
+  
+  // If active order exists during boot, log warning but allow reconciliation
+  if (sessionState.hasActiveOrder && isBootContext) {
+    console.warn('[exitShiftNoArchive] Boot reconciliation clearing shift WITH active order');
+    console.warn('[exitShiftNoArchive] This may indicate server/client state mismatch');
   }
   
   try { predictiveStop?.(); } catch(e){}
