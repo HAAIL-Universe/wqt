@@ -392,62 +392,30 @@ const Storage = {
   // ---- Generic helpers for one-off flags / JSON blobs ----
   getFlag(key) {
     try {
-      const userKey = buildNamespacedKey(key);
-      const rawUser = window.localStorage.getItem(userKey);
-      if (rawUser != null) return rawUser === '1';
-      // Legacy fallback (pre-user-namespacing)
-      const rawLegacy = (userKey !== key) ? window.localStorage.getItem(key) : null;
-      return rawLegacy === '1';
+      return window.localStorage.getItem(key) === '1';
     } catch {
       return false;
     }
   },
+
   setFlag(key, on) {
     try {
-      const userKey = buildNamespacedKey(key);
-      window.localStorage.setItem(userKey, on ? '1' : '0');
-      // Keep legacy updated for older code paths (belt & suspenders)
-      if (userKey !== key) window.localStorage.setItem(key, on ? '1' : '0');
+      window.localStorage.setItem(key, on ? '1' : '0');
     } catch {
       // ignore
     }
   },
-  getJSON(key, fallback = null) {
-    try {
-      const userKey = buildNamespacedKey(key);
-      const rawUser = window.localStorage.getItem(userKey);
-      if (rawUser != null) return safeParse(rawUser, fallback);
 
-      // Legacy fallback (pre-user-namespacing)
-      if (userKey !== key) {
-        const rawLegacy = window.localStorage.getItem(key);
-        if (rawLegacy != null) return safeParse(rawLegacy, fallback);
-      }
-      return fallback;
-    } catch (e) {
-      return fallback;
-    }
+  getJSON(key, fallback = null) {
+    const raw = window.localStorage.getItem(key);
+    return safeParse(raw, fallback);
   },
+
   setJSON(key, value) {
     try {
-      const userKey = buildNamespacedKey(key);
-      const raw = JSON.stringify(value);
-      window.localStorage.setItem(userKey, raw);
-      // Keep legacy updated for older code paths
-      if (userKey !== key) window.localStorage.setItem(key, raw);
+      window.localStorage.setItem(key, JSON.stringify(value));
     } catch (e) {
       console.error('Storage.setJSON failed', e);
-    }
-  },
-
-  // Remove both namespaced and legacy keys (critical for "Clear today" and logout)
-  removeKey(key) {
-    try {
-      const userKey = buildNamespacedKey(key);
-      window.localStorage.removeItem(userKey);
-      if (userKey !== key) window.localStorage.removeItem(key);
-    } catch {
-      // ignore
     }
   },
 

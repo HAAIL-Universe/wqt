@@ -286,7 +286,15 @@ async function startShift(lenHours){
 
 // Transition into main tracker cards after a start time is determined
 function beginShift(){
-  if (!startTime) startTime = nowHHMM();
+  // Self-heal: if startTime missing, set from server meta or now
+  if (!startTime) {
+    if (window.activeShiftSession && window.activeShiftSession.started_at) {
+      const hhmm = typeof shiftIsoToHHMM === 'function' ? shiftIsoToHHMM(window.activeShiftSession.started_at) : null;
+      startTime = hhmm || nowHHMM();
+    } else {
+      startTime = nowHHMM();
+    }
+  }
   pickingCutoff = "";
   // Clean any pre-shift hints/notes
   clearStartHint?.();
@@ -663,6 +671,15 @@ function startOrder() {
   const total = parseInt((totalInput?.value || '0'), 10);
   const locations = parseInt((locsInput?.value || '0'), 10);
 
+  // Self-heal: if startTime missing, set from server meta or now
+  if (!startTime) {
+    if (window.activeShiftSession && window.activeShiftSession.started_at) {
+      const hhmm = typeof shiftIsoToHHMM === 'function' ? shiftIsoToHHMM(window.activeShiftSession.started_at) : null;
+      startTime = hhmm || nowHHMM();
+    } else {
+      startTime = nowHHMM();
+    }
+  }
   if (!startTime) return alert('Set shift start before starting an order.');
   pickingCutoff = ""; // resume counting time if we start picking again
     // Onboarding trigger — order started

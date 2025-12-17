@@ -1,3 +1,5 @@
+// WQT Frontend Version: 2025-12-17-v2-auth-gate
+console.log('WQT Frontend Version: 2025-12-17-v2-auth-gate');
 // Global helper: safe device-id getter used by overlay/role access
 function getDeviceIdSafe() {
   try {
@@ -84,8 +86,13 @@ function logoutAndReset() {
   // OPTIONAL: reset device identity if you want fresh devices each time
   // localStorage.removeItem('wqt_device_id'); 
 
+  // Hard-kill any legacy login modals
+  const loginModal = document.getElementById('loginModal');
+  if (loginModal) loginModal.remove();
+  const opModal = document.getElementById('operatorIdModal');
+  if (opModal) opModal.remove();
   // Redirect to login screen
-  window.location.href = 'login.html';
+  window.location.replace('login.html');
 }
 
 // Convert ISO timestamp to HH:MM local for reconciliation flows
@@ -163,8 +170,38 @@ function showShiftReconcileModal(serverShift){
     }
   };
 
+
+  // Add new "End server shift & reset today" button
+  const resetBtn = document.createElement('button');
+  resetBtn.textContent = 'End server shift & reset today';
+  resetBtn.className = 'btn bad';
+  resetBtn.onclick = async () => {
+    try {
+      // End shift on server
+      await window.WqtAPI?.endShiftSession?.({
+        shiftId: serverShift?.id,
+        summary: { start: isoToHHMM(serverShift?.started_at) || '', end: nowHHMM(), picks: [] },
+        totalUnits: 0,
+        avgRate: null,
+        endTime: new Date().toISOString(),
+      });
+      // Clear all local shift state and today data
+      clearActiveShiftMeta?.();
+      exitShiftNoArchive?.();
+      if (typeof clearToday === 'function') clearToday();
+      showToast?.('Server shift ended and today reset');
+    } catch (err) {
+      console.error('[Reconcile] Failed to end/reset server shift', err);
+      showToast?.('Could not end/reset shift. Try again.');
+    } finally {
+      try { clearShiftRecoveryMode?.(); } catch(_){}
+      overlay.remove();
+    }
+  };
+
   btnRow.appendChild(resumeBtn);
   btnRow.appendChild(endBtn);
+  btnRow.appendChild(resetBtn);
 
   card.appendChild(title);
   card.appendChild(body);
@@ -933,37 +970,110 @@ setInterval(async function pollForMessages() {
 
 function ensureAuthOnBoot() {
   try {
-    // getLoggedInUser is defined in api.js and exposed globally
-    const hasUser = (typeof getLoggedInUser === 'function')
-      ? getLoggedInUser()
-      : null;
-
-    const opId = (typeof window !== 'undefined' && window.localStorage)
-      ? window.localStorage.getItem('wqt_operator_id')
-      : null;
-
-    // If we already know the user (or have an operator id), don't block boot.
-    if ((hasUser && String(hasUser).trim()) || (opId && opId.trim())) {
+    // Hard gate: require WQT_CURRENT_USER with a token
+    const raw = localStorage.getItem('WQT_CURRENT_USER');
+    let user = null;
+    try { user = raw ? JSON.parse(raw) : null; } catch (_) {}
+    if (!user || !user.token) {
+      window.location.replace('login.html');
       return;
     }
-
-    // Brand new device + user: show the login modal if present.
-    const loginModal = document.getElementById('loginModal');
-    if (loginModal) {
-      loginModal.style.display = 'flex';
-      const uEl = document.getElementById('loginUsername');
-      if (uEl) uEl.focus();
-    } else {
-      // Fallback to legacy "Who is picking?" modal.
-      const opModal = document.getElementById('operatorIdModal');
-      if (opModal) opModal.style.display = 'flex';
-    }
   } catch (e) {
-    console.warn('[Boot] ensureAuthOnBoot error:', e);
+    window.location.replace('login.html');
   }
+// Auth gate on tab restore/focus/visibility
+window.addEventListener('pageshow', ensureAuthOnBoot);
+window.addEventListener('focus', ensureAuthOnBoot);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) ensureAuthOnBoot(); });
+// Deterministic logout flow
+function requestLogout() {
+  // Check for open order, picks, or active shift
+  const hasOpenOrder = !!(window.current) || !!localStorage.getItem('currentOrder') || (window.Storage && typeof Storage.getJSON === 'function' && Storage.getJSON('currentOrder'));
+  const hasPicks = Array.isArray(window.picks) && window.picks.length > 0;
+  const hasActiveShift = !!window.startTime || localStorage.getItem('shiftActive') === '1' || (typeof getActiveShiftMeta === 'function' && getActiveShiftMeta());
+
+  if (hasOpenOrder) {
+    showLogoutBlockedModal('You have an open order. Please complete or discard the order before logging out.');
+    return;
+  }
+  if (hasPicks) {
+    showLogoutBlockedModal('You have completed orders for today. Please archive (End Shift) or clear today\'s data before logging out.');
+    return;
+  }
+  if (hasActiveShift) {
+    showLogoutBlockedModal('You have an active shift. Please end or exit the shift before logging out.');
+    return;
+  }
+  // Safe to logout
+  performLogout();
+}
+
+function showLogoutBlockedModal(msg) {
+  // Remove any existing modal
+  document.getElementById('logoutBlockedModal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'logoutBlockedModal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;';
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.cssText = 'max-width:420px;width:100%;padding:18px;';
+  card.innerHTML = `<h3 style="margin-top:0">Logout Blocked</h3><div class="hint" style="margin-bottom:10px;">${msg}</div>`;
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:12px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;';
+  const resumeBtn = document.createElement('button');
+  resumeBtn.textContent = 'Resume';
+  resumeBtn.className = 'btn';
+  resumeBtn.onclick = () => overlay.remove();
+  btnRow.appendChild(resumeBtn);
+  // End Shift & Archive
+  if (!window.current && (Array.isArray(window.picks) && window.picks.length > 0)) {
+    const endBtn = document.createElement('button');
+    endBtn.textContent = 'End Shift & Archive';
+    endBtn.className = 'btn ghost';
+    endBtn.onclick = () => { overlay.remove(); if (typeof endShift === 'function') endShift(); };
+    btnRow.appendChild(endBtn);
+  }
+  // Exit shift (no archive)
+  if (!window.current && (!window.picks || window.picks.length === 0) && (window.startTime || localStorage.getItem('shiftActive') === '1')) {
+    const exitBtn = document.createElement('button');
+    exitBtn.textContent = 'Exit shift (no archive)';
+    exitBtn.className = 'btn ghost';
+    exitBtn.onclick = () => { overlay.remove(); if (typeof exitShiftFromHistory === 'function') exitShiftFromHistory(); };
+    btnRow.appendChild(exitBtn);
+  }
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.className = 'btn';
+  cancelBtn.onclick = () => overlay.remove();
+  btnRow.appendChild(cancelBtn);
+  card.appendChild(btnRow);
+  overlay.appendChild(card);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+function performLogout() {
+  localStorage.removeItem('WQT_CURRENT_USER');
+  localStorage.removeItem('wqt_operator_id');
+  localStorage.removeItem('wqt_username');
+  window.location.replace('login.html');
+}
+
+// Neuter old logoutAndReset to always call requestLogout
+function logoutAndReset() { requestLogout(); }
 }
 
 async function loginSubmit(mode) {
+
+  // HARD GATE: If not authenticated, force redirect to login.html (no modal allowed)
+  const raw = localStorage.getItem('WQT_CURRENT_USER');
+  let user = null;
+  try { user = raw ? JSON.parse(raw) : null; } catch (_) {}
+  if (!user || !user.token) {
+    window.location.replace('login.html');
+    return;
+  }
+
   if (!window.WqtAPI || typeof WqtAPI.login !== 'function' || typeof WqtAPI.register !== 'function') {
     alert('Login is not available (backend offline).');
     return;
@@ -1000,12 +1110,12 @@ async function loginSubmit(mode) {
       console.warn('[Auth] Failed to persist operator id:', e);
     }
 
-    // Close modals
-    const loginModal = document.getElementById('loginModal');
-    if (loginModal) loginModal.style.display = 'none';
 
+    // Always hard-kill any legacy login modals
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal) loginModal.remove();
     const opModal = document.getElementById('operatorIdModal');
-    if (opModal) opModal.style.display = 'none';
+    if (opModal) opModal.remove();
 
     if (typeof showToast === 'function') {
       showToast(`Signed in as ${res.username}`);
@@ -1022,13 +1132,17 @@ async function loginSubmit(mode) {
 }
 
 function loginAsGuest() {
-  const loginModal = document.getElementById('loginModal');
-  if (loginModal) loginModal.style.display = 'none';
-
-  const opModal = document.getElementById('operatorIdModal');
-  if (opModal) {
-    opModal.style.display = 'flex';
-    const inp = document.getElementById('opIdInput');
-    if (inp) inp.focus();
+  // HARD GATE: If not authenticated, force redirect to login.html (no modal allowed)
+  const raw = localStorage.getItem('WQT_CURRENT_USER');
+  let user = null;
+  try { user = raw ? JSON.parse(raw) : null; } catch (_) {}
+  if (!user || !user.token) {
+    window.location.replace('login.html');
+    return;
   }
+  // Always hard-kill any legacy login modals
+  const loginModal = document.getElementById('loginModal');
+  if (loginModal) loginModal.remove();
+  const opModal = document.getElementById('operatorIdModal');
+  if (opModal) opModal.remove();
 }
