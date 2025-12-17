@@ -242,31 +242,51 @@ function snapToNearestHour(){
 }
 
 // Entrypoint when user taps Start 9h / Start 10h
-function startShift(lenHours){
+async function startShift(lenHours){
+  // v2: Shift start is a single action. No contracted-start picker by default.
   try {
     // Persist one-time 9h/10h preference
-    const existing = getShiftPref();
-    const chosen = existing || (lenHours | 0);
-    if (!existing && (chosen === 9 || chosen === 10)) setShiftPref(chosen);
+    const existing = getShiftPref?.();
+    const chosen = existing || (lenHours | 0) || 9;
+    if (!existing && (chosen === 9 || chosen === 10)) setShiftPref?.(chosen);
 
     // Seed hidden length field for downstream logic
-    const applyLen = getShiftPref() || (lenHours || 9);
     const lenEl = document.getElementById('tLen');
-    if (lenEl) lenEl.value = String(applyLen);
+    if (lenEl) lenEl.value = String(chosen);
 
-    // Defer actual start to the contracted time picker
-    openContractedStartPicker();
+    // Start now (real time), not snapped.
+    const hmNow = nowHHMM();
+    startTime = hmNow;
+    pickingCutoff = "";
+
+    try { localStorage.setItem('shiftActive', '1'); } catch(_){}
+
+    // Try to start server shift session (truth source). If offline, we still run local.
+    try {
+      const started = await (window.WqtAPI?.startShiftSession?.({
+        startHHMM: hmNow,
+        shiftLengthHours: chosen,
+      }));
+      const meta = (started && started.shift) ? started.shift : started;
+      persistActiveShiftMeta?.(meta || null);
+    } catch (e) {
+      console.warn('[startShift] Server shift start failed (offline/local-only?)', e);
+    }
+
+    // Enter Shift Active UI
+    beginShift?.();
+    ensureActionRowLayout?.();
+    try { showTab?.('tracker'); } catch(_){}
   } catch (e){
-    // Safe fallback: still route through the picker
-    const lenEl = document.getElementById('tLen');
-    if (lenEl) lenEl.value = String(lenHours || 9);
-    openContractedStartPicker();
+    console.warn('[startShift] Failed to start shift', e);
+    // Legacy fallback
+    try { openContractedStartPicker?.(); } catch(_){}
   }
 }
 
 // Transition into main tracker cards after a start time is determined
 function beginShift(){
-  if (!startTime) startTime = snapToNearestHour();
+  if (!startTime) startTime = nowHHMM();
   pickingCutoff = "";
   // Clean any pre-shift hints/notes
   clearStartHint?.();
@@ -2970,6 +2990,7 @@ function clearToday(){
 
   // Wipe order-specific in-memory state (KEEP the shift running)
   current     = null;
+  try { window.current = null; } catch(e){}
   tempWraps   = [];
   picks       = [];
   undoStack   = [];
@@ -2984,6 +3005,15 @@ function clearToday(){
     localStorage.removeItem('sharedMySum');
     localStorage.removeItem('sharedBlock');
     localStorage.removeItem('currentOrder');   // <-- critical so earlyRestore stops resurrecting shared mode
+    // Clear namespaced variants too (prevents resurrection after reload)
+    try {
+      if (typeof Storage !== 'undefined' && Storage && typeof Storage.removeKey === 'function') {
+        Storage.removeKey(StorageKeys?.CURRENT_ORDER || 'currentOrder');
+        Storage.removeKey(StorageKeys?.SHARED_DOCK_OPEN || 'sharedDockOpen');
+        Storage.removeKey(StorageKeys?.SHARED_MY_SUM || 'sharedMySum');
+        Storage.removeKey(StorageKeys?.SHARED_BLOCK || 'sharedBlock');
+      }
+    } catch(e){}
   } catch(e){}
   window.sharedMySum        = 0;
   window.sharedBlock        = 0;
@@ -3001,6 +3031,7 @@ function clearToday(){
   try { localStorage.removeItem('operativeLog'); } catch(e){}
   try { localStorage.removeItem('shiftDelays'); } catch(e){}
   try { localStorage.removeItem('shiftNotes'); } catch(e){}
+  try { localStorage.removeItem('breakDraft'); } catch(e){}
   try { localStorage.removeItem('shiftOperatives'); } catch(e){}   // immutable operative store
   try {
     const nEl = document.getElementById('opNote');

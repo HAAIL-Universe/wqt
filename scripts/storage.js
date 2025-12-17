@@ -1,3 +1,47 @@
+// ====== Warehouse Map Cache (Offline-first) ======
+const WAREHOUSE_MAP_CACHE_KEY = 'wqt_warehouse_map_cache_v1';
+
+function loadWarehouseMapCache() {
+  try {
+    const raw = window.localStorage.getItem(WAREHOUSE_MAP_CACHE_KEY);
+    const parsed = safeParse(raw, null);
+    if (parsed && parsed.version === 1 && parsed.locations_by_code) return parsed;
+  } catch (_) {}
+  return { version: 1, updated_at: null, locations_by_code: {} };
+}
+
+function saveWarehouseMapCache(cache) {
+  try {
+    cache.version = 1;
+    cache.updated_at = new Date().toISOString();
+    window.localStorage.setItem(WAREHOUSE_MAP_CACHE_KEY, JSON.stringify(cache));
+  } catch (_) {}
+}
+
+function upsertLocationInMapCache(entry) {
+  if (!entry || !entry.code) return;
+  const cache = loadWarehouseMapCache();
+  cache.locations_by_code[entry.code] = { ...entry };
+  saveWarehouseMapCache(cache);
+}
+
+function getLocationsForAisle(aisle) {
+  const cache = loadWarehouseMapCache();
+  const out = [];
+  for (const code in cache.locations_by_code) {
+    const loc = cache.locations_by_code[code];
+    if (loc.aisle === aisle || (code && code[0] === aisle)) out.push(loc);
+  }
+  return out;
+}
+
+if (typeof window !== 'undefined') {
+  window.WqtStorage = window.WqtStorage || {};
+  window.WqtStorage.loadWarehouseMapCache = loadWarehouseMapCache;
+  window.WqtStorage.saveWarehouseMapCache = saveWarehouseMapCache;
+  window.WqtStorage.upsertLocationInMapCache = upsertLocationInMapCache;
+  window.WqtStorage.getLocationsForAisle = getLocationsForAisle;
+}
 // ====== Bay Outbox (Offline-first warehouse map updates) ======
 const BAY_OUTBOX_KEY = 'wqt_bay_outbox_v1';
 
@@ -348,30 +392,62 @@ const Storage = {
   // ---- Generic helpers for one-off flags / JSON blobs ----
   getFlag(key) {
     try {
-      return window.localStorage.getItem(key) === '1';
+      const userKey = buildNamespacedKey(key);
+      const rawUser = window.localStorage.getItem(userKey);
+      if (rawUser != null) return rawUser === '1';
+      // Legacy fallback (pre-user-namespacing)
+      const rawLegacy = (userKey !== key) ? window.localStorage.getItem(key) : null;
+      return rawLegacy === '1';
     } catch {
       return false;
     }
   },
-
   setFlag(key, on) {
     try {
-      window.localStorage.setItem(key, on ? '1' : '0');
+      const userKey = buildNamespacedKey(key);
+      window.localStorage.setItem(userKey, on ? '1' : '0');
+      // Keep legacy updated for older code paths (belt & suspenders)
+      if (userKey !== key) window.localStorage.setItem(key, on ? '1' : '0');
     } catch {
       // ignore
     }
   },
-
   getJSON(key, fallback = null) {
-    const raw = window.localStorage.getItem(key);
-    return safeParse(raw, fallback);
-  },
+    try {
+      const userKey = buildNamespacedKey(key);
+      const rawUser = window.localStorage.getItem(userKey);
+      if (rawUser != null) return safeParse(rawUser, fallback);
 
+      // Legacy fallback (pre-user-namespacing)
+      if (userKey !== key) {
+        const rawLegacy = window.localStorage.getItem(key);
+        if (rawLegacy != null) return safeParse(rawLegacy, fallback);
+      }
+      return fallback;
+    } catch (e) {
+      return fallback;
+    }
+  },
   setJSON(key, value) {
     try {
-      window.localStorage.setItem(key, JSON.stringify(value));
+      const userKey = buildNamespacedKey(key);
+      const raw = JSON.stringify(value);
+      window.localStorage.setItem(userKey, raw);
+      // Keep legacy updated for older code paths
+      if (userKey !== key) window.localStorage.setItem(key, raw);
     } catch (e) {
       console.error('Storage.setJSON failed', e);
+    }
+  },
+
+  // Remove both namespaced and legacy keys (critical for "Clear today" and logout)
+  removeKey(key) {
+    try {
+      const userKey = buildNamespacedKey(key);
+      window.localStorage.removeItem(userKey);
+      if (userKey !== key) window.localStorage.removeItem(key);
+    } catch {
+      // ignore
     }
   },
 

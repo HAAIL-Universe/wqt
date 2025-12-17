@@ -178,6 +178,63 @@ function showShiftReconcileModal(serverShift){
   document.body.appendChild(overlay);
 }
 
+
+function showShiftConflictModal(opts = {}){
+  const existing = document.getElementById('shiftConflictModal');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'shiftConflictModal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:16px;';
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.cssText = 'max-width:560px;width:100%;padding:14px;';
+
+  const hadOpen = !!opts.hadOpen;
+
+  card.innerHTML = `
+    <h3 class="card-h" style="margin:0 0 10px;">Shift mismatch</h3>
+    <div class="hint" style="margin-bottom:10px;">
+      This device believes a shift is active, but the server reports no active shift for this device.
+      Choose what to do.
+    </div>
+    <div class="row" style="gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      <button id="scResume" class="btn ok" type="button">${hadOpen ? 'Resume open order' : 'Resume shift (local)'}</button>
+      <button id="scDiscard" class="btn bad" type="button">Discard local shift</button>
+      <button id="scRetry" class="btn ghost" type="button">Retry</button>
+    </div>
+  `;
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  const byId = (id)=>document.getElementById(id);
+
+  byId('scResume')?.addEventListener('click', ()=>{
+    try { localStorage.setItem('shiftActive','1'); } catch(_){}
+    overlay.remove();
+    try { beginShift?.(); } catch(_){}
+    if (hadOpen) {
+      try { restoreActiveOrderUI?.(); } catch(_){}
+    }
+    try { showTab?.('tracker'); } catch(_){}
+  });
+
+  byId('scDiscard')?.addEventListener('click', ()=>{
+    overlay.remove();
+    try { exitShiftNoArchive?.(); } catch(_){}
+    try { showTab?.('tracker'); } catch(_){}
+  });
+
+  byId('scRetry')?.addEventListener('click', ()=>{
+    overlay.remove();
+    try { location.reload(); } catch(_){}
+  });
+}
+
+
+
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
@@ -227,14 +284,35 @@ document.addEventListener('DOMContentLoaded', function () {
             try { enableShiftRecoveryMode?.(serverShift); } catch(_){}
             showShiftReconcileModal(serverShift);
           } else if (!serverShift && localActive) {
-            // Local thought it was active, server does not → reset to clean slate
-            exitShiftNoArchive?.();
-            showTab?.('tracker');
-            openContractedStartPicker?.();
+            // v2: local shift state exists but server disagrees → user must choose deterministic action
+            showShiftConflictModal({ hadOpen });
           }
         }
       } catch (err) {
         console.warn('[Boot] Active shift check failed:', err);
+
+      // ── v2 routing: never show shift picker overlay if we have a shift/open order ──
+      try {
+        const hasOpen = !!(current && Number.isFinite(current.total));
+        const localActive = !!startTime || (localStorage.getItem('shiftActive') === '1');
+
+        // Invariant: open order implies active shift
+        if (hasOpen && !localActive) {
+          try { localStorage.setItem('shiftActive','1'); } catch(_){}
+          try { startTime = current?.start || (typeof nowHHMM === 'function' ? nowHHMM() : '') || startTime; } catch(_){}
+        }
+
+        if (hasOpen) {
+          beginShift?.();
+          restoreActiveOrderUI?.();
+          showTab?.('tracker');
+        } else if (localActive) {
+          beginShift?.();
+          showTab?.('tracker');
+        }
+      } catch (e) {
+        console.warn('[Boot] v2 routing failed:', e);
+      }
       }
 
       // ── 2) Build customer dropdowns (safe post-restore) ───────────

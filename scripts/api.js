@@ -195,6 +195,29 @@ const WqtAPI = {
      * @returns {Promise<Object>} - { user_id, display_name, role, token }
      */
     async requestRoleAccess({ role, pin }) {
+        // Role-gated unlock (operative/supervisor) via backend.
+        // IMPORTANT: must use API_BASE (absolute) so static frontend works on any host.
+        const body = {
+            role: role,
+            pin_code: pin,
+            device_id: getDeviceIdSafe() || null,
+        };
+
+        const res = await fetch(`${API_BASE}/auth/role_access`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+            const txt = await res.text().catch(() => '');
+            throw new Error(txt || `Role access rejected (${res.status})`);
+        }
+
+        const data = await res.json().catch(() => ({}));
+        // Expected: { user_id, display_name, role, token }
+        return data;
+    }) {
         const body = { pin_code: pin, device_id: getDeviceIdSafe() || null };
 
         const res = await fetch('/auth/login_pin', {

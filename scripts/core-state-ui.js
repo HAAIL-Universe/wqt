@@ -307,9 +307,30 @@ function getEffectiveLiveEndHHMM(){
 
 // Open dynamic start picker with chosen shift length (e.g. 9h / 10h)
 function openDynamicStartPicker(len){
-  // Store today’s chosen shift length in the hidden field; no long-term preference
+  // v2: shift-length selection remains (9/10), but contracted-start selection is NOT blocking.
+  const chosen = (len || 9);
+
   const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(len || 9);
+  if (lenEl) lenEl.value = String(chosen);
+
+  // Remember preference so the user doesn't have to think about it each time.
+  try { setShiftPref?.(chosen); } catch (_) {}
+
+  // Start shift immediately (contracted-start picker can be exposed later as optional).
+  try {
+    if (typeof window.startShift === 'function') {
+      window.startShift(chosen);
+      return;
+    }
+    if (typeof startShift === 'function') {
+      startShift(chosen);
+      return;
+    }
+  } catch (e) {
+    console.warn('[openDynamicStartPicker] Failed to start shift directly, falling back to contracted-start picker', e);
+  }
+
+  // Fallback (legacy)
   openContractedStartPicker();
 }
 
@@ -1147,8 +1168,134 @@ function openSharedPickModal(){
 }
 
 // Exit shift without archiving; return UI to Start state
-function exitShiftNoArchive(){
-  if (current) { alert('Complete or undo the current order before exiting the shift.'); return; }
+// ---- Exit Shift deterministic blocker (v2) ----
+function _wqt_parseJSONSafe(raw, fallback = null){
+  try {
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function _wqt_detectOpenOrderDraft(){
+  try {
+    if (typeof current !== 'undefined' && current && Number.isFinite(current.total)) return { source: 'current', order: current };
+  } catch (_) {}
+
+  try {
+    const wc = (typeof window !== 'undefined') ? window.current : null;
+    if (wc && Number.isFinite(wc.total)) return { source: 'window.current', order: wc };
+  } catch (_) {}
+
+  try {
+    // Side-channel drafts (legacy + namespaced)
+    const key = (typeof StorageKeys !== 'undefined' && StorageKeys?.CURRENT_ORDER) ? StorageKeys.CURRENT_ORDER : 'currentOrder';
+    const fromStorage = (typeof Storage !== 'undefined' && Storage?.getJSON) ? Storage.getJSON(key, null) : null;
+    const fromLegacy  = _wqt_parseJSONSafe(localStorage.getItem('currentOrder'), null);
+    const draft = fromStorage || fromLegacy;
+    if (draft && Number.isFinite(draft.total)) return { source: 'currentOrder', order: draft };
+  } catch (_) {}
+
+  return null;
+}
+
+function _wqt_discardOpenOrderDraft(){
+  try { current = null; } catch (_) {}
+  try { window.current = null; } catch (_) {}
+  try { tempWraps = []; } catch (_) {}
+  try { undoStack = []; } catch (_) {}
+
+  // Kill side-channel snapshots (legacy + namespaced)
+  try {
+    if (typeof Storage !== 'undefined' && Storage && typeof Storage.removeKey === 'function') {
+      Storage.removeKey(StorageKeys?.CURRENT_ORDER || 'currentOrder');
+      Storage.removeKey(StorageKeys?.SHARED_BLOCK || 'sharedBlock');
+      Storage.removeKey(StorageKeys?.SHARED_DOCK_OPEN || 'sharedDockOpen');
+      Storage.removeKey(StorageKeys?.SHARED_MY_SUM || 'sharedMySum');
+      Storage.removeKey(StorageKeys?.BREAK_DRAFT || 'breakDraft');
+    }
+  } catch (_) {}
+
+  try {
+    localStorage.removeItem('currentOrder');
+    localStorage.removeItem('sharedBlock');
+    localStorage.removeItem('sharedDockOpen');
+    localStorage.removeItem('sharedMySum');
+    localStorage.removeItem('breakDraft');
+  } catch (_) {}
+}
+
+function _wqt_closeExitShiftModal(){
+  const existing = document.getElementById('exitShiftBlockerModal');
+  if (existing) existing.remove();
+}
+
+function _wqt_showExitShiftBlockerModal(opts){
+  _wqt_closeExitShiftModal();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'exitShiftBlockerModal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.addEventListener('click', (e)=>{ if (e.target === overlay) _wqt_closeExitShiftModal(); });
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.style.cssText = 'max-width:520px;width:100%;padding:14px;';
+
+  const hasPicks = !!opts?.hasPicks;
+
+  card.innerHTML = `
+    <h3 class="card-h" style="margin:0 0 10px;">Open order detected</h3>
+    <div class="hint" style="margin-bottom:10px;">
+      You can’t exit a shift with an open order. Choose the correct action:
+    </div>
+    <div class="row" style="gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+      <button id="exResume" class="btn ok" type="button">Resume order</button>
+      <button id="exDiscard" class="btn bad" type="button">Discard order & exit</button>
+      <button id="exArchive" class="btn ghost" type="button">Archive shift</button>
+      <button id="exCancel" class="btn" type="button">Cancel</button>
+    </div>
+  `;
+
+  overlay.appendChild(card);
+  document.body.appendChild(overlay);
+
+  const byId = (id)=>document.getElementById(id);
+
+  if (!hasPicks) {
+    try { byId('exArchive')?.setAttribute('disabled','disabled'); } catch (_) {}
+  }
+
+  byId('exResume')?.addEventListener('click', ()=>{
+    _wqt_closeExitShiftModal();
+    try { beginShift?.(); } catch(_){}
+    try { restoreActiveOrderUI?.(); } catch(_){}
+    try { showTab?.('tracker'); } catch(_){}
+  });
+
+  byId('exDiscard')?.addEventListener('click', ()=>{
+    _wqt_closeExitShiftModal();
+    try { _wqt_discardOpenOrderDraft(); } catch(_){}
+    try { _exitShiftNoArchiveProceed(); } catch(_){}
+  });
+
+  byId('exArchive')?.addEventListener('click', ()=>{
+    _wqt_closeExitShiftModal();
+    if (!hasPicks) {
+      showToast?.('Nothing to archive.');
+      return;
+    }
+    // Archive/end shift (will still be blocked elsewhere if a draft exists)
+    try { endShift?.(); } catch(_){}
+  });
+
+  byId('exCancel')?.addEventListener('click', ()=>{
+    _wqt_closeExitShiftModal();
+  });
+}
+
+function _exitShiftNoArchiveProceed(){
   try { predictiveStop?.(); } catch(e){}
 
   // Clear shift session (no archive)
@@ -1173,6 +1320,20 @@ function exitShiftNoArchive(){
   try { clearShiftRecoveryMode?.(); } catch (_) {}
 
   // Clear side-channel localStorage keys
+
+  // Also clear namespaced variants (per-user keys) if Storage wrapper is present
+  try {
+    if (typeof Storage !== 'undefined' && Storage && typeof Storage.removeKey === 'function') {
+      Storage.removeKey(StorageKeys?.SHIFT_ACTIVE || 'shiftActive');
+      Storage.removeKey(StorageKeys?.CURRENT_ORDER || 'currentOrder');
+      Storage.removeKey(StorageKeys?.SHIFT_DELAYS || 'shiftDelays');
+      Storage.removeKey(StorageKeys?.SHIFT_NOTES || 'shiftNotes');
+      Storage.removeKey(StorageKeys?.BREAK_DRAFT || 'breakDraft');
+      Storage.removeKey(StorageKeys?.SHARED_BLOCK || 'sharedBlock');
+      Storage.removeKey(StorageKeys?.SHARED_DOCK_OPEN || 'sharedDockOpen');
+      Storage.removeKey(StorageKeys?.SHARED_MY_SUM || 'sharedMySum');
+    }
+  } catch(e) {}
   try {
     localStorage.setItem('shiftActive', '0');
     localStorage.removeItem('shiftNotes');
@@ -1233,6 +1394,16 @@ function exitShiftNoArchive(){
     btn.onclick = function(){ location.reload(); }; // hard reload to clean state
   })();
 }
+
+function exitShiftNoArchive(){
+  const draft = _wqt_detectOpenOrderDraft();
+  if (draft) {
+    _wqt_showExitShiftBlockerModal({ hasPicks: Array.isArray(picks) && picks.length > 0 });
+    return;
+  }
+  _exitShiftNoArchiveProceed();
+}
+
 
 // Delay / Break (declare BEFORE earlyRestore so restoreBreakDraftIfAny sees it)
 let delayDraft = null; // {start:'HH:MM', cause:''}
