@@ -2838,7 +2838,11 @@ function computeDowntimes(picksArr, shiftBreaksArr){
 async function endShift(){
   const recoveryMode = isShiftRecoveryMode?.() === true;
 
-  if (!recoveryMode && current){
+  // Use canonical session state check
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  const hasActiveOrder = sessionState ? !!sessionState.activeOrder : !!current;
+
+  if (!recoveryMode && hasActiveOrder){
     return alert('Complete or undo the current order before ending the shift.');
   }
   if (!recoveryMode && !picks.length){
@@ -2989,8 +2993,10 @@ async function endShift(){
 function clearToday(){
   if (!confirm("Clear today's order data? Your shift will remain active.")) return;
 
-  // If there's no active shift, don't change layout – nothing to clear.
-  const hasShift = !!startTime || (localStorage.getItem('shiftActive') === '1');
+  // Use canonical session state check
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  const hasShift = sessionState ? !!sessionState.activeShift : (!!startTime || (localStorage.getItem('shiftActive') === '1'));
+  
   if (!hasShift) {
     showToast?.("No active shift to clear.");
     return;
@@ -3104,8 +3110,10 @@ function clearToday(){
 
 // ====== Exit Shift (no archive) from History tab ======
 function exitShiftFromHistory(){
-  // If there is no active shift at all, nothing to do
-  const hasShiftFlag = !!startTime || localStorage.getItem('shiftActive') === '1';
+  // Use canonical session state check
+  const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+  const hasShiftFlag = sessionState ? !!sessionState.activeShift : (!!startTime || localStorage.getItem('shiftActive') === '1');
+  
   if (!hasShiftFlag) {
     if (typeof showToast === 'function') {
       showToast('No active shift to exit.');

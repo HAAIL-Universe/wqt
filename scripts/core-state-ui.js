@@ -130,6 +130,8 @@ if (typeof window !== 'undefined') {
   window.getActiveShiftMeta = loadActiveShiftMeta;
   window.persistActiveShiftMeta = persistActiveShiftMeta;
   window.clearActiveShiftMeta = clearActiveShiftMeta;
+  window.getSessionState = getSessionState;  // Canonical session state function
+  window.hasActiveOrder = hasActiveOrder;     // Export for legacy compatibility
 }
 
 // Reset predictive ETA smoothing buffer
