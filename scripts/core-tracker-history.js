@@ -420,6 +420,11 @@ function restoreActiveOrderUI() {
   const shiftOn  = !!startTime && window.archived !== true;
   const inOrder  = !!(shiftOn && current && Number.isFinite(current.total));
 
+  // FIX: Add defensive logging to catch state inconsistencies
+  if (shiftOn && !current) {
+    console.warn('[restoreActiveOrderUI] Shift active but no current order - may have been cleared by reconciliation');
+  }
+
   const hdrForm   = document.getElementById('orderHeaderForm');
   const hdrProg   = document.getElementById('orderHeaderProgress');
   const orderArea = document.getElementById('orderArea');

@@ -290,7 +290,18 @@ document.addEventListener('DOMContentLoaded', function () {
       const hadShift = sessionState ? sessionState.hasActiveShift : !!startTime;
       const hadOpen  = sessionState ? sessionState.hasActiveOrder : !!(current && Number.isFinite(current.total));
 
+      // DEBUG logging for boot state
+      console.log('[Boot] Post-loadAll state:', {
+        hadShift,
+        hadOpen,
+        startTime: startTime || 'none',
+        currentOrderTotal: current?.total || 'none',
+        picksCount: picks?.length || 0,
+        shiftActiveFlag: localStorage.getItem('shiftActive'),
+      });
+
       // ── 1b) Reconcile with backend shift session state ──────────
+      // CRITICAL FIX: Prevent state wipe when active order exists
       try {
         if (window.WqtAPI?.fetchActiveShiftSession) {
           const res = await WqtAPI.fetchActiveShiftSession();
@@ -299,14 +310,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
           const localActive = hadShift || localStorage.getItem('shiftActive') === '1';
           if (serverShift && !localActive) {
+            // Server has active shift but local doesn't know → show resume modal
             try { enableShiftRecoveryMode?.(serverShift); } catch(_){}
             showShiftReconcileModal(serverShift);
           } else if (!serverShift && localActive) {
-            // Local thought it was active, server does not → reset to clean slate
-            exitShiftNoArchive?.();
-            showTab?.('tracker');
-            // No modal, no user interaction; optionally re-init startTime
-            if (!window.startTime) window.startTime = nowHHMM();
+            // FIX: Only clear state if NO active order exists
+            // If user has an active order, preserve it (they may have been offline)
+            if (!hadOpen) {
+              // Safe to clear: no active order in progress
+              console.log('[Boot] Server has no shift, clearing local shift state (no active order)');
+              exitShiftNoArchive?.();
+              showTab?.('tracker');
+              // Re-init startTime for fresh shift
+              if (!window.startTime) window.startTime = nowHHMM();
+            } else {
+              // CRITICAL: Active order exists - preserve it even if server lost shift
+              console.warn('[Boot] Server has no shift but local has active order - preserving local state');
+              // Set shift active flag to match reality
+              try { localStorage.setItem('shiftActive', '1'); } catch(_){}
+              // Keep user on tracker with their active order visible
+              showTab?.('tracker');
+            }
           }
         }
       } catch (err) {
@@ -356,20 +380,36 @@ document.addEventListener('DOMContentLoaded', function () {
       applyProGate();
 
       // ── 5) Shift/Order shell visibility based on restored flags ───
+      // FIX: Defer card visibility until AFTER reconciliation completes
+      // This prevents flashing empty cards if state gets cleared
 
       const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
       const shiftLog = document.getElementById('shiftLogCard');
 
-      // Always show tracker cards immediately, regardless of shift state
-      if (active) active.style.display = 'block';
-      if (done)   done.style.display   = (picks.length ? 'block' : 'none');
-      if (shiftLog) shiftLog.style.display = 'block';
+      // Check CURRENT state after reconciliation (may have changed)
+      const hasShiftNow = !!(window.startTime || startTime);
+      const hasOrderNow = !!(window.current && Number.isFinite(window.current.total));
+      
+      // DEBUG: Log post-reconciliation state
+      console.log('[Boot] Post-reconciliation state:', {
+        hasShiftNow,
+        hasOrderNow,
+        startTime: window.startTime || startTime || 'none',
+        currentOrderTotal: window.current?.total || current?.total || 'none',
+        stateChanged: (hadShift !== hasShiftNow) || (hadOpen !== hasOrderNow),
+      });
+      
+      // Only show cards if we actually have a shift active
+      if (active) active.style.display = hasShiftNow ? 'block' : 'none';
+      if (done)   done.style.display   = (hasShiftNow && picks.length) ? 'block' : 'none';
+      if (shiftLog) shiftLog.style.display = hasShiftNow ? 'block' : 'none';
 
       renderShiftPanel?.();
 
       // ── 6) Decide header: progress vs new-order form ──────────────
-      if (hadOpen && window.archived !== true) {
+      // FIX: Check CURRENT state, not the pre-reconciliation state
+      if (hasOrderNow && window.archived !== true) {
         // We have an active order: ensure progress header/UI is shown
         restoreActiveOrderUI();
 
