@@ -342,8 +342,173 @@ const Storage = {
   }
 };
 
+// ====== Storage Telemetry (Debug) ======
+// Tracks last 100 save/load operations for debugging iOS state loss issues
+const TELEMETRY_MAX = 100;
+const TELEMETRY_KEY = 'wqt_storage_telemetry';
+
+const StorageTelemetry = {
+  _log: [],
+  
+  // Load persisted telemetry on init
+  init() {
+    try {
+      const raw = window.localStorage.getItem(TELEMETRY_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          this._log = parsed.slice(-TELEMETRY_MAX);
+        }
+      }
+    } catch (e) {
+      console.warn('[Telemetry] Failed to load telemetry log:', e);
+      this._log = [];
+    }
+  },
+  
+  // Record a storage operation
+  record(operation, key, success, error = null, metadata = {}) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      operation,  // 'load' | 'save' | 'remove'
+      key,
+      success: !!success,
+      error: error ? String(error) : null,
+      bytes: metadata.bytes || null,
+      userId: getCurrentUserId() || 'anonymous',
+      // Include visibility state to track backgrounding issues
+      visibility: typeof document !== 'undefined' ? document.visibilityState : 'unknown',
+    };
+    
+    this._log.push(entry);
+    
+    // Keep only last 100 entries
+    if (this._log.length > TELEMETRY_MAX) {
+      this._log = this._log.slice(-TELEMETRY_MAX);
+    }
+    
+    // Persist telemetry log (don't use Storage.* to avoid recursion)
+    try {
+      window.localStorage.setItem(TELEMETRY_KEY, JSON.stringify(this._log));
+    } catch (e) {
+      // Telemetry failure shouldn't break the app
+      console.warn('[Telemetry] Failed to persist log:', e);
+    }
+  },
+  
+  // Get recent operations for debugging
+  getLog() {
+    return [...this._log];
+  },
+  
+  // Get log as formatted string
+  dump() {
+    if (!this._log.length) {
+      return '[Telemetry] No operations logged yet.';
+    }
+    
+    let output = `\n[Telemetry] Last ${this._log.length} storage operations:\n`;
+    output += '='.repeat(80) + '\n';
+    
+    this._log.forEach((entry, idx) => {
+      const time = new Date(entry.timestamp).toLocaleTimeString();
+      const status = entry.success ? '✓' : '✗';
+      const bytes = entry.bytes ? ` (${entry.bytes}B)` : '';
+      const err = entry.error ? ` ERROR: ${entry.error}` : '';
+      const vis = entry.visibility !== 'visible' ? ` [${entry.visibility}]` : '';
+      
+      output += `${idx + 1}. ${time} ${status} ${entry.operation} ${entry.key}${bytes}${vis}${err}\n`;
+    });
+    
+    output += '='.repeat(80) + '\n';
+    return output;
+  },
+  
+  // Clear telemetry log
+  clear() {
+    this._log = [];
+    try {
+      window.localStorage.removeItem(TELEMETRY_KEY);
+    } catch (e) {
+      console.warn('[Telemetry] Failed to clear log:', e);
+    }
+  }
+};
+
+// Initialize telemetry on load
+if (typeof window !== 'undefined') {
+  StorageTelemetry.init();
+}
+
+// Wrap Storage methods with telemetry
+const _origLoadMain = Storage.loadMain;
+Storage.loadMain = function() {
+  let result = null;
+  let error = null;
+  try {
+    result = _origLoadMain.call(this);
+    const bytes = result ? JSON.stringify(result).length : 0;
+    StorageTelemetry.record('load', 'main', true, null, { bytes });
+    return result;
+  } catch (e) {
+    error = e;
+    StorageTelemetry.record('load', 'main', false, e.message);
+    throw e;
+  }
+};
+
+const _origSaveMain = Storage.saveMain;
+Storage.saveMain = function(state) {
+  let error = null;
+  try {
+    const bytes = state ? JSON.stringify(state).length : 0;
+    _origSaveMain.call(this, state);
+    StorageTelemetry.record('save', 'main', true, null, { bytes });
+  } catch (e) {
+    error = e;
+    StorageTelemetry.record('save', 'main', false, e.message);
+    throw e;
+  }
+};
+
+const _origLoadLearnedUL = Storage.loadLearnedUL;
+Storage.loadLearnedUL = function() {
+  let result = null;
+  let error = null;
+  try {
+    result = _origLoadLearnedUL.call(this);
+    const bytes = result ? JSON.stringify(result).length : 0;
+    StorageTelemetry.record('load', 'learnedUL', true, null, { bytes });
+    return result;
+  } catch (e) {
+    error = e;
+    StorageTelemetry.record('load', 'learnedUL', false, e.message);
+    throw e;
+  }
+};
+
+const _origSaveLearnedUL = Storage.saveLearnedUL;
+Storage.saveLearnedUL = function(learned) {
+  let error = null;
+  try {
+    const bytes = learned ? JSON.stringify(learned).length : 0;
+    _origSaveLearnedUL.call(this, learned);
+    StorageTelemetry.record('save', 'learnedUL', true, null, { bytes });
+  } catch (e) {
+    error = e;
+    StorageTelemetry.record('save', 'learnedUL', false, e.message);
+    throw e;
+  }
+};
+
 // Expose to window for non-module scripts
 if (typeof window !== 'undefined') {
   window.StorageKeys = window.StorageKeys || StorageKeys;
   window.Storage = window.Storage || Storage;
+  window.StorageTelemetry = StorageTelemetry;
+  
+  // Add global debug function for easy access from console
+  window.dumpStorageTelemetry = function() {
+    console.log(StorageTelemetry.dump());
+  };
 }

@@ -290,6 +290,14 @@ function beginShift(){
 
   saveAll();
 
+  // CRITICAL: Immediately persist shift active flag for iOS background recovery
+  try {
+    localStorage.setItem('shiftActive', '1');
+    console.log('[beginShift] Shift active flag persisted for iOS recovery');
+  } catch (e) {
+    console.warn('[beginShift] Failed to persist shift active flag:', e);
+  }
+
   // Lock the bottom action row layout
   ensureActionRowLayout?.();
 }
@@ -686,6 +694,15 @@ function startOrder() {
   updateHeaderActions?.();
   ensureActionRowLayout?.();
   saveAll?.();
+  
+  // CRITICAL: Immediately persist current order snapshot for iOS background recovery
+  try {
+    localStorage.setItem('currentOrder', JSON.stringify(current));
+    localStorage.setItem('shiftActive', '1');
+    console.log('[startOrder] Current order snapshot persisted for iOS recovery');
+  } catch (e) {
+    console.warn('[startOrder] Failed to persist current order snapshot:', e);
+  }
 }
 // --- Backend hook: record closed orders (normal + Close Early) ---
 function syncClosedOrderToBackend(archivedOrder) {

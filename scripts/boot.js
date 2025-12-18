@@ -231,19 +231,127 @@ function showShiftReconcileModal(serverShift){
   document.body.appendChild(overlay);
 }
 
-// ====== iOS PWA BFCache Protection ======
+// ====== State Rehydration Function ======
+/**
+ * rehydrateState() - Reload state from localStorage after app resume
+ * 
+ * This function is called when the page becomes visible again after being
+ * backgrounded, to recover from iOS process termination.
+ * 
+ * Critical: This must run BEFORE any UI updates to prevent showing stale data.
+ */
+function rehydrateState() {
+  try {
+    console.log('[Rehydrate] Reloading state from localStorage...');
+    
+    // Check if loadAll exists (it's defined in core-state-ui.js)
+    if (typeof loadAll === 'function') {
+      // Reload all state from localStorage
+      loadAll();
+      console.log('[Rehydrate] State reloaded successfully');
+      
+      // If we have an active shift or order, update the UI
+      const sessionState = typeof getSessionState === 'function' ? getSessionState() : null;
+      
+      if (sessionState) {
+        console.log('[Rehydrate] Session state after reload:', {
+          hasActiveShift: sessionState.hasActiveShift,
+          hasActiveOrder: sessionState.hasActiveOrder,
+          hasCompletedOrders: sessionState.hasCompletedOrders,
+        });
+        
+        // Update UI to reflect rehydrated state
+        if (sessionState.hasActiveOrder && typeof restoreActiveOrderUI === 'function') {
+          restoreActiveOrderUI();
+        }
+        
+        // Refresh displays
+        if (typeof renderHistory === 'function') renderHistory();
+        if (typeof renderDone === 'function') renderDone();
+        if (typeof updateSummary === 'function') updateSummary();
+        if (typeof renderShiftPanel === 'function') renderShiftPanel();
+      }
+    } else {
+      console.warn('[Rehydrate] loadAll function not available yet');
+    }
+  } catch (e) {
+    console.error('[Rehydrate] Failed to rehydrate state:', e);
+  }
+}
+
+// ====== Forced Persistence on iOS Lifecycle Events ======
+/**
+ * persistStateOnBackground() - Force save state when page is backgrounded
+ * 
+ * iOS Safari/PWA often kills background tabs without firing beforeunload.
+ * We must persist state immediately when the page becomes hidden.
+ */
+function persistStateOnBackground() {
+  try {
+    console.log('[iOS Persist] Page becoming hidden, forcing state save...');
+    
+    // Force immediate save of all state
+    if (typeof saveAll === 'function') {
+      saveAll();
+      console.log('[iOS Persist] saveAll() completed');
+    }
+    
+    // Also persist critical flags explicitly
+    try {
+      // Persist shift active flag
+      const hasShift = !!(window.startTime || (typeof startTime !== 'undefined' && startTime));
+      if (hasShift) {
+        localStorage.setItem('shiftActive', '1');
+      }
+      
+      // Persist current order if exists
+      const curr = window.current || (typeof current !== 'undefined' ? current : null);
+      if (curr && curr.total !== undefined) {
+        localStorage.setItem('currentOrder', JSON.stringify(curr));
+        console.log('[iOS Persist] Current order snapshot saved');
+      }
+    } catch (e) {
+      console.warn('[iOS Persist] Failed to save critical flags:', e);
+    }
+    
+    console.log('[iOS Persist] State persistence completed');
+  } catch (e) {
+    console.error('[iOS Persist] Failed to persist state:', e);
+  }
+}
+
+// ====== iOS PWA BFCache Protection + State Management ======
 // Catch iOS BFCache restores with pageshow event
 window.addEventListener('pageshow', function(e) {
   console.log('[BFCache] pageshow event fired, persisted:', e.persisted);
   enforceAuthGate();
+  
+  // If this is a BFCache restore (persisted=true), rehydrate state
+  if (e.persisted) {
+    console.log('[BFCache] BFCache restore detected, rehydrating state...');
+    rehydrateState();
+  }
 });
 
 // Catch app switch/resume with visibilitychange
 document.addEventListener('visibilitychange', function() {
-  if (!document.hidden) {
-    console.log('[BFCache] page became visible - checking auth');
+  if (document.hidden) {
+    // Page is being hidden (backgrounded) - persist state immediately
+    console.log('[Visibility] Page hidden, persisting state...');
+    persistStateOnBackground();
+  } else {
+    // Page is becoming visible again - check auth and rehydrate state
+    console.log('[Visibility] Page visible, checking auth and rehydrating state...');
     enforceAuthGate();
+    rehydrateState();
   }
+});
+
+// iOS Safari PWA-specific: pagehide event for background persistence
+window.addEventListener('pagehide', function(e) {
+  console.log('[pagehide] Event fired, persisted:', e.persisted);
+  // Force save even if beforeunload didn't fire
+  persistStateOnBackground();
 });
 
 // ====== Boot ======
@@ -1064,3 +1172,28 @@ function loginAsGuest() {
     if (inp) inp.focus();
   }
 }
+
+// ====== Storage Telemetry Debug UI ======
+function openStorageTelemetryModal() {
+  const modal = document.getElementById('storageTelemetryModal');
+  const output = document.getElementById('telemetryOutput');
+  
+  if (!modal || !output) {
+    alert('Telemetry modal not found');
+    return;
+  }
+  
+  // Refresh telemetry output
+  if (typeof window !== 'undefined' && window.StorageTelemetry) {
+    output.textContent = StorageTelemetry.dump();
+  } else {
+    output.textContent = '[Error] StorageTelemetry not initialized';
+  }
+  
+  modal.style.display = 'flex';
+}
+
+if (typeof window !== 'undefined') {
+  window.openStorageTelemetryModal = openStorageTelemetryModal;
+}
+

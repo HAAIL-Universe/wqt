@@ -621,6 +621,14 @@
             onclick="logoutAndReset()">
             Log Out
           </button>
+          
+          <button
+            class="btn ghost"
+            type="button"
+            style="background:#1a2332; border-color:#2d4a6d;"
+            onclick="openStorageTelemetryModal()">
+            🔍 Debug Storage
+          </button>
         </div>
       </div>
     </div>
@@ -1104,6 +1112,27 @@
     </div>
     <div class="actions" style="justify-content:center;">
       <button class="btn ok" type="button" onclick="saveOperatorId()">Clock In</button>
+    </div>
+  </div>
+</div>
+
+<!-- Storage Telemetry Debug Modal -->
+<div id="storageTelemetryModal" class="modal" style="display:none;">
+  <div class="box" style="max-width:800px; max-height:80vh; overflow:auto;">
+    <div class="hdr">
+      <h3>Storage Telemetry (Debug)</h3>
+      <button class="close" type="button" onclick="document.getElementById('storageTelemetryModal').style.display='none'">×</button>
+    </div>
+    <div class="body">
+      <p class="sub" style="margin-bottom:12px;">
+        Last 100 storage operations. Used to diagnose iOS state loss issues.
+      </p>
+      <pre id="telemetryOutput" style="background:#0f1419; color:#e6f1ff; padding:12px; border-radius:6px; overflow:auto; max-height:400px; font-size:0.85rem; font-family:monospace; white-space:pre-wrap; word-break:break-all;"></pre>
+    </div>
+    <div class="actions">
+      <button class="btn ghost" type="button" onclick="if(window.StorageTelemetry){StorageTelemetry.clear();alert('Telemetry cleared');}">Clear Log</button>
+      <button class="btn" type="button" onclick="if(navigator.clipboard&&window.StorageTelemetry){navigator.clipboard.writeText(StorageTelemetry.dump()).then(()=>alert('Copied to clipboard!')).catch(()=>alert('Failed to copy'))}">Copy to Clipboard</button>
+      <button class="btn ok" type="button" onclick="document.getElementById('storageTelemetryModal').style.display='none'">Close</button>
     </div>
   </div>
 </div>

@@ -2008,6 +2008,7 @@ function loadAll(){
       try {
         p = Storage.loadMain();
       } catch (e) {
+        console.error('[loadAll] Storage.loadMain failed:', e);
         p = null;
       }
     }
@@ -2018,13 +2019,31 @@ function loadAll(){
         const raw = localStorage.getItem(KEY);
         p = raw ? JSON.parse(raw) : null;
       } catch (e) {
+        console.error('[loadAll] Failed to parse legacy key:', e);
         p = null;
       }
     }
 
+    // CRITICAL FIX: Preserve existing history if new load fails or returns empty
+    // This prevents history loss when localStorage is corrupted or state is reset
+    const existingHistory = Array.isArray(historyDays) ? historyDays : [];
+    const existingPicks = Array.isArray(picks) ? picks : [];
+
     if (p) {
-      picks       = Array.isArray(p.picks) ? p.picks : [];
-      historyDays = Array.isArray(p.history) ? p.history : [];
+      picks       = Array.isArray(p.picks) ? p.picks : existingPicks;
+      
+      // CRITICAL: Never overwrite history with empty array unless explicitly cleared
+      // If loaded history is empty but we have existing history, keep existing
+      const loadedHistory = Array.isArray(p.history) ? p.history : [];
+      if (loadedHistory.length > 0) {
+        historyDays = loadedHistory;
+      } else if (existingHistory.length > 0) {
+        console.warn('[loadAll] Loaded empty history but preserving existing', existingHistory.length, 'records');
+        historyDays = existingHistory;
+      } else {
+        historyDays = [];
+      }
+      
       current     = p.current || null;
       tempWraps   = Array.isArray(p.tempWraps) ? p.tempWraps : [];
       startTime   = (typeof p.startTime === 'string') ? p.startTime : "";
@@ -2042,21 +2061,33 @@ function loadAll(){
         const currentUser = window.WQT_CURRENT_USER;
         const userId = currentUser?.userId || 'unknown';
         console.log(`[loadAll] ✓ Loaded ${historyDays.length} history records for user ${userId}`);
-        if (historyDays.length === 0) {
+        if (historyDays.length === 0 && existingHistory.length === 0) {
           console.log('[loadAll] ✓ Empty history confirmed (new user or fresh account)');
         }
       } catch(e){}
     } else {
-      picks = []; historyDays = []; current = null; tempWraps = [];
-      startTime = ""; lastClose = ""; pickingCutoff = ""; undoStack = [];
-      proUnlocked = false; shiftBreaks = [];
-      operativeLog = []; operativeActive = null;
+      // CRITICAL FIX: When no data is loaded, preserve existing history instead of resetting
+      // Only reset active shift/order state, never history
       
-      // DEBUG: Log empty state for current user
+      // Reset active session state only
+      picks = existingPicks;  // Keep existing completed picks
+      historyDays = existingHistory;  // NEVER reset history to empty array
+      current = null;
+      tempWraps = [];
+      startTime = "";
+      lastClose = "";
+      pickingCutoff = "";
+      undoStack = [];
+      proUnlocked = false;
+      shiftBreaks = [];
+      operativeLog = [];
+      operativeActive = null;
+      
+      // DEBUG: Log state preservation
       try {
         const currentUser = window.WQT_CURRENT_USER;
         const userId = currentUser?.userId || 'unknown';
-        console.log(`[loadAll] ✓ Initialized blank state for user ${userId} (no previous data)`);
+        console.log(`[loadAll] ⚠️  No data loaded, preserved ${historyDays.length} history records for user ${userId}`);
       } catch(e){}
     }
 
@@ -2087,13 +2118,30 @@ function loadAll(){
     } catch(e){ breakDraft = null; }
 
   } catch (e) {
-    console.error("Data load failed, resetting:", e);
-    // Hard reset if corrupted
-    picks = []; historyDays = []; current = null; tempWraps = [];
-    startTime = ""; lastClose = ""; pickingCutoff = ""; undoStack = [];
-    proUnlocked = false; shiftBreaks = []; learnedUL = {};
+    console.error("[loadAll] CRITICAL: Data load failed, preserving history:", e);
+    
+    // CRITICAL FIX: Even on complete failure, preserve history
+    // Only reset if we have no existing data at all
+    const existingHistory = Array.isArray(historyDays) ? historyDays : [];
+    const existingPicks = Array.isArray(picks) ? picks : [];
+    
+    // Reset active session state but preserve history
+    picks = existingPicks;
+    historyDays = existingHistory;  // NEVER reset history on error
+    current = null;
+    tempWraps = [];
+    startTime = "";
+    lastClose = "";
+    pickingCutoff = "";
+    undoStack = [];
+    proUnlocked = false;
+    shiftBreaks = [];
+    learnedUL = {};
     breakDraft = null;
-    operativeLog = []; operativeActive = null;
+    operativeLog = [];
+    operativeActive = null;
+    
+    console.log(`[loadAll] Error recovery: preserved ${historyDays.length} history records`);
   }
 
   // 2. CHECK OPERATOR ID (Safe separate block)
