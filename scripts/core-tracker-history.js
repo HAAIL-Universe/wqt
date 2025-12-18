@@ -326,69 +326,7 @@ function hmTo12(hm){
 }
 
 // Contracted start modal: build 6 hour buttons around current hour
-
-
-
-
-
-  const chosenLen = lenEl ? (parseInt(lenEl.value, 10) || 9) : 9;
-  if (lenEl) lenEl.value = String(chosenLen);
-
-  const actualHM  = nowHHMM();
-  const cMin = hmToMin(contractedHM);
-  const aMin = hmToMin(actualHM);
-
-  // Effective start: contracted if on-time/early; actual if late
-  const effectiveMin = (aMin <= cMin) ? cMin : aMin;
-  const effectiveHM  = minToHm(effectiveMin);
-
-  // Live rate baseline
-  startTime = effectiveHM;
-
-  // Log lateness
-  const lateMin = aMin - cMin;
-  try {
-    const day = new Date().toISOString().slice(0,10);
-    const raw = localStorage.getItem(LATE_LOG_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    obj[day] = {
-      contracted: contractedHM,
-      actual: actualHM,
-      effective: effectiveHM,
-      lateMin,
-      shiftLen: chosenLen
-    };
-    localStorage.setItem(LATE_LOG_KEY, JSON.stringify(obj));
-  } catch(e) {}
-
-  // Try to start server session before entering S2
-  try {
-    const started = await (window.WqtAPI?.startShiftSession?.({
-      startHHMM: effectiveHM,
-      shiftLengthHours: chosenLen,
-    }));
-    const meta = (started && started.shift) ? started.shift : started;
-    persistActiveShiftMeta?.(meta || null);
-    localStorage.setItem('shiftActive','1');
-  } catch (err) {
-    console.error('[ShiftStart] Failed to start shift on server', err);
-    showToast?.('Could not start shift on server. Check connection and retry.');
-    startTime = '';
-    return;
-  }
-
-  // Show S2 (customer selection) view
-  beginShift();
-  if (typeof updateSummary === 'function') updateSummary();
-
-  // S2 note (left side near Log/Delay), formatted nicely
-  const contracted12 = hmTo12?.(contractedHM) || contractedHM;
-  const actual12     = hmTo12?.(actualHM)     || actualHM;
-  const noteText = lateMin > 0 ? `${lateMin}m late`
-                 : lateMin < 0 ? `${-lateMin}m early`
-                 : 'on time';
-  showPreOrderNote?.(`Contracted ${contracted12} • Actual ${actual12} (${noteText})`);
-}
+// (Function removed - contract start functionality disabled)
 
 // Enable/disable Start + Shared Start buttons based on customer + units
 function refreshStartButton(){
