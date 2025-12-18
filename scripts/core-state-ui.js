@@ -1950,6 +1950,11 @@ function tryBeep(){
 
 // Main load: everything from localStorage → in-memory state
 function loadAll(){
+  // CRITICAL: Capture existing state BEFORE any try/catch blocks
+  // This ensures we can recover history even if an exception occurs mid-load
+  const existingHistory = Array.isArray(historyDays) ? historyDays : [];
+  const existingPicks = Array.isArray(picks) ? picks : [];
+
   // 1. Attempt to load data
   try {
 
@@ -1975,11 +1980,6 @@ function loadAll(){
         p = null;
       }
     }
-
-    // CRITICAL FIX: Preserve existing history if new load fails or returns empty
-    // This prevents history loss when localStorage is corrupted or state is reset
-    const existingHistory = Array.isArray(historyDays) ? historyDays : [];
-    const existingPicks = Array.isArray(picks) ? picks : [];
 
     if (p) {
       picks       = Array.isArray(p.picks) ? p.picks : existingPicks;
@@ -2072,10 +2072,8 @@ function loadAll(){
   } catch (e) {
     console.error("[loadAll] CRITICAL: Data load failed, preserving history:", e);
     
-    // CRITICAL FIX: Even on complete failure, preserve history
-    // Only reset if we have no existing data at all
-    const existingHistory = Array.isArray(historyDays) ? historyDays : [];
-    const existingPicks = Array.isArray(picks) ? picks : [];
+    // CRITICAL FIX: Use the existingHistory/existingPicks captured at function start
+    // These values were saved BEFORE any exceptions could corrupt them
     
     // Reset active session state but preserve history
     picks = existingPicks;
