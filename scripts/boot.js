@@ -79,13 +79,26 @@ function logoutAndReset() {
   localStorage.removeItem('weekCardCollapsed');
   localStorage.removeItem('proUnlocked');
 
+  // FIX: Clear pending operations queue to prevent replay under wrong user
+  try {
+    if (window.Storage && typeof Storage.savePendingOps === 'function') {
+      Storage.savePendingOps([]);
+      console.log('[logout] Cleared pending ops queue');
+    }
+  } catch (e) {
+    console.warn('[logout] Failed to clear pending ops:', e);
+  }
+
   console.log('[logout] Full reset complete - redirecting to login');
 
   // OPTIONAL: reset device identity if you want fresh devices each time
   // localStorage.removeItem('wqt_device_id'); 
 
-  // Redirect to login screen
-  window.location.href = 'login.html';
+  // FIX: Delay redirect to allow DOM/state teardown to complete (iOS PWA fix)
+  // requestAnimationFrame ensures all pending UI updates finish before navigation
+  requestAnimationFrame(() => {
+    window.location.href = 'login.html';
+  });
 }
 
 // Convert ISO timestamp to HH:MM local for reconciliation flows
@@ -177,6 +190,45 @@ function showShiftReconcileModal(serverShift){
 
   document.body.appendChild(overlay);
 }
+
+// ====== iOS bfcache Handler (FIX for PWA page restore) ======
+// iOS Safari aggressively uses back-forward cache (bfcache).
+// When a page is restored from bfcache, DOMContentLoaded doesn't fire again,
+// but the page may be in a stale auth state. This handler re-validates.
+window.addEventListener('pageshow', function(event) {
+  if (event.persisted) {
+    // Page restored from bfcache
+    console.log('[iOS bfcache] Page restored from cache, re-validating auth...');
+    
+    const path = (window.location && window.location.pathname) || '';
+    const onLoginPage = path.includes('login');
+    
+    if (!onLoginPage) {
+      try {
+        const raw = localStorage.getItem('WQT_CURRENT_USER');
+        if (!raw) {
+          console.warn('[iOS bfcache] No auth found after restore - redirecting to login');
+          window.location.href = 'login.html';
+          return;
+        }
+        
+        const user = JSON.parse(raw);
+        if (!user || !user.userId) {
+          console.warn('[iOS bfcache] Invalid user after restore - redirecting to login');
+          localStorage.removeItem('WQT_CURRENT_USER');
+          window.location.href = 'login.html';
+          return;
+        }
+        
+        console.log('[iOS bfcache] Auth valid after restore, continuing...');
+        window.WQT_CURRENT_USER = user;
+      } catch (e) {
+        console.error('[iOS bfcache] Auth validation error:', e);
+        window.location.href = 'login.html';
+      }
+    }
+  }
+});
 
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {

@@ -55,6 +55,23 @@ function getCurrentUserId() {
         if (_lastKnownUserId && _lastKnownUserId !== currentUserId) {
           console.warn(`[Storage] User switch detected: ${_lastKnownUserId} → ${currentUserId}`);
           console.log('[Storage] User-specific data will be isolated by user ID');
+          
+          // FIX: Clear old user's namespaced keys to prevent data bleed
+          try {
+            const oldMainKey = STORAGE_KEY_MAIN + '__u_' + _lastKnownUserId;
+            const oldLearnKey = STORAGE_KEY_LEARN + '__u_' + _lastKnownUserId;
+            const oldCodesKey = STORAGE_KEY_CODES + '__u_' + _lastKnownUserId;
+            const oldPendingKey = 'wqt_pending_ops__u_' + _lastKnownUserId;
+            
+            window.localStorage.removeItem(oldMainKey);
+            window.localStorage.removeItem(oldLearnKey);
+            window.localStorage.removeItem(oldCodesKey);
+            window.localStorage.removeItem(oldPendingKey);
+            
+            console.log(`[Storage] Cleared old user namespaced keys for ${_lastKnownUserId}`);
+          } catch (e) {
+            console.warn('[Storage] Failed to clear old user keys:', e);
+          }
         }
         _lastKnownUserId = currentUserId;
         
