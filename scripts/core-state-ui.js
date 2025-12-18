@@ -2122,6 +2122,15 @@ function saveAll(){
   }
 }
 
+// Debounced version of saveAll to avoid excessive saves
+let saveAllDebounceTimer = null;
+function saveAllDebounced(delay = 300) {
+  if (saveAllDebounceTimer) clearTimeout(saveAllDebounceTimer);
+  saveAllDebounceTimer = setTimeout(() => {
+    saveAll();
+  }, delay);
+}
+
 // Custom codes
 function loadCustomCodes(){
   try{
@@ -2748,24 +2757,6 @@ async function selectAisle(aisle) {
 
   const warehouseId = getActiveWarehouseId();
   const mappingMode = !!window.rowGeneratorUnlocked;
-  try {
-    const fetchFn = window?.WqtAPI?.fetchLocationsByAisle;
-    if (typeof fetchFn !== 'function') throw new Error('API missing');
-    const res = await fetchFn(warehouseId, aisle, !mappingMode ? true : false);
-    renderAisleList(res?.locations || [], { mappingMode });
-  } catch (err) {
-    console.warn('[Warehouse Map] Failed to load aisle locations', err);
-    if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';
-  }
-async function selectAisle(aisle) {
-  wmActiveAisle = aisle;
-  renderAisleChips();
-
-  const list = document.getElementById('wmAisleList');
-  if (list) list.innerHTML = '<div class="hint">Loading locations…</div>';
-
-  const warehouseId = getActiveWarehouseId();
-  const mappingMode = !!window.rowGeneratorUnlocked;
   let locations = [];
   try {
     locations = await loadAisleLocations(aisle, mappingMode);
@@ -2784,18 +2775,6 @@ async function selectAisle(aisle) {
   const merged = overlayOutbox(locations, outbox);
   renderAisleList(merged, { mappingMode });
 }
-function renderAisleList(locations, { mappingMode = false } = {}) {
-      // If this location is pending in outbox, visually indicate
-      let isPending = false;
-      if (window.WqtStorage?.listBayOutboxUpdates) {
-        const pending = window.WqtStorage.listBayOutboxUpdates();
-        isPending = pending.some(e => e && e.code === loc.code);
-      }
-      applyState(!!loc.is_empty);
-      if (isPending) {
-        row.classList.add('wm-loc-pending');
-        status.textContent += ' (Pending)';
-      }
 
 async function refreshWarehouseAisleBrowser() {
   const chips = document.getElementById('wmAisleChips');
