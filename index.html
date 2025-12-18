@@ -1118,6 +1118,7 @@
 <script src="scripts/core-tracker-history.js"></script>
 <script>
   // ====== Login gate (front-door auth) ======
+  // FIX: Deferred to DOMContentLoaded to prevent race with logout redirect on iOS PWA
   (function gateWqtByLogin() {
     const KEY = 'WQT_CURRENT_USER';
 
@@ -1139,26 +1140,36 @@
       }
     }
 
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) {
-        if (!onLoginPage) window.location.href = 'login.html';
-        return;
-      }
+    function checkAuth() {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (!raw) {
+          if (!onLoginPage) window.location.href = 'login.html';
+          return;
+        }
 
-      const user = JSON.parse(raw);
-      if (!user || !user.userId) {
+        const user = JSON.parse(raw);
+        if (!user || !user.userId) {
+          localStorage.removeItem(KEY);
+          if (!onLoginPage) window.location.href = 'login.html';
+          return;
+        }
+
+        window.WQT_CURRENT_USER = user;
+        updateUserTabLabel(user);
+      } catch (e) {
+        console.warn('[Auth] Failed to read WQT_CURRENT_USER', e);
         localStorage.removeItem(KEY);
         if (!onLoginPage) window.location.href = 'login.html';
-        return;
       }
+    }
 
-      window.WQT_CURRENT_USER = user;
-      updateUserTabLabel(user);
-    } catch (e) {
-      console.warn('[Auth] Failed to read WQT_CURRENT_USER', e);
-      localStorage.removeItem(KEY);
-      if (!onLoginPage) window.location.href = 'login.html';
+    // Run check after DOMContentLoaded to avoid racing with logout cleanup
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', checkAuth);
+    } else {
+      // Document already loaded (iOS bfcache restore) - check immediately
+      checkAuth();
     }
   })();
 </script>
