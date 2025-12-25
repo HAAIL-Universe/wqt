@@ -8,6 +8,12 @@
 <link rel="stylesheet" href="styles/index.css">
 </head>
 <body>
+<div class="sync-status-bar" style="width:100%;display:flex;justify-content:center;align-items:center;margin:0 0 8px 0;">
+  <div id="syncStatusIndicator" title="Sync Status" style="width:32px;height:32px;border-radius:50%;background:#9fd6a5;border:2px solid #333;box-shadow:0 0 0 2px #fff;display:flex;align-items:center;justify-content:center;transition:background 0.3s;">
+    <span id="syncStatusIcon" style="font-size:1.5em;">🟢</span>
+  </div>
+  <span id="syncStatusText" style="margin-left:10px;font-size:1em;color:#333;">Saved</span>
+</div>
 <div class="wrap">
   <div class="tabs">
     <button id="tabCalcBtn" class="tabbtn" type="button" onclick="showTab('calc')">QuickCalc</button>

@@ -47,7 +47,13 @@ app = FastAPI(title="WQT Backend v1")
 # -------------------------------------------------------------------
 # Auth configuration
 # -------------------------------------------------------------------
-JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("AUTH_SECRET") or "dev-change-me"
+from dotenv import load_dotenv
+load_dotenv()
+
+try:
+    JWT_SECRET = os.environ["JWT_SECRET_KEY"]
+except KeyError:
+    raise ValueError("JWT_SECRET_KEY environment variable is required for JWT signing.")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "720"))
 ALLOWED_ROLES = {"picker", "operative", "supervisor", "gm"}
@@ -233,9 +239,17 @@ def summarize_state_save(state: MainState) -> Dict[str, Any]:
 # -------------------------------------------------------------------
 # CORS
 # -------------------------------------------------------------------
+# Secure CORS configuration
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS")
+if not allowed_origins_env:
+    raise ValueError("ALLOWED_ORIGINS environment variable is required for CORS policy.")
+allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+if not allowed_origins:
+    raise ValueError("ALLOWED_ORIGINS must specify at least one allowed origin.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

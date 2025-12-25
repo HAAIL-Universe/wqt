@@ -286,6 +286,21 @@ const WqtAPI = {
             return false;
         }
 
+
+        // Check for pending offline operations before fetching from backend
+        const pendingOps = Storage.loadPendingOps ? Storage.loadPendingOps() : [];
+        if (pendingOps && pendingOps.length > 0) {
+            // If there are pending ops, return localMain immediately and trigger forceSync in background
+            if (typeof this.forceSync === 'function') {
+                this.forceSync();
+            } else if (typeof this.syncPendingOps === 'function') {
+                this.syncPendingOps();
+            }
+            const learnedUL = Storage.loadLearnedUL();
+            const customCodes = Storage.loadCustomCodes();
+            return { main: localMain || {}, learnedUL, customCodes };
+        }
+
         // 1) Try backend - CRITICAL: only use user_id, never device_id for history queries
         // This ensures strict per-user data isolation even on shared devices
         try {
@@ -336,12 +351,19 @@ const WqtAPI = {
         const learnedUL = state.learnedUL || {};
         const customCodes = state.customCodes || [];
 
+        // Set sync status to pending after local save
         Storage.saveMain(main);
         Storage.saveLearnedUL(learnedUL);
         Storage.saveCustomCodes(customCodes);
+        if (typeof window !== 'undefined' && typeof window.setSyncStatus === 'function') {
+            window.setSyncStatus('pending');
+        }
 
         // 2) Try to persist to backend
         try {
+            if (typeof window !== 'undefined' && typeof window.setSyncStatus === 'function') {
+                window.setSyncStatus('syncing');
+            }
             const deviceId = getDeviceId();
 
             // Identity: PIN as ID, displayName / role for humans
@@ -396,8 +418,14 @@ const WqtAPI = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
+            if (typeof window !== 'undefined' && typeof window.setSyncStatus === 'function') {
+                window.setSyncStatus('synced');
+            }
             console.log('[WQT API] Saved main state to backend (User/Device)');
         } catch (err) {
+            if (typeof window !== 'undefined' && typeof window.setSyncStatus === 'function') {
+                window.setSyncStatus('error');
+            }
             console.warn('[WQT API] Failed to save main state to backend, local-only:', err);
         }
     },
@@ -768,26 +796,36 @@ const WqtAPI = {
 
         const pendingOps = Storage.loadPendingOps();
         if (!pendingOps || pendingOps.length === 0) {
+            if (typeof window !== 'undefined' && typeof window.setSyncStatus === 'function') {
+                window.setSyncStatus('synced');
+            }
             console.log('[WQT API] No pending ops to sync');
             return;
         }
 
+        if (typeof window !== 'undefined' && typeof window.setSyncStatus === 'function') {
+            window.setSyncStatus('syncing');
+        }
         console.log(`[WQT API] Syncing ${pendingOps.length} pending operation(s)...`);
 
+        let hadError = false;
         for (const op of pendingOps) {
             try {
                 if (op.type === 'END_SHIFT_ARCHIVE') {
                     await this.archiveShift(op.payload);
-                    // Success: remove from queue
                     Storage.removePendingOp(op.id);
                     console.log(`[WQT API] ✓ Synced ${op.type} (${op.id})`);
                 } else {
                     console.warn(`[WQT API] Unknown pending op type: ${op.type}`);
                 }
             } catch (err) {
+                hadError = true;
                 // Keep op in queue for next retry
                 console.warn(`[WQT API] Failed to sync ${op.type} (${op.id}), will retry:`, err);
             }
+        }
+        if (typeof window !== 'undefined' && typeof window.setSyncStatus === 'function') {
+            window.setSyncStatus(hadError ? 'error' : 'synced');
         }
     },
 

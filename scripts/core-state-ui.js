@@ -1,3 +1,63 @@
+// ==================== TAB CLOSE BLOCKER FOR UNSYNCED CHANGES ====================
+
+// ==================== VISIBILITY & ONLINE SYNC TRIGGERS ====================
+if (typeof window !== 'undefined') {
+  // When the tab becomes visible, trigger a force sync
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && window.WqtAPI && typeof window.WqtAPI.forceSync === 'function') {
+      window.WqtAPI.forceSync();
+    }
+  });
+  // When the browser comes online, trigger a force sync
+  window.addEventListener('online', function () {
+    if (window.WqtAPI && typeof window.WqtAPI.forceSync === 'function') {
+      window.WqtAPI.forceSync();
+    }
+  });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', function (e) {
+    if (typeof window.getSyncStatus === 'function' && window.getSyncStatus() !== 'synced') {
+      // Standard message is ignored by most browsers, but setting returnValue triggers the dialog
+      const msg = 'You have unsynced changes. Are you sure you want to leave?';
+      e.preventDefault();
+      e.returnValue = msg;
+      return msg;
+    }
+  });
+}
+// ==================== SYNC STATUS INDICATOR ====================
+// Statuses: 'synced', 'pending', 'syncing', 'error'
+const SYNC_STATUS_MAP = {
+  synced:   { color: '#9fd6a5', icon: '🟢', text: 'Saved' },
+  pending:  { color: '#e6cf8a', icon: '🟡', text: 'Offline / Pending' },
+  syncing:  { color: '#8ab6e6', icon: '🔵', text: 'Syncing…' },
+  error:    { color: '#e49b9b', icon: '🔴', text: 'Sync Error' }
+};
+
+let _currentSyncStatus = 'synced';
+
+function setSyncStatus(status) {
+  if (!SYNC_STATUS_MAP[status]) status = 'error';
+  _currentSyncStatus = status;
+  const ind = document.getElementById('syncStatusIndicator');
+  const icon = document.getElementById('syncStatusIcon');
+  const text = document.getElementById('syncStatusText');
+  if (ind && icon && text) {
+    ind.style.background = SYNC_STATUS_MAP[status].color;
+    icon.textContent = SYNC_STATUS_MAP[status].icon;
+    text.textContent = SYNC_STATUS_MAP[status].text;
+  }
+}
+
+function getSyncStatus() {
+  return _currentSyncStatus;
+}
+
+if (typeof window !== 'undefined') {
+  window.setSyncStatus = setSyncStatus;
+  window.getSyncStatus = getSyncStatus;
+}
 // Helper: Overlay outbox entries onto locations (pending edits win)
 function overlayOutbox(locations, outboxEntries) {
   if (!Array.isArray(locations)) locations = [];
