@@ -16,7 +16,35 @@ import json
 # CORS
 # -------------------------------------------------------------------
 
+import logging
+VERSION = os.getenv("WQT_VERSION", "dev")
 app = FastAPI(title="WQT Backend v1")
+
+# --- Route inventory logging (AUDIT_ROUTES=1) ---
+if os.getenv("AUDIT_ROUTES", "0") == "1":
+    @app.on_event("startup")
+    async def log_routes():
+        print("[AUDIT] Route inventory:")
+        for route in app.routes:
+            methods = ','.join(sorted(route.methods))
+            print(f"  {methods:10s} {route.path}")
+
+# --- 404 logging middleware ---
+@app.middleware("http")
+async def log_404_middleware(request, call_next):
+    response = await call_next(request)
+    if response.status_code == 404:
+        logging.warning(f"404 Not Found: {request.method} {request.url.path}")
+    return response
+
+# --- Root endpoint (GET /, HEAD /) ---
+@app.get("/")
+async def root():
+    return {"service": "wqt-backend", "status": "ok", "version": VERSION}
+
+@app.head("/")
+async def root_head():
+    return {"service": "wqt-backend", "status": "ok", "version": VERSION}
 
 def get_shift_state_with_version(shift_id):
     # Fetch shift session and return state_version and active_order_snapshot
