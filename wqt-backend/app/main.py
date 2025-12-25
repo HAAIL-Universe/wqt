@@ -12,6 +12,11 @@ from fastapi.responses import JSONResponse
 from .models import MainState
 from .models import MainState
 import json
+
+# -------------------------------------------------------------------
+# CORS
+# -------------------------------------------------------------------
+
 def get_shift_state_with_version(shift_id):
     # Fetch shift session and return state_version and active_order_snapshot
     from .db import get_session, ShiftSession
@@ -25,9 +30,6 @@ def get_shift_state_with_version(shift_id):
         "shift_id": shift.id
     }
 
-# -------------------------------------------------------------------
-# CORS
-# -------------------------------------------------------------------
 @app.patch("/api/shift/{shift_id}/state")
 async def patch_shift_state(shift_id: int, payload: Dict[str, Any], base_version: int = None, explicit_clear_active_order: bool = False, request_id: str = None, device_id: str = None):
     from .db import get_session, ShiftSession
