@@ -14,8 +14,11 @@
     <button id="tabCalcBtn" class="tabbtn" type="button" onclick="showTab('calc')">QuickCalc</button>
     <button id="tabTrackBtn" class="tabbtn active" type="button" onclick="showTab('tracker')">Tracker</button>
     <button id="tabHistBtn" class="tabbtn tab-user" type="button" onclick="showTab('history')">
-      <span id="userTabLabel">History</span>
-      <span id="syncStatusIndicator" class="sync-dot is-saved" title="Sync Status" aria-label="Sync Status"></span>
+      <span class="tab-left"><span id="userTabLabel">History</span></span>
+      <span class="tab-right user-sync" aria-live="polite">
+        <span id="syncStatusText" class="sync-text">Saved</span>
+        <span id="syncStatusIndicator" class="sync-dot is-saved" title="Saved" aria-label="Saved"></span>
+      </span>
     </button>
     <button id="tabSupervisorBtn" class="tabbtn" type="button" onclick="showTab('supervisor')" style="display:none;">Supervisor</button>
   </div>

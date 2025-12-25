@@ -1,12 +1,37 @@
 /* Subtle sync indicator dot inside User tab */
+
+/* User tab with right-aligned sync status cluster */
 .tab-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 160px;
+  padding: 0 12px;
+}
+.tab-left {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.tab-right.user-sync {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+.sync-text {
+  font-size: 12px;
+  opacity: 0.75;
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: right;
+  transition: color 0.2s;
 }
 .sync-dot {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 999px;
   opacity: .85;
   box-shadow: 0 0 0 2px rgba(0,0,0,.25);
