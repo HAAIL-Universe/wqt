@@ -2908,6 +2908,15 @@ async function endShift(){
   }
 
   // Local archive follows server success
+  if (!Array.isArray(historyDays)) {
+    // Defensive: hydrate from main.history if missing
+    if (window.Storage && typeof Storage.loadMain === 'function') {
+      const main = Storage.loadMain();
+      historyDays = Array.isArray(main.history) ? main.history.slice() : [];
+    } else {
+      historyDays = [];
+    }
+  }
   historyDays.push(snapshot);
   saveAll();
   renderHistory();
