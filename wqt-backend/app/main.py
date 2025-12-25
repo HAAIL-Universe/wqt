@@ -10,6 +10,49 @@ from jose import JWTError, jwt
 from fastapi.responses import JSONResponse
 
 from .models import MainState
+from .models import MainState
+import json
+def get_shift_state_with_version(shift_id):
+    # Fetch shift session and return state_version and active_order_snapshot
+    from .db import get_session, ShiftSession
+    db = get_session()
+    shift = db.query(ShiftSession).filter(ShiftSession.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return {
+        "state_version": shift.state_version,
+        "active_order_snapshot": json.loads(shift.active_order_snapshot or '{}'),
+        "shift_id": shift.id
+    }
+
+# -------------------------------------------------------------------
+# CORS
+# -------------------------------------------------------------------
+@app.patch("/api/shift/{shift_id}/state")
+async def patch_shift_state(shift_id: int, payload: Dict[str, Any], base_version: int = None, explicit_clear_active_order: bool = False, request_id: str = None, device_id: str = None):
+    from .db import get_session, ShiftSession
+    db = get_session()
+    shift = db.query(ShiftSession).filter(ShiftSession.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    # Version check
+    if base_version is not None and base_version != shift.state_version:
+        # Log conflict
+        print(f"[PATCH CONFLICT] request_id={request_id} device_id={device_id} shift_id={shift_id} base_version={base_version} current_version={shift.state_version}")
+        return JSONResponse(status_code=409, content={"detail": "Version conflict", "server_state": get_shift_state_with_version(shift_id)})
+    # Defensive clear guard
+    incoming_order = payload.get("active_order_snapshot")
+    if (shift.active_order_snapshot and not incoming_order) and not explicit_clear_active_order:
+        # Log blocked clear
+        print(f"[PATCH BLOCKED CLEAR] request_id={request_id} device_id={device_id} shift_id={shift_id} - attempted clear without explicit flag")
+        return JSONResponse(status_code=409, content={"detail": "Blocked destructive clear", "server_state": get_shift_state_with_version(shift_id)})
+    # Apply patch
+    if incoming_order is not None:
+        shift.active_order_snapshot = json.dumps(incoming_order)
+    # ...apply other fields as needed...
+    shift.state_version += 1
+    db.commit()
+    return {"ok": True, "state_version": shift.state_version}
 from .storage import load_main, save_main
 from .db import (
     init_db,

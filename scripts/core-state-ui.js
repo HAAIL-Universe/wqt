@@ -1,3 +1,18 @@
+// ===== HYDRATION GATE =====
+window._wqtHydrated = false;
+
+function setHydrated(val) {
+  window._wqtHydrated = !!val;
+  setSyncStatus(val ? 'synced' : 'loading');
+}
+
+function isHydrated() {
+  return !!window._wqtHydrated;
+}
+
+// Patch: Add 'loading' state to SYNC_STATUS_MAP
+SYNC_STATUS_MAP.loading = { color: '#aaa', icon: '⏳', text: 'Loading…' };
+
 // ==================== TAB CLOSE BLOCKER FOR UNSYNCED CHANGES ====================
 
 // ==================== VISIBILITY & ONLINE SYNC TRIGGERS ====================
@@ -53,6 +68,53 @@ function setSyncStatus(status) {
     label.setAttribute('title', text);
     label.setAttribute('aria-label', text);
   }
+}
+
+// Defensive: block all save/sync routines if not hydrated
+function canSyncOrSave() {
+  return isHydrated();
+}
+
+// PATCH: send base_version and handle 409
+async function saveShiftState(payload) {
+  if (!canSyncOrSave()) {
+    setSyncStatus('loading');
+    return;
+  }
+  setSyncStatus('syncing');
+  try {
+    const shiftId = window.activeShiftSession?.id;
+    const baseVersion = window._wqtStateVersion || 0;
+    const resp = await fetch(`/api/shift/${shiftId}/state`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, base_version: baseVersion, request_id: genRequestId(), device_id: getDeviceIdSafe() })
+    });
+    if (resp.status === 409) {
+      setSyncStatus('error');
+      const data = await resp.json();
+      // Conflict: rehydrate from server
+      if (data?.server_state) {
+        window.current = data.server_state.active_order_snapshot;
+        window._wqtStateVersion = data.server_state.state_version;
+        setSyncStatus('synced');
+      }
+      return;
+    }
+    if (resp.ok) {
+      const data = await resp.json();
+      window._wqtStateVersion = data.state_version;
+      setSyncStatus('synced');
+    } else {
+      setSyncStatus('error');
+    }
+  } catch (e) {
+    setSyncStatus('error');
+  }
+}
+
+function genRequestId() {
+  return 'req_' + Math.random().toString(36).slice(2,10) + '_' + Date.now();
 }
 
 function getSyncStatus() {

@@ -197,15 +197,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // ── 1) Try to hydrate from backend (then localStorage) ────────
       if (window.WqtAPI && typeof WqtAPI.loadInitialState === 'function') {
+        setHydrated(false);
         try {
-          // This will:
-          //  - GET /api/state
-          //  - On success: write into localStorage via Storage.saveMain()
-          //  - On failure: fall back to Storage.loadMain()
-          await WqtAPI.loadInitialState();
+          // GET /api/shift/{shift_id}/state for hydration
+          const shiftId = window.activeShiftSession?.id;
+          let serverState = null;
+          if (shiftId) {
+            serverState = await WqtAPI.getShiftStateWithVersion(shiftId);
+            // Hydrate open order from server snapshot
+            if (serverState?.active_order_snapshot) {
+              window.current = serverState.active_order_snapshot;
+            }
+            window._wqtStateVersion = serverState?.state_version || 0;
+          }
+          setHydrated(true);
         } catch (e) {
           console.warn('[Boot] Backend load failed, continuing local-only', e);
+          setHydrated(true); // fallback: allow local-only
         }
+      } else {
+        setHydrated(true);
       }
 
       // ── 2) Restore persisted state from localStorage ──────────────
