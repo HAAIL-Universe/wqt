@@ -1,3 +1,24 @@
+/* Subtle sync indicator dot inside User tab */
+.tab-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.sync-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  opacity: .85;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.25);
+  pointer-events: none;
+  display: inline-block;
+  margin-left: 2px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.sync-dot.is-saved { background: #2ee86f; }
+.sync-dot.is-pending { background: #f7c948; }
+.sync-dot.is-error { background: #ff5c5c; }
+.sync-dot.is-idle { background: rgba(255,255,255,.25); opacity: .5; }
 /* Live Rate summary chip: dual-side layout */
 .summary-chip-dual {
   display: flex;

@@ -40,13 +40,11 @@ let _currentSyncStatus = 'synced';
 function setSyncStatus(status) {
   if (!SYNC_STATUS_MAP[status]) status = 'error';
   _currentSyncStatus = status;
-  const ind = document.getElementById('syncStatusIndicator');
-  const icon = document.getElementById('syncStatusIcon');
-  const text = document.getElementById('syncStatusText');
-  if (ind && icon && text) {
-    ind.style.background = SYNC_STATUS_MAP[status].color;
-    icon.textContent = SYNC_STATUS_MAP[status].icon;
-    text.textContent = SYNC_STATUS_MAP[status].text;
+  const dot = document.getElementById('syncStatusIndicator');
+  if (dot) {
+    dot.className = 'sync-dot is-' + (status === 'synced' ? 'saved' : status);
+    dot.setAttribute('title', SYNC_STATUS_MAP[status].text);
+    dot.setAttribute('aria-label', SYNC_STATUS_MAP[status].text);
   }
 }
 
