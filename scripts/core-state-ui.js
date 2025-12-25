@@ -1,3 +1,12 @@
+// ===== SYNC STATUS MAP: must be defined before any usage =====
+const SYNC_STATUS_MAP = {
+  synced:   { color: '#9fd6a5', icon: '🟢', text: 'Saved' },
+  pending:  { color: '#e6cf8a', icon: '🟡', text: 'Offline / Pending' },
+  syncing:  { color: '#8ab6e6', icon: '🔵', text: 'Syncing…' },
+  error:    { color: '#e49b9b', icon: '🔴', text: 'Sync Error' },
+  loading:  { color: '#aaa', icon: '⏳', text: 'Loading…' }
+};
+
 // ===== HYDRATION GATE =====
 window._wqtHydrated = false;
 
@@ -9,9 +18,6 @@ function setHydrated(val) {
 function isHydrated() {
   return !!window._wqtHydrated;
 }
-
-// Patch: Add 'loading' state to SYNC_STATUS_MAP
-SYNC_STATUS_MAP.loading = { color: '#aaa', icon: '⏳', text: 'Loading…' };
 
 // ==================== TAB CLOSE BLOCKER FOR UNSYNCED CHANGES ====================
 
