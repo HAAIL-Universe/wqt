@@ -249,17 +249,27 @@ function startShift(lenHours){
     const chosen = existing || (lenHours | 0);
     if (!existing && (chosen === 9 || chosen === 10)) setShiftPref(chosen);
 
-    // Seed hidden length field for downstream logic
+    // Seed hidden length field for downstream logic and ensure selector is enabled
     const applyLen = getShiftPref() || (lenHours || 9);
     const lenEl = document.getElementById('tLen');
-    if (lenEl) lenEl.value = String(applyLen);
+    if (lenEl) {
+      lenEl.value = String(applyLen);
+      lenEl.disabled = false;
+      lenEl.removeAttribute('readonly');
+      lenEl.style.display = '';
+    }
 
     // Defer actual start to the contracted time picker
     openContractedStartPicker();
   } catch (e){
     // Safe fallback: still route through the picker
     const lenEl = document.getElementById('tLen');
-    if (lenEl) lenEl.value = String(lenHours || 9);
+    if (lenEl) {
+      lenEl.value = String(lenHours || 9);
+      lenEl.disabled = false;
+      lenEl.removeAttribute('readonly');
+      lenEl.style.display = '';
+    }
     openContractedStartPicker();
   }
 }
@@ -398,8 +408,14 @@ async function applyContractedStart(hh){
 
   // Read the shift length (9h or 10h) from the hidden field set by the button
   const lenEl = document.getElementById('tLen');
-  const chosenLen = lenEl ? (parseInt(lenEl.value, 10) || 9) : 9;
-  if (lenEl) lenEl.value = String(chosenLen);
+  let chosenLen = 9;
+  if (lenEl) {
+    chosenLen = parseInt(lenEl.value, 10) || 9;
+    lenEl.value = String(chosenLen);
+    lenEl.disabled = true; // lock after start
+    lenEl.setAttribute('readonly', 'readonly');
+    lenEl.style.display = 'none';
+  }
 
   const actualHM  = nowHHMM();
   const cMin = hmToMin(contractedHM);
