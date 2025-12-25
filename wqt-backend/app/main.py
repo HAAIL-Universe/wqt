@@ -10,12 +10,13 @@ from jose import JWTError, jwt
 from fastapi.responses import JSONResponse
 
 from .models import MainState
-from .models import MainState
 import json
 
 # -------------------------------------------------------------------
 # CORS
 # -------------------------------------------------------------------
+
+app = FastAPI(title="WQT Backend v1")
 
 def get_shift_state_with_version(shift_id):
     # Fetch shift session and return state_version and active_order_snapshot
