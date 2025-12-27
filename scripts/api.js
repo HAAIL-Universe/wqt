@@ -174,20 +174,10 @@ async function fetchJSON(path, options = {}) {
         console.warn('[WQT API] Missing Authorization header for', path);
     }
 
-    const fetchOptions = {
+    const res = await fetch(url, {
         ...options,
         headers: mergedHeaders,
-    };
-    try {
-        if (typeof window !== 'undefined') {
-            const apiOrigin = new URL(API_BASE, window.location.href).origin;
-            if (apiOrigin === window.location.origin) {
-                fetchOptions.credentials = 'omit';
-            }
-        }
-    } catch (_) {}
-
-    const res = await fetch(url, fetchOptions);
+    });
 
     if (!res.ok) {
         const text = await res.text().catch(() => '');
