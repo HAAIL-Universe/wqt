@@ -317,7 +317,7 @@ def summarize_state_save(state: MainState) -> Dict[str, Any]:
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS")
 if not allowed_origins_env:
     raise ValueError("ALLOWED_ORIGINS environment variable is required for CORS policy.")
-allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+allowed_origins = [origin.strip().rstrip("/") for origin in allowed_origins_env.split(",") if origin.strip()]
 if not allowed_origins:
     raise ValueError("ALLOWED_ORIGINS must specify at least one allowed origin.")
 

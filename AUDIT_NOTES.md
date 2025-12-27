@@ -122,3 +122,8 @@
 - Health path alignment: frontend continues using /health (matches backend @app.get("/health") in wqt-backend/app/main.py:344).
 - Gating fix: scripts/login.js now awaits the slow health attempt on submit; loginWithPin only runs after online.
 - Tooltip: offline due to failed fetch sets title "Health check failed (possible CORS/network/timeout)"; browser offline sets title "Browser offline".
+
+## CORS Hardening
+- Timestamp: 2025-12-27T14:56:42.9880633+00:00
+- Change: Normalize ALLOWED_ORIGINS by stripping trailing slashes to avoid exact-match CORS misses.
+- File: wqt-backend/app/main.py:319
