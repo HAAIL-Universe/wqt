@@ -2,7 +2,7 @@ import os
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Query, HTTPException, Depends, status
+from fastapi import FastAPI, Query, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -329,6 +329,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def _cors_headers_for_origin(origin: Optional[str]) -> Dict[str, str]:
+    if origin and origin in allowed_origins:
+        return {
+            "access-control-allow-origin": origin,
+            "access-control-allow-credentials": "true",
+            "vary": "Origin",
+        }
+    return {}
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    headers = dict(exc.headers or {})
+    headers.update(_cors_headers_for_origin(request.headers.get("origin")))
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=headers)
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled exception", exc_info=exc)
+    headers = _cors_headers_for_origin(request.headers.get("origin"))
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"}, headers=headers)
+
 
 # -------------------------------------------------------------------
 # Startup
@@ -604,7 +625,16 @@ async def api_shift_active(
     if not current_user:
         raise HTTPException(status_code=401, detail="Missing user identity")
 
-    active_shift = get_active_shift_for_operator(current_user.username)
+    try:
+        active_shift = get_active_shift_for_operator(current_user.username)
+    except Exception as exc:
+        logging.exception("[ShiftActive] Failed to fetch active shift", exc_info=exc)
+        return {
+            "active": False,
+            "shift": None,
+            "device_id": device_id,
+            "error": "shift_active_failed",
+        }
     return {
         "active": bool(active_shift),
         "shift": active_shift,
