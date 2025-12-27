@@ -455,7 +455,15 @@ async function applyContractedStart(hh){
     localStorage.setItem('shiftActive','1');
   } catch (err) {
     console.error('[ShiftStart] Failed to start shift on server', err);
-    showToast?.('Could not start shift on server. Check connection and retry.');
+    const detail = (err && err.message) ? String(err.message) : '';
+    const statusMatch = detail.match(/failed:\s*(\d{3})/i);
+    const statusCode = statusMatch ? statusMatch[1] : null;
+    const trimmed = detail.length > 200 ? detail.slice(0, 200) + '…' : detail;
+    const prefix = statusCode
+      ? `Could not start shift on server (${statusCode})`
+      : 'Could not start shift on server';
+    const msg = trimmed ? `${prefix}: ${trimmed}` : `${prefix}. Check connection and retry.`;
+    showToast?.(msg);
     startTime = '';
     return;
   }
