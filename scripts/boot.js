@@ -186,6 +186,12 @@ function normalizeShiftHours(value) {
   return (n === 9 || n === 10) ? n : null;
 }
 
+function needsShiftHoursRepair(me) {
+  const completedAt = !!me?.onboarding_completed_at;
+  if (!completedAt) return false;
+  return !normalizeShiftHours(me?.default_shift_hours);
+}
+
 function applyDefaultShiftHours(hours) {
   const h = normalizeShiftHours(hours);
   if (!h) return null;
@@ -206,15 +212,20 @@ function isOnboardingComplete(me) {
   return completedAt && version >= ONBOARDING_VERSION;
 }
 
-function showShiftLengthOnboarding() {
+function showShiftLengthOnboarding(mode) {
+  const onboarding = document.getElementById('onboardingCard');
   if (typeof setWqtShiftUiState === 'function') {
     setWqtShiftUiState('onboarding');
-    return;
   }
-  const onboarding = document.getElementById('onboardingCard');
   const shift = document.getElementById('shiftCard');
   const active = document.getElementById('activeOrderCard');
   const done = document.getElementById('completedCard');
+  const title = onboarding?.querySelector?.('h3');
+  if (title) {
+    title.textContent = (mode === 'repair')
+      ? 'Finish setup: choose contracted shift length'
+      : 'Select Shift Length (one-time)';
+  }
   if (onboarding) onboarding.style.display = 'block';
   if (shift) shift.style.display = 'none';
   if (active) active.style.display = 'none';
@@ -226,11 +237,12 @@ async function ensureOnboardingFlow() {
   try {
     const me = await WqtAPI.getMe();
     applyDefaultShiftHours(me?.default_shift_hours);
+    const needsRepair = needsShiftHoursRepair(me);
     const complete = isOnboardingComplete(me);
     window._wqtOnboardingComplete = complete;
     window._wqtOnboardingBlocked = !complete;
-    if (!complete) {
-      showShiftLengthOnboarding();
+    if (!complete || needsRepair) {
+      showShiftLengthOnboarding(needsRepair ? 'repair' : undefined);
       return { complete: false, blocked: true };
     }
     return { complete: true };

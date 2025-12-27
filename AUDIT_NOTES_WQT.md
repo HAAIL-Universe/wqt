@@ -13,3 +13,11 @@
 - Network (scripts/failed requests): None reported.
 - Classification: C) Init never called / handlers not bound (resume handler did not assert UI state to shift_active).
 - Root cause: `scripts/boot.js` resume handler omits explicit UI state transition when resuming a server-active shift.
+2025-12-27: Onboarding repair mode for missing shift length.
+- Branch/SHA: chore/db-schema-audit / 51ea1d88a297eb7b04fd875f9fb5c0625c7b5647
+- Repro steps: User has onboarding_completed_at set and onboarding_version >= ONBOARDING_VERSION; user.default_shift_hours is NULL/invalid.
+- Console first error: None reported.
+- Network (scripts/failed requests): None reported.
+- Classification: E) Gating deadlock (onboarding gate allowed incomplete data; UI fell back to 9h).
+- Root cause: Onboarding gate treated completion as sufficient without validating shift length, allowing silent fallback.
+- Fix summary: Trigger onboarding card in repair mode to collect contracted shift length; prevents silent 9h fallback.
