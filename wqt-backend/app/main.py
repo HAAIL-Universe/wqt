@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
@@ -578,43 +579,76 @@ async def api_shift_start(
     payload: ShiftStartPayload,
     device_id: Optional[str] = Query(default=None, alias="device-id"),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ) -> Dict[str, Any]:
+    request_id = uuid.uuid4().hex
     # Force authenticated identity for all shift writes
     if not current_user:
         raise HTTPException(status_code=401, detail="Missing user identity")
 
-    shift_id = start_shift(
-        operator_id=current_user.username,
-        device_id=device_id,
-        operator_name=payload.operator_name or current_user.display_name,
-        site=payload.site,
-        shift_type=payload.shift_type,
+    logging.info(
+        "[ShiftStart] request_id=%s user=%s device_id=%s start_hhmm=%s shift_length_hours=%s",
+        request_id,
+        getattr(current_user, "username", None),
+        device_id,
+        payload.start_hhmm,
+        payload.shift_length_hours,
     )
 
-    active_shift = get_active_shift_for_operator(current_user.username)
+    try:
+        shift_id = start_shift(
+            operator_id=current_user.username,
+            device_id=device_id,
+            operator_name=payload.operator_name or current_user.display_name,
+            site=payload.site,
+            shift_type=payload.shift_type,
+        )
 
-    detail: Dict[str, Any] = {
-        "shift_id": shift_id,
-        "operator_id": current_user.username,
-        "operator_name": payload.operator_name,
-        "site": payload.site,
-        "shift_type": payload.shift_type,
-        "start_hhmm": payload.start_hhmm,
-        "shift_length_hours": payload.shift_length_hours,
-        "already_active": bool(active_shift and active_shift.get("ended_at") is None and active_shift.get("id") == shift_id),
-    }
-    if device_id:
-        detail["device_id"] = device_id
+        active_shift = get_active_shift_for_operator(current_user.username)
 
-    log_usage_event("SHIFT_START", detail)
+        detail: Dict[str, Any] = {
+            "shift_id": shift_id,
+            "operator_id": current_user.username,
+            "operator_name": payload.operator_name,
+            "site": payload.site,
+            "shift_type": payload.shift_type,
+            "start_hhmm": payload.start_hhmm,
+            "shift_length_hours": payload.shift_length_hours,
+            "already_active": bool(active_shift and active_shift.get("ended_at") is None and active_shift.get("id") == shift_id),
+        }
+        if device_id:
+            detail["device_id"] = device_id
 
-    log_usage_event("SHIFT_DEBUG_WRITE", {
-        "operator_id": current_user.username,
-        "device_id": device_id,
-        "note": "Shift start bound to authenticated user",
-    })
+        log_usage_event("SHIFT_START", detail)
 
-    return {"shift_id": shift_id, "shift": active_shift}
+        log_usage_event("SHIFT_DEBUG_WRITE", {
+            "operator_id": current_user.username,
+            "device_id": device_id,
+            "note": "Shift start bound to authenticated user",
+        })
+
+        return {"shift_id": shift_id, "shift": active_shift}
+    except Exception as exc:
+        logging.exception(
+            "[ShiftStart] request_id=%s device_id=%s user=%s",
+            request_id,
+            device_id,
+            getattr(current_user, "username", None),
+            exc_info=exc,
+        )
+        headers = {
+            "X-Request-ID": request_id,
+            **_cors_headers_for_origin(request.headers.get("origin") if request else None),
+        }
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Internal Server Error",
+                "request_id": request_id,
+                "error": "shift_start_failed",
+            },
+            headers=headers,
+        )
 
 
 @app.get("/api/shifts/active")
