@@ -21,3 +21,11 @@
 - Classification: E) Gating deadlock (onboarding gate allowed incomplete data; UI fell back to 9h).
 - Root cause: Onboarding gate treated completion as sufficient without validating shift length, allowing silent fallback.
 - Fix summary: Trigger onboarding card in repair mode to collect contracted shift length; prevents silent 9h fallback.
+2025-12-27: Header state sync for shift_home vs shift_active.
+- Branch/SHA: chore/db-schema-audit / c94b6e7af57cfef40945dd09ba37c98b9933839c
+- Repro steps: Login → Start shift (order header visible) → End shift (order header should hide, home header should show) → Refresh on shift_home (home header persists).
+- Console first error: None reported.
+- Network (scripts/failed requests): None reported.
+- Classification: C) Init not called / handlers not bound (header not wired to setWqtShiftUiState).
+- Root cause: Order header lived outside any UI-state switch, so shift_home still showed the order header on end/refresh.
+- Fix summary: Add explicit header containers and toggle them in setWqtShiftUiState.

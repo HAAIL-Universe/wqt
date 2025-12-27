@@ -272,6 +272,8 @@ function setWqtShiftUiState(nextState){
   const tools      = document.getElementById('shift-tools-card');
   const history    = document.getElementById('historyCard');
   const manage     = document.getElementById('manageCustomersCard');
+  const orderHeader = document.getElementById('orderHeaderBar');
+  const homeHeader  = document.getElementById('homeHeaderBar');
 
   const show = (el, on) => {
     if (!el) return;
@@ -287,6 +289,8 @@ function setWqtShiftUiState(nextState){
     show(tools, false);
     show(history, false);
     show(manage, false);
+    show(orderHeader, false);
+    show(homeHeader, false);
     return;
   }
 
@@ -298,6 +302,8 @@ function setWqtShiftUiState(nextState){
     show(shiftLog, false);
     show(tools, true);
     show(history, true);
+    show(orderHeader, false);
+    show(homeHeader, true);
     return;
   }
 
@@ -309,6 +315,8 @@ function setWqtShiftUiState(nextState){
     show(shiftLog, true);
     show(tools, true);
     show(history, true);
+    show(orderHeader, true);
+    show(homeHeader, false);
   }
 }
 
