@@ -321,22 +321,79 @@
       }
     }
 
-    function updateOnlineBadge() {
+    const HEALTH_PATH = '/health';
+    const BADGE_STATES = ['checking', 'online', 'waking', 'offline'];
+    let lastHealthState = 'checking';
+    let healthCheckToken = 0;
+
+    function setOnlineBadgeState(state, text, title) {
       if (!onlineBadge) return;
-      if (navigator.onLine) {
-        onlineBadge.textContent = 'Online';
-        onlineBadge.classList.add('online');
-        onlineBadge.classList.remove('offline');
+      lastHealthState = state;
+      onlineBadge.textContent = text;
+      if (title) {
+        onlineBadge.setAttribute('title', title);
       } else {
-        onlineBadge.textContent = 'Offline (cached users only)';
-        onlineBadge.classList.add('offline');
-        onlineBadge.classList.remove('online');
+        onlineBadge.removeAttribute('title');
+      }
+      BADGE_STATES.forEach(s => onlineBadge.classList.remove(s));
+      onlineBadge.classList.add(state);
+    }
+
+    function getHealthUrl() {
+      const base = getApiBase().replace(/\/+$/, '');
+      return base + HEALTH_PATH;
+    }
+
+    async function checkHealthAttempt(timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const resp = await fetch(getHealthUrl(), {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal
+        });
+        return resp.ok;
+      } catch (_) {
+        return false;
+      } finally {
+        clearTimeout(timer);
       }
     }
 
-    window.addEventListener('online', updateOnlineBadge);
-    window.addEventListener('offline', updateOnlineBadge);
-    updateOnlineBadge();
+    async function refreshOnlineStatus() {
+      const token = ++healthCheckToken;
+      if (!onlineBadge) return 'unknown';
+      if (!navigator.onLine) {
+        setOnlineBadgeState('offline', 'Offline', 'Browser offline');
+        return 'offline';
+      }
+      setOnlineBadgeState('checking', 'Checking...');
+      const fastOk = await checkHealthAttempt(2500);
+      if (token != healthCheckToken) return lastHealthState;
+      if (fastOk) {
+        setOnlineBadgeState('online', 'Online');
+        return 'online';
+      }
+      setOnlineBadgeState('waking', 'Waking...');
+      const slowOk = await checkHealthAttempt(12000);
+      if (token != healthCheckToken) return lastHealthState;
+      if (slowOk) {
+        setOnlineBadgeState('online', 'Online');
+        return 'online';
+      }
+      setOnlineBadgeState(
+        'offline',
+        'Offline',
+        'Health check failed (possible CORS/network/timeout)'
+      );
+      return 'offline';
+    }
+
+    window.addEventListener('online', () => refreshOnlineStatus());
+    window.addEventListener('offline', () => setOnlineBadgeState('offline', 'Offline', 'Browser offline'));
+    window.addEventListener('focus', () => refreshOnlineStatus());
+    refreshOnlineStatus();
 
     // If we already know a user on this device, allow quick resume
     if (currentUser && resumeBlock && resumeBtn) {
@@ -390,6 +447,13 @@
         }
 
         loginBtn.disabled = true;
+        setStatus('Starting server...', false);
+        const healthState = await refreshOnlineStatus();
+        if (healthState === 'offline') {
+          loginBtn.disabled = false;
+          setStatus('Server unreachable. Try again.', true);
+          return;
+        }
         setStatus('Logging in…', false);
 
         try {

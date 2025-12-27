@@ -81,3 +81,44 @@
 
 ## Test Results
 - Not run here (no local browser run). Manual verification required: reload, check console, click tabs/buttons/shift-length.
+
+# Login Status Audit (truthful online badge)
+
+## Step 0 - Baseline Evidence
+- Timestamp: 2025-12-27T14:16:57.2984658+00:00
+- Badge element: login.html:17 (<div id="online-badge">)
+- Status logic: scripts/login.js:324-339
+- Current behavior: updateOnlineBadge() sets Online when navigator.onLine is true; Offline otherwise.
+- Search terms: Online, status, badge, health, ping, heartbeat, render (rg -n "Online|status|badge|health|ping|heartbeat|render" -S .)
+
+## Step 1 - Frontend/Backend Topology
+- API base resolution: scripts/login.js:49-59 uses resolveApiBase() from scripts/api.js, fallback https://wqt-backend.onrender.com
+- API base default: scripts/api.js:12,36 (DEFAULT_BACKEND_URL)
+- Conclusion: Cross-origin login page -> API at https://wqt-backend.onrender.com (unless WQT_BACKEND_URL override is set)
+
+## Step 2-4 - Implementation Notes
+- Timestamp: 2025-12-27T14:19:23.7271701+00:00
+- Health endpoint reused: wqt-backend/app/main.py:344-346 defines GET /health (no DB access). No backend changes required.
+- Login badge logic replaced with health check state machine: scripts/login.js (around updateOnlineBadge block) now uses /health with 2.5s + 12s timeouts and states checking/online/waking/offline.
+- Login submission gating: scripts/login.js now blocks submit when health state is offline; allows when waking with message.
+- UI style: styles/index.css adds #online-badge.checking and #online-badge.waking.
+
+# Login Status Hardening (truthful online badge) - Step 0
+
+## Health Endpoint Evidence
+- Search: rg -n "healthz|health|ready|ping" -S wqt-backend/app
+- Path: wqt-backend/app/main.py:344-346
+- Route: @app.get("/health") -> returns {"status": "ok"}
+
+## API Base / Topology Evidence
+- Frontend base resolution: scripts/login.js:53-59 uses resolveApiBase() from scripts/api.js, fallback https://wqt-backend.onrender.com
+- Default backend base: scripts/api.js:12,40 (DEFAULT_BACKEND_URL / resolveApiBase)
+- login.html includes scripts/api.js then scripts/login.js (login.html:82-85)
+- Conclusion: Cross-origin in production (static login served separately, API base is https://wqt-backend.onrender.com unless overridden)
+- Timestamp: 2025-12-27T14:26:23.9530569+00:00
+
+## Step 1-4 - Changes (truthful gating)
+- Timestamp: 2025-12-27T14:26:59.0777899+00:00
+- Health path alignment: frontend continues using /health (matches backend @app.get("/health") in wqt-backend/app/main.py:344).
+- Gating fix: scripts/login.js now awaits the slow health attempt on submit; loginWithPin only runs after online.
+- Tooltip: offline due to failed fetch sets title "Health check failed (possible CORS/network/timeout)"; browser offline sets title "Browser offline".
