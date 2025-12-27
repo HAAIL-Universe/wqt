@@ -53,3 +53,15 @@
 - Classification: F) Backend error masked as "Failed to fetch" (success-only teardown not enforced).
 - Root cause: Teardown ran even if endShift response was not OK, risking UI desync on failed archive.
 - Fix summary: Gate forceShiftTeardownToHome() on successful /api/shifts/end response.
+2025-12-27: Shift action busy feedback (start/reconcile/end).
+- Branch/SHA: chore/db-schema-audit / de78711f93aaeb82f6f68636318b8594a7e9dc49
+- Repro steps: Click "Start shift" (API responds ~1s) and observe no loading state; in reconcile modal click "Resume shift" or "End it now" with no pending feedback; click "End shift & archive" with no busy indicator.
+- Console first error: Not captured (no browser session).
+- Network (scripts): Not captured.
+- Network (failed request): Not captured.
+- Classification: E) Gating deadlock (async shift actions wait without visible pending state).
+- Root cause: Shift action handlers do not set a busy/disabled state (`scripts/core-tracker-history.js` startShift/endShift, `scripts/boot.js` reconcile modal).
+- Fix summary: Add setButtonBusy helper (`scripts/core-state-ui.js`) and wrap shift actions to show spinner + disable until completion.
+- Expected behavior: Start shift, reconcile actions, and end shift show spinner + disabled state while pending, then restore on success or error with toast on failure.
+- Verification: Click Start shift/Resume shift/End it now/End shift & archive and confirm spinner + disabled state until requests complete; on failure, toast shows and buttons restore.
+- Risks: None noted (UI-only change).

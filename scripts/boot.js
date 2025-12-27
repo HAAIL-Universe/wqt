@@ -129,21 +129,43 @@ function showShiftReconcileModal(serverShift){
   const resumeBtn = document.createElement('button');
   resumeBtn.textContent = 'Resume shift';
   resumeBtn.className = 'btn';
-  resumeBtn.onclick = () => {
-    const hhmm = isoToHHMM(serverShift?.started_at) || nowHHMM();
-    window.startTime = hhmm;
-    try { localStorage.setItem('shiftActive','1'); } catch (_){ }
-    persistActiveShiftMeta?.(serverShift || null);
-    try { beginShift?.(); } catch(_){ }
-    setWqtShiftUiState?.('shift_active');
-    try { clearShiftRecoveryMode?.(); } catch(_){}
-    overlay.remove();
-  };
 
   const endBtn = document.createElement('button');
   endBtn.textContent = 'End it now';
   endBtn.className = 'btn ghost';
+
+  const setReconcileButtonsBusy = (activeBtn, idleBtn, busy, label) => {
+    if (busy) {
+      if (label) {
+        setButtonBusy?.(activeBtn, true, { label });
+      } else {
+        setButtonBusy?.(activeBtn, true);
+      }
+      setButtonBusy?.(idleBtn, true, { disableOnly: true });
+      return;
+    }
+    setButtonBusy?.(activeBtn, false);
+    setButtonBusy?.(idleBtn, false);
+  };
+
+  resumeBtn.onclick = () => {
+    setReconcileButtonsBusy(resumeBtn, endBtn, true, 'Resuming…');
+    try {
+      const hhmm = isoToHHMM(serverShift?.started_at) || nowHHMM();
+      window.startTime = hhmm;
+      try { localStorage.setItem('shiftActive','1'); } catch (_){ }
+      persistActiveShiftMeta?.(serverShift || null);
+      try { beginShift?.(); } catch(_){ }
+      setWqtShiftUiState?.('shift_active');
+      try { clearShiftRecoveryMode?.(); } catch(_){}
+      overlay.remove();
+    } finally {
+      setReconcileButtonsBusy(resumeBtn, endBtn, false);
+    }
+  };
+
   endBtn.onclick = async () => {
+    setReconcileButtonsBusy(endBtn, resumeBtn, true, 'Ending…');
     try {
       await window.WqtAPI?.endShiftSession?.({
         shiftId: serverShift?.id,
@@ -159,6 +181,7 @@ function showShiftReconcileModal(serverShift){
       console.error('[Reconcile] Failed to end server shift', err);
       showToast?.('Could not end shift on server. Try again.');
     } finally {
+      setReconcileButtonsBusy(endBtn, resumeBtn, false);
       try { clearShiftRecoveryMode?.(); } catch(_){}
       overlay.remove();
     }

@@ -122,6 +122,62 @@ if (typeof window !== 'undefined') {
   window.setSyncStatus = setSyncStatus;
   window.getSyncStatus = getSyncStatus;
 }
+
+function ensureBusySpinnerStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('wqt-busy-spinner-style')) return;
+  const style = document.createElement('style');
+  style.id = 'wqt-busy-spinner-style';
+  style.textContent =
+    '.wqt-busy-spinner{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;margin-right:6px;vertical-align:-2px;animation:wqt-spin 0.8s linear infinite;}' +
+    '@keyframes wqt-spin{to{transform:rotate(360deg);}}';
+  document.head.appendChild(style);
+}
+
+function setButtonBusy(btn, busy, opts) {
+  if (!btn) return;
+  const options = opts || {};
+  const label = options.label || 'Loading...';
+  const disableOnly = options.disableOnly === true;
+
+  if (busy) {
+    if (disableOnly) {
+      btn.disabled = true;
+      btn.dataset.wqtBusyDisableOnly = '1';
+      return;
+    }
+    if (btn.dataset.wqtOriginalHtml === undefined) {
+      btn.dataset.wqtOriginalHtml = btn.innerHTML;
+    }
+    if (btn.dataset.wqtOriginalText === undefined) {
+      btn.dataset.wqtOriginalText = btn.textContent || '';
+    }
+    ensureBusySpinnerStyle();
+    btn.innerHTML = `<span class="wqt-busy-spinner" aria-hidden="true"></span>${label}`;
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    return;
+  }
+
+  if (btn.dataset.wqtBusyDisableOnly === '1') {
+    btn.disabled = false;
+    delete btn.dataset.wqtBusyDisableOnly;
+    return;
+  }
+  if (btn.dataset.wqtOriginalHtml !== undefined) {
+    btn.innerHTML = btn.dataset.wqtOriginalHtml;
+    delete btn.dataset.wqtOriginalHtml;
+  } else if (btn.dataset.wqtOriginalText !== undefined) {
+    btn.textContent = btn.dataset.wqtOriginalText;
+  }
+  delete btn.dataset.wqtOriginalText;
+  btn.disabled = false;
+  btn.removeAttribute('aria-busy');
+}
+
+if (typeof window !== 'undefined') {
+  window.setButtonBusy = setButtonBusy;
+}
 // Helper: Overlay outbox entries onto locations (pending edits win)
 function overlayOutbox(locations, outboxEntries) {
   if (!Array.isArray(locations)) locations = [];
