@@ -178,10 +178,58 @@ function showShiftReconcileModal(serverShift){
   document.body.appendChild(overlay);
 }
 
+// ====== Boot harness (guarded init + debug) ======
+window.__WQT_BOOT_STEP = 'preload';
+window.__WQT_BOOT_ERROR = null;
+const WQT_DEBUG_BOOT = new URLSearchParams(window.location.search).get('debug') === '1';
+
+function ensureBootDebugBanner() {
+  if (!WQT_DEBUG_BOOT) return null;
+  let banner = document.getElementById('wqtBootDebugBanner');
+  if (banner) return banner;
+  banner = document.createElement('div');
+  banner.id = 'wqtBootDebugBanner';
+  banner.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:99999;background:#111827;color:#f9fafb;border:1px solid #374151;border-radius:6px;padding:6px 8px;font:12px/1.3 monospace;opacity:0.9;';
+  document.body.appendChild(banner);
+  return banner;
+}
+
+function updateBootDebugBanner() {
+  if (!WQT_DEBUG_BOOT) return;
+  const banner = ensureBootDebugBanner();
+  if (!banner) return;
+  const step = window.__WQT_BOOT_STEP || 'unknown';
+  const err = window.__WQT_BOOT_ERROR ? String(window.__WQT_BOOT_ERROR) : '';
+  banner.textContent = `boot=${step}${err ? ' err=' + err : ''}`;
+}
+
+function setBootStep(step) {
+  window.__WQT_BOOT_STEP = step;
+  updateBootDebugBanner();
+}
+
+function setBootError(err) {
+  window.__WQT_BOOT_ERROR = err ? (err.stack || err.message || String(err)) : null;
+  updateBootDebugBanner();
+}
+
+function showBootErrorBanner(err) {
+  let banner = document.getElementById('wqtBootErrorBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'wqtBootErrorBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;background:#7f1d1d;color:#fef2f2;padding:10px 14px;font:14px/1.4 system-ui,sans-serif;';
+    document.body.appendChild(banner);
+  }
+  const msg = err ? (err.message || String(err)) : 'Unknown boot error';
+  banner.textContent = `WQT failed to start: ${msg}`;
+}
+
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
     try {
+      setBootStep('init_start');
       // Login now handled by front-door (login.html + WQT_CURRENT_USER).
       // If this script is running, gateWqtByLogin has already ensured a user.
 
@@ -447,9 +495,12 @@ document.addEventListener('DOMContentLoaded', function () {
       // NOTE: We do NOT auto-save to backend on load per offline recovery design.
       // MainState is only POSTed for explicit actions (start order, log wrap, etc.).
       // Archives are handled separately via the pending ops queue.
+      setBootStep('init_ok');
     } catch (err) {
-      console.error(err);
-      showToast('Error on load: ' + (err.message || err));
+      setBootStep('init_failed');
+      setBootError(err);
+      console.error('[Boot] Fatal init error:', err);
+      showBootErrorBanner(err);
     }
   })();
 });
