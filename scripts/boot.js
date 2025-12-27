@@ -207,10 +207,16 @@ function isOnboardingComplete(me) {
 }
 
 function showShiftLengthOnboarding() {
+  if (typeof setWqtShiftUiState === 'function') {
+    setWqtShiftUiState('onboarding');
+    return;
+  }
+  const onboarding = document.getElementById('onboardingCard');
   const shift = document.getElementById('shiftCard');
   const active = document.getElementById('activeOrderCard');
   const done = document.getElementById('completedCard');
-  if (shift) shift.style.display = 'block';
+  if (onboarding) onboarding.style.display = 'block';
+  if (shift) shift.style.display = 'none';
   if (active) active.style.display = 'none';
   if (done) done.style.display = 'none';
 }
@@ -248,8 +254,13 @@ async function submitOnboardingShiftLength(hours) {
     applyDefaultShiftHours(res?.default_shift_hours || choice);
     window._wqtOnboardingComplete = true;
     window._wqtOnboardingBlocked = false;
-    if (typeof startShift === 'function') {
-      await startShift(choice);
+    if (typeof setWqtShiftUiState === 'function') {
+      setWqtShiftUiState('shift_home');
+    } else {
+      const onboarding = document.getElementById('onboardingCard');
+      const shift = document.getElementById('shiftCard');
+      if (onboarding) onboarding.style.display = 'none';
+      if (shift) shift.style.display = 'block';
     }
   } catch (err) {
     console.error('[Onboarding] Failed to save shift length', err);
@@ -326,8 +337,10 @@ document.addEventListener('DOMContentLoaded', function () {
         console.warn('[Boot] Active shift check failed:', err);
       }
       const onboarding = await ensureOnboardingFlow();
-      if (onboarding?.blocked) {
+      const onboardingBlocked = onboarding?.blocked === true;
+      if (onboardingBlocked) {
         hadShift = false;
+        setWqtShiftUiState?.('onboarding');
       } else {
         if (window.activeShiftSession && !startTime) {
           const hhmm = shiftIsoToHHMM(
@@ -341,9 +354,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const hasActiveShift = !!startTime
           || localStorage.getItem('shiftActive') === '1'
           || !!window.activeShiftSession?.id;
-        if (!hasActiveShift && typeof startShift === 'function') {
-          await startShift();
-          hadShift = !!startTime;
+        if (hasActiveShift && window.archived !== true) {
+          hadShift = true;
+          setWqtShiftUiState?.('shift_active');
+        } else {
+          hadShift = false;
+          setWqtShiftUiState?.('shift_home');
         }
       }
 
@@ -390,16 +406,12 @@ document.addEventListener('DOMContentLoaded', function () {
       applyProGate();
 
       // ── 5) Shift/Order shell visibility based on restored flags ───
-      const shift  = document.getElementById('shiftCard');
-      const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
 
-      const onboardingBlocked = window._wqtOnboardingBlocked === true;
-      if (window.archived !== true && (hadShift || (!onboardingBlocked && window._wqtOnboardingComplete === true))) {
-        if (shift)  shift.style.display  = 'none';
-        if (active) active.style.display = 'block';
-        if (done)   done.style.display   = (picks.length ? 'block' : 'none');
+      if (!onboardingBlocked && window.archived !== true && hadShift) {
+        if (done) done.style.display = (picks.length ? 'block' : 'none');
       } else {
+        if (done) done.style.display = 'none';
         // No shift yet → hide order-only controls by default
         ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
           const el = document.getElementById(id);

@@ -1,3 +1,7 @@
+## Codex Enforcement Rule
+All Codex tasks MUST begin by reading this file.
+If this file is not referenced in the task prompt, Codex must stop and report.
+
 # WQT Codex Contract (Evidence-First, Minimal-Diff)
 
 This contract governs how Codex/AI assistants operate inside the WQT repo. If a request conflicts with this contract, the contract wins.

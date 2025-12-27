@@ -256,6 +256,66 @@ if (typeof window !== 'undefined') {
   window.clearActiveShiftMeta = clearActiveShiftMeta;
 }
 
+function setWqtShiftUiState(nextState){
+  if (typeof document === 'undefined') return;
+  if (!nextState) return;
+  const prevState = window.__WQT_UI_STATE;
+  if (prevState === nextState) return;
+  window.__WQT_UI_STATE = nextState;
+  try { console.log(`[State] STATE -> ${nextState}`); } catch (_) {}
+
+  const onboarding = document.getElementById('onboardingCard');
+  const shiftHome  = document.getElementById('shiftCard');
+  const active     = document.getElementById('activeOrderCard');
+  const done       = document.getElementById('completedCard');
+  const shiftLog   = document.getElementById('shiftLogCard');
+  const tools      = document.getElementById('shift-tools-card');
+  const history    = document.getElementById('historyCard');
+  const manage     = document.getElementById('manageCustomersCard');
+
+  const show = (el, on) => {
+    if (!el) return;
+    el.style.display = on ? 'block' : 'none';
+  };
+
+  if (nextState === 'onboarding') {
+    show(onboarding, true);
+    show(shiftHome, false);
+    show(active, false);
+    show(done, false);
+    show(shiftLog, false);
+    show(tools, false);
+    show(history, false);
+    show(manage, false);
+    return;
+  }
+
+  if (nextState === 'shift_home') {
+    show(onboarding, false);
+    show(shiftHome, true);
+    show(active, false);
+    show(done, false);
+    show(shiftLog, false);
+    show(tools, true);
+    show(history, true);
+    return;
+  }
+
+  if (nextState === 'shift_active') {
+    show(onboarding, false);
+    show(shiftHome, false);
+    show(active, true);
+    show(done, true);
+    show(shiftLog, true);
+    show(tools, true);
+    show(history, true);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.setWqtShiftUiState = setWqtShiftUiState;
+}
+
 // Reset predictive ETA smoothing buffer
 function resetEtaSmoother(){
   etaSmooth = [];
@@ -1290,6 +1350,18 @@ function exitShiftNoArchive(){
     console.log('[exitShiftNoArchive] Persisted cleared state via saveAll()');
   }
 
+  if (typeof setWqtShiftUiState === 'function') {
+    setWqtShiftUiState('shift_home');
+  } else {
+    const shiftHome = document.getElementById('shiftCard');
+    const active = document.getElementById('activeOrderCard');
+    const done = document.getElementById('completedCard');
+    const shiftLog = document.getElementById('shiftLogCard');
+    if (shiftHome) shiftHome.style.display = 'block';
+    if (active) active.style.display = 'none';
+    if (done) done.style.display = 'none';
+    if (shiftLog) shiftLog.style.display = 'none';
+  }
   showToast?.('Shift ended.');
 
   // After exiting shift, repurpose the ghost button as a one-click restart

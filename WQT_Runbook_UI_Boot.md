@@ -1,3 +1,8 @@
+## UI Boot Authority
+All frontend/UI state decisions must conform to this runbook.
+If UI behavior conflicts, this document overrides ad-hoc logic.
+
+
 # WQT UI Boot & Interactivity Runbook
 
 Purpose: restore interactivity when the UI renders but clicks/buttons/tabs do nothing.
@@ -121,3 +126,6 @@ After patch:
 - Fix summary:
 - Verification:
 - Risks:
+
+## 6) Extra Rule's 
+- Any backend deploy that introduces new DB fields must have its migration applied in Neon before deploy.

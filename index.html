@@ -349,7 +349,7 @@
       </div>
     </div>
 
-    <div class="card" id="shiftCard">
+    <div class="card" id="onboardingCard" style="display:none;">
       <div class="row" style="align-items:flex-end;">
         <div class="col">
           <h3 class="card-h" style="text-align:center; margin:0 0 8px;">
@@ -372,6 +372,28 @@
             </button>
           </div>
           <div id="snapHint" class="hint"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="shiftCard">
+      <div class="row" style="align-items:flex-end;">
+        <div class="col">
+          <h3 class="card-h" style="text-align:center; margin:0 0 8px;">
+            Shift ready
+          </h3>
+          <div class="hint" style="margin:0; text-align:center;">
+            You're signed in. Start a shift to open the order form.
+          </div>
+          <div class="row" style="gap:8px; justify-content:center; margin-top:8px;">
+            <button
+              class="btn ok"
+              type="button"
+              style="min-width:180px;"
+              onclick="startShift()">
+              Start shift
+            </button>
+          </div>
         </div>
 
         <input id="tLen" type="number" value="9" style="display:none;">
@@ -650,7 +672,7 @@
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="historyCard">
       <div style="display:flex; gap:8px; justify-content:space-between; align-items:center; flex-wrap:wrap;">
         <h3 style="margin:0; font-size:14px; color:#9fb3c8;">History (daily archives)</h3>
         <div>

@@ -306,6 +306,7 @@ function beginShift(){
     );
     if (hhmm) startTime = hhmm;
   }
+  setWqtShiftUiState?.('shift_active');
   pickingCutoff = "";
   // Clean any pre-shift hints/notes
   clearStartHint?.();
