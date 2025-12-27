@@ -135,6 +135,7 @@ function showShiftReconcileModal(serverShift){
     try { localStorage.setItem('shiftActive','1'); } catch (_){ }
     persistActiveShiftMeta?.(serverShift || null);
     try { beginShift?.(); } catch(_){ }
+    setWqtShiftUiState?.('shift_active');
     try { clearShiftRecoveryMode?.(); } catch(_){}
     overlay.remove();
   };
@@ -201,9 +202,8 @@ function applyDefaultShiftHours(hours) {
 
 function isOnboardingComplete(me) {
   const version = Number(me?.onboarding_version) || 0;
-  const shiftHours = normalizeShiftHours(me?.default_shift_hours);
   const completedAt = !!me?.onboarding_completed_at;
-  return !!shiftHours && completedAt && version >= ONBOARDING_VERSION;
+  return completedAt && version >= ONBOARDING_VERSION;
 }
 
 function showShiftLengthOnboarding() {
