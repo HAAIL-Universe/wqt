@@ -143,6 +143,8 @@ class ShiftSession(Base):
     site = Column(Text, nullable=True)
     shift_type = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    scheduled_start_at = Column(DateTime(timezone=True), nullable=True)
+    actual_login_at = Column(DateTime(timezone=True), nullable=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
     total_units = Column(Integer, nullable=True)
     avg_rate = Column(Float, nullable=True)
@@ -241,6 +243,9 @@ class User(Base):
     hashed_pin = Column(Text, nullable=True)  # canonical hashed PIN
     display_name = Column(Text, nullable=True)
     role = Column(Text, nullable=False, default="picker")
+    default_shift_hours = Column(Integer, nullable=True)
+    onboarding_version = Column(Integer, nullable=False, server_default=text("0"))
+    onboarding_completed_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -811,6 +816,8 @@ def serialize_shift_session(shift: ShiftSession) -> Dict[str, Any]:
         "site": shift.site,
         "shift_type": shift.shift_type,
         "started_at": shift.started_at.isoformat() if shift.started_at else None,
+        "scheduled_start_at": shift.scheduled_start_at.isoformat() if shift.scheduled_start_at else None,
+        "actual_login_at": shift.actual_login_at.isoformat() if shift.actual_login_at else None,
         "ended_at": shift.ended_at.isoformat() if shift.ended_at else None,
         "total_units": shift.total_units,
         "avg_rate": shift.avg_rate,
@@ -844,6 +851,8 @@ def start_shift(
 ) -> int:
     if engine is None:
         return 0
+    now = datetime.now(timezone.utc)
+    scheduled_start_at = now.replace(minute=0, second=0, microsecond=0)
     session = get_session()
     try:
         existing = (
@@ -876,6 +885,9 @@ def start_shift(
             operator_name=operator_name,
             site=site,
             shift_type=shift_type,
+            started_at=now,
+            actual_login_at=now,
+            scheduled_start_at=scheduled_start_at,
         )
         session.add(shift)
         session.commit()
@@ -959,6 +971,8 @@ def get_recent_shifts(limit: int = 50, operator_id: Optional[str] = None) -> Lis
                 "site": s.site,
                 "shift_type": s.shift_type,
                 "started_at": s.started_at.isoformat() if s.started_at else None,
+                "scheduled_start_at": s.scheduled_start_at.isoformat() if s.scheduled_start_at else None,
+                "actual_login_at": s.actual_login_at.isoformat() if s.actual_login_at else None,
                 "ended_at": s.ended_at.isoformat() if s.ended_at else None,
                 "total_units": s.total_units,
                 "avg_rate": s.avg_rate,

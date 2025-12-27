@@ -178,6 +178,85 @@ function showShiftReconcileModal(serverShift){
   document.body.appendChild(overlay);
 }
 
+const ONBOARDING_VERSION = 1;
+
+function normalizeShiftHours(value) {
+  const n = parseInt(value, 10);
+  return (n === 9 || n === 10) ? n : null;
+}
+
+function applyDefaultShiftHours(hours) {
+  const h = normalizeShiftHours(hours);
+  if (!h) return null;
+  window._wqtDefaultShiftHours = h;
+  const lenEl = document.getElementById('tLen');
+  if (lenEl) {
+    lenEl.value = String(h);
+    lenEl.disabled = true;
+    lenEl.setAttribute('readonly', 'readonly');
+    lenEl.style.display = 'none';
+  }
+  return h;
+}
+
+function isOnboardingComplete(me) {
+  const version = Number(me?.onboarding_version) || 0;
+  const shiftHours = normalizeShiftHours(me?.default_shift_hours);
+  const completedAt = !!me?.onboarding_completed_at;
+  return !!shiftHours && completedAt && version >= ONBOARDING_VERSION;
+}
+
+function showShiftLengthOnboarding() {
+  const shift = document.getElementById('shiftCard');
+  const active = document.getElementById('activeOrderCard');
+  const done = document.getElementById('completedCard');
+  if (shift) shift.style.display = 'block';
+  if (active) active.style.display = 'none';
+  if (done) done.style.display = 'none';
+}
+
+async function ensureOnboardingFlow() {
+  if (!window.WqtAPI?.getMe) return { complete: true };
+  try {
+    const me = await WqtAPI.getMe();
+    applyDefaultShiftHours(me?.default_shift_hours);
+    const complete = isOnboardingComplete(me);
+    window._wqtOnboardingComplete = complete;
+    window._wqtOnboardingBlocked = !complete;
+    if (!complete) {
+      showShiftLengthOnboarding();
+      return { complete: false, blocked: true };
+    }
+    return { complete: true };
+  } catch (err) {
+    console.warn('[Onboarding] Failed to fetch profile', err);
+    window._wqtOnboardingComplete = true;
+    window._wqtOnboardingBlocked = false;
+    return { complete: true };
+  }
+}
+
+async function submitOnboardingShiftLength(hours) {
+  const choice = normalizeShiftHours(hours);
+  if (!choice) return;
+  if (!window.WqtAPI?.updateMe) {
+    showToast?.('Onboarding update is unavailable (backend offline).');
+    return;
+  }
+  try {
+    const res = await WqtAPI.updateMe({ default_shift_hours: choice });
+    applyDefaultShiftHours(res?.default_shift_hours || choice);
+    window._wqtOnboardingComplete = true;
+    window._wqtOnboardingBlocked = false;
+    if (typeof startShift === 'function') {
+      await startShift(choice);
+    }
+  } catch (err) {
+    console.error('[Onboarding] Failed to save shift length', err);
+    showToast?.('Could not save shift length. Try again.');
+  }
+}
+
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
@@ -223,7 +302,7 @@ document.addEventListener('DOMContentLoaded', function () {
       loadCustomCodes();
       loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
 
-      const hadShift = !!startTime;
+      let hadShift = !!startTime;
       const hadOpen  = !!(current && Number.isFinite(current.total));
 
       // ── 1b) Reconcile with backend shift session state ──────────
@@ -241,11 +320,31 @@ document.addEventListener('DOMContentLoaded', function () {
             // Local thought it was active, server does not → reset to clean slate
             exitShiftNoArchive?.();
             showTab?.('tracker');
-            openContractedStartPicker?.();
           }
         }
       } catch (err) {
         console.warn('[Boot] Active shift check failed:', err);
+      }
+      const onboarding = await ensureOnboardingFlow();
+      if (onboarding?.blocked) {
+        hadShift = false;
+      } else {
+        if (window.activeShiftSession && !startTime) {
+          const hhmm = shiftIsoToHHMM(
+            window.activeShiftSession.actual_login_at
+            || window.activeShiftSession.started_at
+            || window.activeShiftSession.scheduled_start_at
+            || window.activeShiftSession.start_time
+          );
+          if (hhmm) startTime = hhmm;
+        }
+        const hasActiveShift = !!startTime
+          || localStorage.getItem('shiftActive') === '1'
+          || !!window.activeShiftSession?.id;
+        if (!hasActiveShift && typeof startShift === 'function') {
+          await startShift();
+          hadShift = !!startTime;
+        }
       }
 
       // ── 2) Build customer dropdowns (safe post-restore) ───────────
@@ -295,7 +394,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
 
-      if (hadShift && window.archived !== true) {
+      const onboardingBlocked = window._wqtOnboardingBlocked === true;
+      if (window.archived !== true && (hadShift || (!onboardingBlocked && window._wqtOnboardingComplete === true))) {
         if (shift)  shift.style.display  = 'none';
         if (active) active.style.display = 'block';
         if (done)   done.style.display   = (picks.length ? 'block' : 'none');

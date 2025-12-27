@@ -1,7 +1,7 @@
 import os
 import uuid
 from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Query, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +19,7 @@ import json
 
 import logging
 VERSION = os.getenv("WQT_VERSION", "dev")
+CURRENT_ONBOARDING_VERSION = 1
 app = FastAPI(title="WQT Backend v1")
 
 # --- Route inventory logging (AUDIT_ROUTES=1) ---
@@ -143,6 +144,10 @@ class TokenPayload(BaseModel):
     exp: int
 
 
+class MeUpdatePayload(BaseModel):
+    default_shift_hours: int
+
+
 def create_access_token(user: User) -> str:
     expire = datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
     payload = {
@@ -186,6 +191,67 @@ def get_current_user(
 
     print(f"AUTH_DEBUG: current_user.id={user.id} username={user.username} role={user.role}")
     return user
+
+
+# -------------------------------------------------------------------
+# Current user profile (onboarding)
+# -------------------------------------------------------------------
+@app.get("/api/me")
+async def api_me(
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    return {
+        "username": current_user.username,
+        "operator_id": current_user.username,
+        "role": current_user.role,
+        "default_shift_hours": current_user.default_shift_hours,
+        "onboarding_version": current_user.onboarding_version,
+        "onboarding_completed_at": (
+            current_user.onboarding_completed_at.isoformat()
+            if current_user.onboarding_completed_at
+            else None
+        ),
+    }
+
+
+@app.patch("/api/me")
+async def api_me_update(
+    payload: MeUpdatePayload,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if payload.default_shift_hours not in (9, 10):
+        raise HTTPException(status_code=400, detail="default_shift_hours must be 9 or 10")
+    session = get_session()
+    try:
+        user = session.get(User, current_user.id)
+        if user is None:
+            user = session.query(User).filter(User.username == current_user.username).first()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        user.default_shift_hours = payload.default_shift_hours
+        user.onboarding_version = CURRENT_ONBOARDING_VERSION
+        user.onboarding_completed_at = datetime.now(timezone.utc)
+        session.commit()
+        logging.info(
+            "[OnboardingUpdate] user=%s default_shift_hours=%s onboarding_version=%s",
+            user.username,
+            user.default_shift_hours,
+            user.onboarding_version,
+        )
+        return {
+            "username": user.username,
+            "operator_id": user.username,
+            "role": user.role,
+            "default_shift_hours": user.default_shift_hours,
+            "onboarding_version": user.onboarding_version,
+            "onboarding_completed_at": (
+                user.onboarding_completed_at.isoformat()
+                if user.onboarding_completed_at
+                else None
+            ),
+        }
+    finally:
+        session.close()
 
 
 # -------------------------------------------------------------------

@@ -386,16 +386,7 @@ function openSharedPickModal(){
   document.getElementById('sharedModal').style.display = 'flex';
 }
 
-// ─── Dynamic Start Picker (contracted start) ──────────────────────────────────
-// NOTE: these globals are used by the "contracted start" modal logic
-window._chosenShiftLen = null;
-window._chosenStartHHMM = null;
-
-// Close the contracted-start modal
-function closeContractModal(){
-  const modal = document.getElementById('contractModal');
-  if (modal) modal.style.display = 'none';
-}
+// --- Time helpers (start/end snapping) ---
 
 // Snap a HH:MM value forward to the next 15-minute block
 function snapForwardQuarter(hhmm) {
@@ -428,25 +419,6 @@ function getEffectiveLiveEndHHMM(){
 }
 
 // === SharedPad Persistence + Auto-Hide Helpers ===
-
-// Open dynamic start picker with chosen shift length (e.g. 9h / 10h)
-function openDynamicStartPicker(len){
-  // Store today’s chosen shift length in the hidden field; no long-term preference
-  const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(len || 9);
-  openContractedStartPicker();
-}
-
-// Apply contracted start logic and log lateness for the day
-function applyContractedStart(hhmm){
-  // Delegate to the correct implementation in core-tracker-history.js if present
-  if (typeof window.applyContractedStart === 'function' && window.applyContractedStart !== applyContractedStart) {
-    window.applyContractedStart(hhmm);
-    return;
-  }
-  // Fallback: close modal if no implementation is found
-  closeContractModal();
-}
 
 // Open the Pro Settings modal (advanced config)
 function openProSettingsModal(){
@@ -927,35 +899,6 @@ function closeProSettingsModal(){
   if (!m) return;
   m.style.display = 'none';
 }
-// ─── Patch startShift to honour chosen HH:MM ──────────────────────────────────
-// We avoid changing your original logic; we just enforce startTime after startShift.
-(function wrapStartShiftToUseChosenStart(){
-  if (typeof startShift !== 'function') {
-    // If startShift isn't defined yet, retry after scripts finish loading
-    // (this makes the wrapper resilient to script ordering).
-    setTimeout(wrapStartShiftToUseChosenStart, 0);
-    return;
-  }
-  const _origStartShift = startShift;
-  startShift = function(len){
-    // If a chosen time exists, apply BEFORE calling original
-    // (in case original reads startTime for UI).
-    if (window._chosenStartHHMM) {
-      window.startTime = window._chosenStartHHMM;
-      try { localStorage.setItem('shiftActive','1'); } catch(e){}
-    }
-
-    _origStartShift.call(this, len);
-
-    // And ensure it sticks if original overwrote it
-    if (window._chosenStartHHMM) {
-      window.startTime = window._chosenStartHHMM;
-      try { localStorage.setItem('shiftActive','1'); } catch(e){}
-      // Clear the choice so future shifts use live snapping again
-      window._chosenStartHHMM = null;
-    }
-  };
-})();
 
 // Add a units entry to the Shared Pick modal and update summary
 function sharedAddUnits() {
@@ -1491,9 +1434,6 @@ const MAP_ADMIN_CODE = '1111';
 
 let proUnlocked  = false;  // Gate: Export/Import/Manage Customers
 
-// Persisted preference: one-time shift length (hours)
-const SHIFT_PREF = 'wqt.shiftLenH';
-
 // Extra safety net save (very infrequent; use debounced saver)
 setInterval(function(){ saveAllDebounced(0); }, 30000);
 
@@ -1501,16 +1441,6 @@ setInterval(function(){ saveAllDebounced(0); }, 30000);
 function clearStartHint(){
   const hint = document.getElementById('snapHint');
   if (hint) hint.textContent = '';
-}
-
-// Fetch stored 9h/10h preference (or null)
-function getShiftPref(){
-  const v = localStorage.getItem(SHIFT_PREF);
-  const n = parseInt(v, 10);
-  return (n === 9 || n === 10) ? n : null;
-}
-function setShiftPref(n){
-  if (n === 9 || n === 10) localStorage.setItem(SHIFT_PREF, String(n));
 }
 
 // ---- Lateness logging ----
