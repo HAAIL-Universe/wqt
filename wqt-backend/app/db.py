@@ -149,6 +149,8 @@ class ShiftSession(Base):
     duration_minutes = Column(Integer, nullable=True)
     active_minutes = Column(Integer, nullable=True)
     summary_json = Column(Text, nullable=True)
+    state_version = Column(Integer, nullable=False, default=0)
+    active_order_snapshot = Column(Text, nullable=True)  # JSON string for now
 
 
 class OrderRecord(Base):

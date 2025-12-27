@@ -79,26 +79,13 @@ function logoutAndReset() {
   localStorage.removeItem('weekCardCollapsed');
   localStorage.removeItem('proUnlocked');
 
-  // FIX: Clear pending operations queue to prevent replay under wrong user
-  try {
-    if (window.Storage && typeof Storage.savePendingOps === 'function') {
-      Storage.savePendingOps([]);
-      console.log('[logout] Cleared pending ops queue');
-    }
-  } catch (e) {
-    console.warn('[logout] Failed to clear pending ops:', e);
-  }
-
   console.log('[logout] Full reset complete - redirecting to login');
 
   // OPTIONAL: reset device identity if you want fresh devices each time
   // localStorage.removeItem('wqt_device_id'); 
 
-  // FIX: Delay redirect to allow DOM/state teardown to complete (iOS PWA fix)
-  // requestAnimationFrame ensures all pending UI updates finish before navigation
-  requestAnimationFrame(() => {
-    window.location.href = 'login.html';
-  });
+  // Redirect to login screen
+  window.location.href = 'login.html';
 }
 
 // Convert ISO timestamp to HH:MM local for reconciliation flows
@@ -191,45 +178,6 @@ function showShiftReconcileModal(serverShift){
   document.body.appendChild(overlay);
 }
 
-// ====== iOS bfcache Handler (FIX for PWA page restore) ======
-// iOS Safari aggressively uses back-forward cache (bfcache).
-// When a page is restored from bfcache, DOMContentLoaded doesn't fire again,
-// but the page may be in a stale auth state. This handler re-validates.
-window.addEventListener('pageshow', function(event) {
-  if (event.persisted) {
-    // Page restored from bfcache
-    console.log('[iOS bfcache] Page restored from cache, re-validating auth...');
-    
-    const path = (window.location && window.location.pathname) || '';
-    const onLoginPage = path.includes('login');
-    
-    if (!onLoginPage) {
-      try {
-        const raw = localStorage.getItem('WQT_CURRENT_USER');
-        if (!raw) {
-          console.warn('[iOS bfcache] No auth found after restore - redirecting to login');
-          window.location.href = 'login.html';
-          return;
-        }
-        
-        const user = JSON.parse(raw);
-        if (!user || !user.userId) {
-          console.warn('[iOS bfcache] Invalid user after restore - redirecting to login');
-          localStorage.removeItem('WQT_CURRENT_USER');
-          window.location.href = 'login.html';
-          return;
-        }
-        
-        console.log('[iOS bfcache] Auth valid after restore, continuing...');
-        window.WQT_CURRENT_USER = user;
-      } catch (e) {
-        console.error('[iOS bfcache] Auth validation error:', e);
-        window.location.href = 'login.html';
-      }
-    }
-  }
-});
-
 // ====== Boot ======
 document.addEventListener('DOMContentLoaded', function () {
   (async () => {
@@ -249,15 +197,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
       // ── 1) Try to hydrate from backend (then localStorage) ────────
       if (window.WqtAPI && typeof WqtAPI.loadInitialState === 'function') {
+        setHydrated(false);
         try {
-          // This will:
-          //  - GET /api/state
-          //  - On success: write into localStorage via Storage.saveMain()
-          //  - On failure: fall back to Storage.loadMain()
-          await WqtAPI.loadInitialState();
+          // GET /api/shift/{shift_id}/state for hydration
+          const shiftId = window.activeShiftSession?.id;
+          let serverState = null;
+          if (shiftId) {
+            serverState = await WqtAPI.getShiftStateWithVersion(shiftId);
+            // Hydrate open order from server snapshot
+            if (serverState?.active_order_snapshot) {
+              window.current = serverState.active_order_snapshot;
+            }
+            window._wqtStateVersion = serverState?.state_version || 0;
+          }
+          setHydrated(true);
         } catch (e) {
           console.warn('[Boot] Backend load failed, continuing local-only', e);
+          setHydrated(true); // fallback: allow local-only
         }
+      } else {
+        setHydrated(true);
       }
 
       // ── 2) Restore persisted state from localStorage ──────────────
@@ -282,8 +241,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Local thought it was active, server does not → reset to clean slate
             exitShiftNoArchive?.();
             showTab?.('tracker');
-            // No modal, no user interaction; optionally re-init startTime
-            if (!window.startTime) window.startTime = nowHHMM();
+            openContractedStartPicker?.();
           }
         }
       } catch (err) {
@@ -333,15 +291,21 @@ document.addEventListener('DOMContentLoaded', function () {
       applyProGate();
 
       // ── 5) Shift/Order shell visibility based on restored flags ───
-
+      const shift  = document.getElementById('shiftCard');
       const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
-      const shiftLog = document.getElementById('shiftLogCard');
 
-      // Always show tracker cards immediately, regardless of shift state
-      if (active) active.style.display = 'block';
-      if (done)   done.style.display   = (picks.length ? 'block' : 'none');
-      if (shiftLog) shiftLog.style.display = 'block';
+      if (hadShift && window.archived !== true) {
+        if (shift)  shift.style.display  = 'none';
+        if (active) active.style.display = 'block';
+        if (done)   done.style.display   = (picks.length ? 'block' : 'none');
+      } else {
+        // No shift yet → hide order-only controls by default
+        ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'none';
+        });
+      }
 
       renderShiftPanel?.();
 

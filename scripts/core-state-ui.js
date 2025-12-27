@@ -1,3 +1,179 @@
+// ===== SYNC STATUS MAP: must be defined before any usage =====
+const SYNC_STATUS_MAP = {
+  synced:   { color: '#9fd6a5', icon: '🟢', text: 'Saved' },
+  pending:  { color: '#e6cf8a', icon: '🟡', text: 'Offline / Pending' },
+  syncing:  { color: '#8ab6e6', icon: '🔵', text: 'Syncing…' },
+  error:    { color: '#e49b9b', icon: '🔴', text: 'Sync Error' },
+  loading:  { color: '#aaa', icon: '⏳', text: 'Loading…' }
+};
+
+// ===== HYDRATION GATE =====
+window._wqtHydrated = false;
+
+function setHydrated(val) {
+  window._wqtHydrated = !!val;
+  setSyncStatus(val ? 'synced' : 'loading');
+}
+
+function isHydrated() {
+  return !!window._wqtHydrated;
+}
+
+// ==================== TAB CLOSE BLOCKER FOR UNSYNCED CHANGES ====================
+
+// ==================== VISIBILITY & ONLINE SYNC TRIGGERS ====================
+if (typeof window !== 'undefined') {
+  // When the tab becomes visible, trigger a force sync
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && window.WqtAPI && typeof window.WqtAPI.forceSync === 'function') {
+      window.WqtAPI.forceSync();
+    }
+  });
+  // When the browser comes online, trigger a force sync
+  window.addEventListener('online', function () {
+    if (window.WqtAPI && typeof window.WqtAPI.forceSync === 'function') {
+      window.WqtAPI.forceSync();
+    }
+  });
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', function (e) {
+    if (typeof window.getSyncStatus === 'function' && window.getSyncStatus() !== 'synced') {
+      // Standard message is ignored by most browsers, but setting returnValue triggers the dialog
+      const msg = 'You have unsynced changes. Are you sure you want to leave?';
+      e.preventDefault();
+      e.returnValue = msg;
+      return msg;
+    }
+  });
+}
+let _currentSyncStatus = 'synced';
+
+function setSyncStatus(status) {
+  if (!SYNC_STATUS_MAP[status]) status = 'error';
+  _currentSyncStatus = status;
+  const dot = document.getElementById('syncStatusIndicator');
+  const label = document.getElementById('syncStatusText');
+  const text = SYNC_STATUS_MAP[status].text;
+  if (dot) {
+    dot.className = 'sync-dot is-' + (status === 'synced' ? 'saved' : status);
+    dot.setAttribute('title', text);
+    dot.setAttribute('aria-label', text);
+  }
+  if (label) {
+    label.textContent = text;
+    label.setAttribute('title', text);
+    label.setAttribute('aria-label', text);
+  }
+}
+
+// Defensive: block all save/sync routines if not hydrated
+function canSyncOrSave() {
+  return isHydrated();
+}
+
+// PATCH: send base_version and handle 409
+async function saveShiftState(payload) {
+  if (!canSyncOrSave()) {
+    setSyncStatus('loading');
+    return;
+  }
+  setSyncStatus('syncing');
+  try {
+    const shiftId = window.activeShiftSession?.id;
+    const baseVersion = window._wqtStateVersion || 0;
+    const resp = await fetch(`/api/shift/${shiftId}/state`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, base_version: baseVersion, request_id: genRequestId(), device_id: getDeviceIdSafe() })
+    });
+    if (resp.status === 409) {
+      setSyncStatus('error');
+      const data = await resp.json();
+      // Conflict: rehydrate from server
+      if (data?.server_state) {
+        window.current = data.server_state.active_order_snapshot;
+        window._wqtStateVersion = data.server_state.state_version;
+        setSyncStatus('synced');
+      }
+      return;
+    }
+    if (resp.ok) {
+      const data = await resp.json();
+      window._wqtStateVersion = data.state_version;
+      setSyncStatus('synced');
+    } else {
+      setSyncStatus('error');
+    }
+  } catch (e) {
+    setSyncStatus('error');
+  }
+}
+
+function genRequestId() {
+  return 'req_' + Math.random().toString(36).slice(2,10) + '_' + Date.now();
+}
+
+function getSyncStatus() {
+  return _currentSyncStatus;
+}
+
+if (typeof window !== 'undefined') {
+  window.setSyncStatus = setSyncStatus;
+  window.getSyncStatus = getSyncStatus;
+}
+// Helper: Overlay outbox entries onto locations (pending edits win)
+function overlayOutbox(locations, outboxEntries) {
+  if (!Array.isArray(locations)) locations = [];
+  if (!Array.isArray(outboxEntries)) outboxEntries = [];
+  const byCode = {};
+  locations.forEach(loc => {
+    if (loc && loc.code) byCode[loc.code] = { ...loc };
+  });
+  outboxEntries.forEach(entry => {
+    if (entry && entry.code) {
+      // Overlay or add new
+      byCode[entry.code] = {
+        ...(byCode[entry.code] || {}),
+        ...entry,
+        // Outbox always sets is_empty, but preserve other fields if present
+      };
+    }
+  });
+  return Object.values(byCode);
+}
+
+// Helper: Load aisle locations from cache if offline, else from server
+async function loadAisleLocations(aisle, mappingMode) {
+  const warehouseId = getActiveWarehouseId();
+  const fetchFn = window?.WqtAPI?.fetchLocationsByAisle;
+  let locations = [];
+  let fromCache = false;
+  if (typeof fetchFn === 'function') {
+    try {
+      const res = await fetchFn(warehouseId, aisle, !mappingMode ? true : false);
+      if (Array.isArray(res?.locations)) {
+        locations = res.locations;
+        // Save to cache for offline use
+        if (window.WqtStorage?.saveWarehouseMapCache) {
+          const cache = window.WqtStorage.loadWarehouseMapCache();
+          res.locations.forEach(loc => {
+            if (loc && loc.code) cache.locations_by_code[loc.code] = { ...loc };
+          });
+          window.WqtStorage.saveWarehouseMapCache(cache);
+        }
+      }
+    } catch (err) {
+      fromCache = true;
+    }
+  } else {
+    fromCache = true;
+  }
+  if (fromCache && window.WqtStorage?.getLocationsForAisle) {
+    locations = window.WqtStorage.getLocationsForAisle(aisle);
+  }
+  return locations;
+}
 // ====== State ======
 
 // Closed orders (completed picks)
@@ -143,6 +319,19 @@ function refreshSummaryChips(main) {
   setSummarySideStatus(perfSide, perfStatus);
   renderPerfScoreTrend(perfScoreDelta, perfStatus);
   window.perfScoreDelta = perfScoreDelta;
+
+  // === Set gradient colors on #chipRate ===
+  const chipRate = document.getElementById('chipRate');
+  if (chipRate) {
+    // Map status to RGBA color (same as old CSS)
+    const statusToColor = {
+      'status-green': 'rgba(34,197,94,0.18)',
+      'status-amber': 'rgba(251,191,36,0.18)',
+      'status-red': 'rgba(239,68,68,0.18)'
+    };
+    chipRate.style.setProperty('--lr-grad', statusToColor[liveStatus] || 'rgba(34,197,94,0.18)');
+    chipRate.style.setProperty('--ps-grad', statusToColor[perfStatus] || 'rgba(34,197,94,0.18)');
+  }
 }
 
 // Patch updateSummary to also refresh the summary chips
@@ -203,7 +392,10 @@ window._chosenShiftLen = null;
 window._chosenStartHHMM = null;
 
 // Close the contracted-start modal
-
+function closeContractModal(){
+  const modal = document.getElementById('contractModal');
+  if (modal) modal.style.display = 'none';
+}
 
 // Snap a HH:MM value forward to the next 15-minute block
 function snapForwardQuarter(hhmm) {
@@ -238,51 +430,22 @@ function getEffectiveLiveEndHHMM(){
 // === SharedPad Persistence + Auto-Hide Helpers ===
 
 // Open dynamic start picker with chosen shift length (e.g. 9h / 10h)
-  // Contracted start picker removed; no-op
-  return;
+function openDynamicStartPicker(len){
+  // Store today’s chosen shift length in the hidden field; no long-term preference
+  const lenEl = document.getElementById('tLen');
+  if (lenEl) lenEl.value = String(len || 9);
+  openContractedStartPicker();
 }
 
 // Apply contracted start logic and log lateness for the day
-
-  const prefLen = getShiftPref() || 9;
-  const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(prefLen);
-
-  // Backward compatible: numeric hour → HH:00, else use string
-  const contracted = (typeof hhmm === 'number')
-    ? ((hhmm<10?'0':'') + hhmm + ':00')
-    : String(hhmm);
-
-  const actual = nowHHMM();
-  const cMin = hmToMin(contracted);
-  const aMin = hmToMin(actual);
-
-  // Effective start = contracted if on-time/early; else actual if late
-  const effectiveMin = (aMin <= cMin) ? cMin : aMin;
-  const effectiveHM  = minToHm(effectiveMin);
-
-  // Baseline live rate anchor: shift "start"
-  startTime = effectiveHM;
-
-  // Lateness log (per-day record of contracted vs actual)
-  const lateMin = aMin - cMin;
-  try {
-    const day = new Date().toISOString().slice(0,10);
-    const raw = localStorage.getItem(LATE_LOG_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    obj[day] = { contracted, actual, effective: effectiveHM, lateMin, shiftLen: prefLen };
-    localStorage.setItem(LATE_LOG_KEY, JSON.stringify(obj));
-  } catch(e) {}
-
-  // Proceed to S2 and show note
-  beginShift();
-  if (typeof updateSummary === 'function') updateSummary();
-
-  // Human-readable lateness text for the pre-order note
-  let note = 'on time';
-  if (lateMin > 0)      note = `${lateMin}m late`;
-  else if (lateMin < 0) note = `${-lateMin}m early`;
-  showPreOrderNote?.(`Contracted ${hmTo12(contracted)} • Actual ${hmTo12(actual)} (${note})`);
+function applyContractedStart(hhmm){
+  // Delegate to the correct implementation in core-tracker-history.js if present
+  if (typeof window.applyContractedStart === 'function' && window.applyContractedStart !== applyContractedStart) {
+    window.applyContractedStart(hhmm);
+    return;
+  }
+  // Fallback: close modal if no implementation is found
+  closeContractModal();
 }
 
 // Open the Pro Settings modal (advanced config)
@@ -643,10 +806,7 @@ function toggleOperative(){
 // Start an Operative block (non-picking work)
 // NOTE: shift must be started; we do not auto-start a shift here.
 function startOperative(){
-  if (!startTime) {
-    startTime = nowHHMM();
-    beginShift?.();
-  }
+  if (!startTime) { showToast('Start your shift first'); return; }
   if (operativeActive) return;
 
   // ensure log exists
@@ -1153,12 +1313,6 @@ function exitShiftNoArchive(){
   }
 
   // UI → Start Shift screen
-  const shiftCard  = document.getElementById('shiftCard');
-  const activeCard = document.getElementById('activeOrderCard');
-  const doneCard   = document.getElementById('completedCard');
-  if (shiftCard)  shiftCard.style.display  = 'block';
-  if (activeCard) activeCard.style.display = 'none';
-  if (doneCard)   doneCard.style.display   = 'none';
 
   const hdrForm = document.getElementById('orderHeaderForm');
   const hdrProg = document.getElementById('orderHeaderProgress');
@@ -1353,23 +1507,11 @@ function clearStartHint(){
 function getShiftPref(){
   const v = localStorage.getItem(SHIFT_PREF);
   const n = parseInt(v, 10);
-  return (Number.isFinite(n) && n > 0) ? n : 9;
+  return (n === 9 || n === 10) ? n : null;
 }
 function setShiftPref(n){
-  n = parseInt(n, 10);
-  if (Number.isFinite(n) && n > 0) localStorage.setItem(SHIFT_PREF, String(n));
+  if (n === 9 || n === 10) localStorage.setItem(SHIFT_PREF, String(n));
 }
-
-// Wire contracted-hours input in Pro Tools modal
-document.addEventListener('DOMContentLoaded', function() {
-  const input = document.getElementById('contractedHoursInput');
-  if (input) {
-    input.value = getShiftPref();
-    input.addEventListener('change', function() {
-      setShiftPref(input.value);
-    });
-  }
-});
 
 // ---- Lateness logging ----
 const LATE_LOG_KEY = 'wqt.lateLog'; // { "YYYY-MM-DD": {contracted, actual, lateMin, shiftLen} }
@@ -2104,6 +2246,15 @@ function saveAll(){
   }
 }
 
+// Debounced version of saveAll to avoid excessive saves
+let saveAllDebounceTimer = null;
+function saveAllDebounced(delay = 300) {
+  if (saveAllDebounceTimer) clearTimeout(saveAllDebounceTimer);
+  saveAllDebounceTimer = setTimeout(() => {
+    saveAll();
+  }, delay);
+}
+
 // Custom codes
 function loadCustomCodes(){
   try{
@@ -2272,8 +2423,9 @@ function updCalcGate() {
   if (digits.endsWith(OPER_UNLOCK_CODE) && digits.length >= OPER_UNLOCK_CODE.length) {
     inp.value = '';
     if (!startTime) {
-      startTime = nowHHMM();
-      beginShift?.();
+      showToast('Start your shift first');
+      // openContractedStartPicker?.();  // optional
+      return;
     }
     openOperativeModal();
     return;
@@ -2448,6 +2600,8 @@ function initUpdateBasePanel() {
 }
 
 function initUpdateBaysModal() {
+    // Also refresh pending count on modal open
+    refreshBayPendingCountUI();
   const btnUpdateBays = document.getElementById('btnUpdateBays');
   const updateBayModal = document.getElementById('updateBayModal');
   const updateBayCodeInput = document.getElementById('updateBayCodeInput');
@@ -2471,26 +2625,25 @@ function initUpdateBaysModal() {
     if (!updateBayCodeInput) return;
     const rawCode = updateBayCodeInput.value.trim();
     if (!rawCode) return;
-
-    const code = rawCode; // If DB stores prefixes, add normalization here.
-
-    try {
-      const res = await window?.WqtAPI?.toggleLocationEmpty?.(code);
-      if (res && res.success) {
-        const stateLabel = res.is_empty ? 'empty' : 'full';
-        showToast?.(`Marked ${rawCode} as ${stateLabel}`);
-        hideUpdateBayModal();
-        if (wmActiveAisle) {
-          selectAisle(wmActiveAisle);
-        }
-      } else {
-        showToast?.(res?.message || 'Location not found');
-      }
-    } catch (err) {
-      console.warn('[UpdateBays] Failed to toggle location', err);
-      showToast?.('Failed to update location');
-    }
+    const code = window.WqtStorage?.normalizeLocationCode?.(rawCode) || rawCode;
+    const isEmptyEl = document.getElementById('bayIsEmptyCheckbox');
+    const palletTypeEl = document.getElementById('bayPalletTypeSelect');
+    const is_empty = isEmptyEl ? !!isEmptyEl.checked : true;
+    const pallet_type = palletTypeEl ? palletTypeEl.value : 'UK';
+    const result = window.WqtStorage?.queueBayUpdate?.({ code, is_empty, pallet_type });
+    hideUpdateBayModal();
+    showToast?.(`Saved locally. Pending: ${result?.count ?? 1}`);
+    refreshBayPendingCountUI();
   };
+
+// --- Bay Outbox UI helpers ---
+function refreshBayPendingCountUI() {
+  const el = document.getElementById('bayPendingCount');
+  if (!el || !window.WqtStorage) return;
+  const n = window.WqtStorage.getBayOutboxCount?.() || 0;
+  el.textContent = `Pending: ${n}`;
+  el.style.display = n > 0 ? '' : 'none';
+}
 
   if (btnUpdateBays && !btnUpdateBays.dataset.wired) {
     btnUpdateBays.dataset.wired = '1';
@@ -2728,15 +2881,23 @@ async function selectAisle(aisle) {
 
   const warehouseId = getActiveWarehouseId();
   const mappingMode = !!window.rowGeneratorUnlocked;
+  let locations = [];
   try {
-    const fetchFn = window?.WqtAPI?.fetchLocationsByAisle;
-    if (typeof fetchFn !== 'function') throw new Error('API missing');
-    const res = await fetchFn(warehouseId, aisle, !mappingMode ? true : false);
-    renderAisleList(res?.locations || [], { mappingMode });
+    locations = await loadAisleLocations(aisle, mappingMode);
   } catch (err) {
     console.warn('[Warehouse Map] Failed to load aisle locations', err);
     if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';
+    locations = [];
   }
+  // Overlay outbox
+  let outbox = [];
+  if (window.WqtStorage?.listBayOutboxUpdates) {
+    outbox = window.WqtStorage.listBayOutboxUpdates();
+    // Only include outbox entries for this aisle
+    outbox = outbox.filter(e => e && e.code && (locations.some(l => l.code === e.code) || (e.aisle === aisle || (e.code && e.code[0] === aisle))));
+  }
+  const merged = overlayOutbox(locations, outbox);
+  renderAisleList(merged, { mappingMode });
 }
 
 async function refreshWarehouseAisleBrowser() {
@@ -3265,3 +3426,4 @@ async function refreshSupervisorDashboard() {
     }
   }
 }
+

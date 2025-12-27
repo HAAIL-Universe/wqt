@@ -41,14 +41,27 @@ function updateSummary(){
   const progress   = currentOrderUnitsDone();
   const totalUnits = closedUnits + progress;
 
-  const s       = hm(getSnappedStartHHMM());
-  const endHHMM = getEffectiveLiveEndHHMM();
-  const e       = hm(endHHMM);
-  const live    = (!isNaN(s) && !isNaN(e) && e > s)
-    ? Math.round(totalUnits / (e - s))
-    : 0;
+  // Calculate pick rate duration from shift start to last pick time (not now)
+  let shiftStartMs = null;
+  if (typeof startTime === 'string' && startTime.length >= 4) {
+    // Parse HH:MM to ms since epoch (today)
+    const [h, m] = startTime.split(':').map(Number);
+    const now = new Date();
+    shiftStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0, 0).getTime();
+  }
+  let lastPickMs = null;
+  if (Array.isArray(picks) && picks.length > 0 && picks[picks.length-1].timestamp) {
+    lastPickMs = new Date(picks[picks.length-1].timestamp).getTime();
+  }
+  const endMs = lastPickMs || Date.now();
+  let durationMs = (shiftStartMs && endMs > shiftStartMs) ? (endMs - shiftStartMs) : 0;
+  // Minimum duration: 1 minute
+  if (durationMs < 60000) durationMs = 60000;
+  const hours = durationMs / (1000 * 60 * 60);
+  const live = Math.round(totalUnits / hours);
 
-  const shiftLen = (typeof getShiftPref === 'function' ? getShiftPref() : 9);
+  const tLenEl  = document.getElementById('tLen');
+  const shiftLen= parseFloat(tLenEl?.value || '9');
   const dayAvg  = shiftLen > 0 ? Math.round(totalUnits / shiftLen) : 0; // kept for future tiles if needed
 
   const chipRate = document.getElementById('chipRate');
@@ -62,9 +75,7 @@ function updateSummary(){
   if (totalEl) totalEl.textContent = totalUnits;
 
   // elapsedMin/hours are implicitly used by other tiles; no extra DOM here
-  const elapsedMin = (!isNaN(s) && !isNaN(e) && e > s)
-    ? Math.round((e - s) * 60)
-    : 0;
+  const elapsedMin = Math.round(durationMs / 60000);
   const eh = Math.floor(elapsedMin / 60), em = elapsedMin % 60;
   // (eh/em kept for future display if you want an elapsed chip)
 

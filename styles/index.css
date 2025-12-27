@@ -1,3 +1,49 @@
+/* Subtle sync indicator dot inside User tab */
+
+/* User tab with right-aligned sync status cluster */
+.tab-user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 160px;
+  padding: 0 12px;
+}
+.tab-left {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.tab-right.user-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+.sync-text {
+  font-size: 12px;
+  opacity: 0.75;
+  white-space: nowrap;
+  min-width: 60px;
+  text-align: right;
+  transition: color 0.2s;
+}
+.sync-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  opacity: .85;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.25);
+  pointer-events: none;
+  display: inline-block;
+  margin-left: 2px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.sync-dot.is-saved { background: #2ee86f; }
+.sync-dot.is-pending { background: #f7c948; }
+.sync-dot.is-error { background: #ff5c5c; }
+.sync-dot.is-idle { background: rgba(255,255,255,.25); opacity: .5; }
 /* Live Rate summary chip: dual-side layout */
 .summary-chip-dual {
   display: flex;
@@ -101,21 +147,21 @@
 }
 
 .summary-chip-side.status-green {
-  background-color: rgba(34, 197, 94, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.45);
-  border-radius: 12px;
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .summary-chip-side.status-amber {
-  background-color: rgba(251, 191, 36, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.40);
-  border-radius: 12px;
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .summary-chip-side.status-red {
-  background-color: rgba(239, 68, 68, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.42);
-  border-radius: 12px;
+  background: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .summary-chip-side.status-green .perf-score-trend,
@@ -451,6 +497,28 @@ h3, h4 {
 
 /* Make the Live Rate chip clearly clickable */
 #chipRate { cursor: pointer; transition: transform .08s ease; }
+#chipRate {
+  position: relative;
+  overflow: hidden;
+}
+#chipRate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    var(--lr-grad,rgba(34,197,94,0.18)) 0%,
+    var(--lr-grad,rgba(34,197,94,0.18)) 10%,
+    var(--ps-grad,rgba(34,197,94,0.18)) 90%,
+    var(--ps-grad,rgba(34,197,94,0.18)) 100%
+  );
+  /* fallback: both ends green, will be set by JS */
+}
+#chipRate > * {
+  position: relative;
+  z-index: 1;
+}
 #chipRate:active { transform: scale(0.97); }
 
 /* QC keypad tactile press + pointer */

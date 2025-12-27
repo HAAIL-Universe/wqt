@@ -1,8 +1,9 @@
 import os
+import uuid
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, Query, HTTPException, Depends, status
+from fastapi import FastAPI, Query, HTTPException, Depends, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -10,6 +11,80 @@ from jose import JWTError, jwt
 from fastapi.responses import JSONResponse
 
 from .models import MainState
+import json
+
+# -------------------------------------------------------------------
+# CORS
+# -------------------------------------------------------------------
+
+import logging
+VERSION = os.getenv("WQT_VERSION", "dev")
+app = FastAPI(title="WQT Backend v1")
+
+# --- Route inventory logging (AUDIT_ROUTES=1) ---
+if os.getenv("AUDIT_ROUTES", "0") == "1":
+    @app.on_event("startup")
+    async def log_routes():
+        print("[AUDIT] Route inventory:")
+        for route in app.routes:
+            methods = ','.join(sorted(route.methods))
+            print(f"  {methods:10s} {route.path}")
+
+# --- 404 logging middleware ---
+@app.middleware("http")
+async def log_404_middleware(request, call_next):
+    response = await call_next(request)
+    if response.status_code == 404:
+        logging.warning(f"404 Not Found: {request.method} {request.url.path}")
+    return response
+
+# --- Root endpoint (GET /, HEAD /) ---
+@app.get("/")
+async def root():
+    return {"service": "wqt-backend", "status": "ok", "version": VERSION}
+
+@app.head("/")
+async def root_head():
+    return {"service": "wqt-backend", "status": "ok", "version": VERSION}
+
+def get_shift_state_with_version(shift_id):
+    # Fetch shift session and return state_version and active_order_snapshot
+    from .db import get_session, ShiftSession
+    db = get_session()
+    shift = db.query(ShiftSession).filter(ShiftSession.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    return {
+        "state_version": shift.state_version,
+        "active_order_snapshot": json.loads(shift.active_order_snapshot or '{}'),
+        "shift_id": shift.id
+    }
+
+@app.patch("/api/shift/{shift_id}/state")
+async def patch_shift_state(shift_id: int, payload: Dict[str, Any], base_version: int = None, explicit_clear_active_order: bool = False, request_id: str = None, device_id: str = None):
+    from .db import get_session, ShiftSession
+    db = get_session()
+    shift = db.query(ShiftSession).filter(ShiftSession.id == shift_id).first()
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    # Version check
+    if base_version is not None and base_version != shift.state_version:
+        # Log conflict
+        print(f"[PATCH CONFLICT] request_id={request_id} device_id={device_id} shift_id={shift_id} base_version={base_version} current_version={shift.state_version}")
+        return JSONResponse(status_code=409, content={"detail": "Version conflict", "server_state": get_shift_state_with_version(shift_id)})
+    # Defensive clear guard
+    incoming_order = payload.get("active_order_snapshot")
+    if (shift.active_order_snapshot and not incoming_order) and not explicit_clear_active_order:
+        # Log blocked clear
+        print(f"[PATCH BLOCKED CLEAR] request_id={request_id} device_id={device_id} shift_id={shift_id} - attempted clear without explicit flag")
+        return JSONResponse(status_code=409, content={"detail": "Blocked destructive clear", "server_state": get_shift_state_with_version(shift_id)})
+    # Apply patch
+    if incoming_order is not None:
+        shift.active_order_snapshot = json.dumps(incoming_order)
+    # ...apply other fields as needed...
+    shift.state_version += 1
+    db.commit()
+    return {"ok": True, "state_version": shift.state_version}
 from .storage import load_main, save_main
 from .db import (
     init_db,
@@ -47,7 +122,13 @@ app = FastAPI(title="WQT Backend v1")
 # -------------------------------------------------------------------
 # Auth configuration
 # -------------------------------------------------------------------
-JWT_SECRET = os.getenv("JWT_SECRET") or os.getenv("AUTH_SECRET") or "dev-change-me"
+from dotenv import load_dotenv
+load_dotenv()
+
+try:
+    JWT_SECRET = os.environ["JWT_SECRET_KEY"]
+except KeyError:
+    raise ValueError("JWT_SECRET_KEY environment variable is required for JWT signing.")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "720"))
 ALLOWED_ROLES = {"picker", "operative", "supervisor", "gm"}
@@ -233,13 +314,42 @@ def summarize_state_save(state: MainState) -> Dict[str, Any]:
 # -------------------------------------------------------------------
 # CORS
 # -------------------------------------------------------------------
+# Secure CORS configuration
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS")
+if not allowed_origins_env:
+    raise ValueError("ALLOWED_ORIGINS environment variable is required for CORS policy.")
+allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
+if not allowed_origins:
+    raise ValueError("ALLOWED_ORIGINS must specify at least one allowed origin.")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def _cors_headers_for_origin(origin: Optional[str]) -> Dict[str, str]:
+    if origin and origin in allowed_origins:
+        return {
+            "access-control-allow-origin": origin,
+            "access-control-allow-credentials": "true",
+            "vary": "Origin",
+        }
+    return {}
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    headers = dict(exc.headers or {})
+    headers.update(_cors_headers_for_origin(request.headers.get("origin")))
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=headers)
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled exception", exc_info=exc)
+    headers = _cors_headers_for_origin(request.headers.get("origin"))
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"}, headers=headers)
 
 
 # -------------------------------------------------------------------
@@ -469,43 +579,76 @@ async def api_shift_start(
     payload: ShiftStartPayload,
     device_id: Optional[str] = Query(default=None, alias="device-id"),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
 ) -> Dict[str, Any]:
+    request_id = uuid.uuid4().hex
     # Force authenticated identity for all shift writes
     if not current_user:
         raise HTTPException(status_code=401, detail="Missing user identity")
 
-    shift_id = start_shift(
-        operator_id=current_user.username,
-        device_id=device_id,
-        operator_name=payload.operator_name or current_user.display_name,
-        site=payload.site,
-        shift_type=payload.shift_type,
+    logging.info(
+        "[ShiftStart] request_id=%s user=%s device_id=%s start_hhmm=%s shift_length_hours=%s",
+        request_id,
+        getattr(current_user, "username", None),
+        device_id,
+        payload.start_hhmm,
+        payload.shift_length_hours,
     )
 
-    active_shift = get_active_shift_for_operator(current_user.username)
+    try:
+        shift_id = start_shift(
+            operator_id=current_user.username,
+            device_id=device_id,
+            operator_name=payload.operator_name or current_user.display_name,
+            site=payload.site,
+            shift_type=payload.shift_type,
+        )
 
-    detail: Dict[str, Any] = {
-        "shift_id": shift_id,
-        "operator_id": current_user.username,
-        "operator_name": payload.operator_name,
-        "site": payload.site,
-        "shift_type": payload.shift_type,
-        "start_hhmm": payload.start_hhmm,
-        "shift_length_hours": payload.shift_length_hours,
-        "already_active": bool(active_shift and active_shift.get("ended_at") is None and active_shift.get("id") == shift_id),
-    }
-    if device_id:
-        detail["device_id"] = device_id
+        active_shift = get_active_shift_for_operator(current_user.username)
 
-    log_usage_event("SHIFT_START", detail)
+        detail: Dict[str, Any] = {
+            "shift_id": shift_id,
+            "operator_id": current_user.username,
+            "operator_name": payload.operator_name,
+            "site": payload.site,
+            "shift_type": payload.shift_type,
+            "start_hhmm": payload.start_hhmm,
+            "shift_length_hours": payload.shift_length_hours,
+            "already_active": bool(active_shift and active_shift.get("ended_at") is None and active_shift.get("id") == shift_id),
+        }
+        if device_id:
+            detail["device_id"] = device_id
 
-    log_usage_event("SHIFT_DEBUG_WRITE", {
-        "operator_id": current_user.username,
-        "device_id": device_id,
-        "note": "Shift start bound to authenticated user",
-    })
+        log_usage_event("SHIFT_START", detail)
 
-    return {"shift_id": shift_id, "shift": active_shift}
+        log_usage_event("SHIFT_DEBUG_WRITE", {
+            "operator_id": current_user.username,
+            "device_id": device_id,
+            "note": "Shift start bound to authenticated user",
+        })
+
+        return {"shift_id": shift_id, "shift": active_shift}
+    except Exception as exc:
+        logging.exception(
+            "[ShiftStart] request_id=%s device_id=%s user=%s",
+            request_id,
+            device_id,
+            getattr(current_user, "username", None),
+            exc_info=exc,
+        )
+        headers = {
+            "X-Request-ID": request_id,
+            **_cors_headers_for_origin(request.headers.get("origin") if request else None),
+        }
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Internal Server Error",
+                "request_id": request_id,
+                "error": "shift_start_failed",
+            },
+            headers=headers,
+        )
 
 
 @app.get("/api/shifts/active")
@@ -516,7 +659,16 @@ async def api_shift_active(
     if not current_user:
         raise HTTPException(status_code=401, detail="Missing user identity")
 
-    active_shift = get_active_shift_for_operator(current_user.username)
+    try:
+        active_shift = get_active_shift_for_operator(current_user.username)
+    except Exception as exc:
+        logging.exception("[ShiftActive] Failed to fetch active shift", exc_info=exc)
+        return {
+            "active": False,
+            "shift": None,
+            "device_id": device_id,
+            "error": "shift_active_failed",
+        }
     return {
         "active": bool(active_shift),
         "shift": active_shift,

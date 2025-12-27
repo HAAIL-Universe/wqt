@@ -242,7 +242,37 @@ function snapToNearestHour(){
 }
 
 // Entrypoint when user taps Start 9h / Start 10h
+function startShift(lenHours){
+  try {
+    // Persist one-time 9h/10h preference
+    const existing = getShiftPref();
+    const chosen = existing || (lenHours | 0);
+    if (!existing && (chosen === 9 || chosen === 10)) setShiftPref(chosen);
 
+    // Seed hidden length field for downstream logic and ensure selector is enabled
+    const applyLen = getShiftPref() || (lenHours || 9);
+    const lenEl = document.getElementById('tLen');
+    if (lenEl) {
+      lenEl.value = String(applyLen);
+      lenEl.disabled = false;
+      lenEl.removeAttribute('readonly');
+      lenEl.style.display = '';
+    }
+
+    // Defer actual start to the contracted time picker
+    openContractedStartPicker();
+  } catch (e){
+    // Safe fallback: still route through the picker
+    const lenEl = document.getElementById('tLen');
+    if (lenEl) {
+      lenEl.value = String(lenHours || 9);
+      lenEl.disabled = false;
+      lenEl.removeAttribute('readonly');
+      lenEl.style.display = '';
+    }
+    openContractedStartPicker();
+  }
+}
 
 // Transition into main tracker cards after a start time is determined
 function beginShift(){
@@ -318,13 +348,74 @@ function hmTo12(hm){
 }
 
 // Contracted start modal: build 6 hour buttons around current hour
+function openContractedStartPicker(){
+  const modal = document.getElementById('contractModal');
+  const list  = document.getElementById('contractHourList');
+  if (!modal || !list) return;
 
+  list.innerHTML = '';
 
+  // Base at the current hour (FLOOR) so offsets are stable
+  const now = new Date();
+  const mins = now.getMinutes();
+  const snapped = new Date(now);
+  snapped.setMinutes(0, 0, 0); // 11:20 -> 11:00, 11:45 -> 11:00
 
+  // Option B: if we're past the top of the hour, include +1h and highlight it.
+  // Keep exactly 6 buttons.
+  const justOnHour = (mins === 0);
+  const OFFSETS = justOnHour ? [-5, -4, -3, -2, -1, 0] : [-4, -3, -2, -1, 0, +1];
+  const HIGHLIGHT = justOnHour ? 0 : +1;
 
+  OFFSETS.forEach(off => {
+    const d = new Date(snapped);
+    d.setHours(d.getHours() + off);
 
-  const chosenLen = lenEl ? (parseInt(lenEl.value, 10) || 9) : 9;
-  if (lenEl) lenEl.value = String(chosenLen);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = '00';
+
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    if (off === HIGHLIGHT) btn.classList.add('ok'); // highlight per Option B
+    btn.type = 'button';
+    btn.textContent = to12hLabel(hh, mm);                // plain hour text
+    btn.onclick = () => applyContractedStart(`${hh}:${mm}`);
+    list.appendChild(btn);
+  });
+
+  modal.style.display = 'flex';
+}
+
+// Simple close for contracted-start modal
+function closeContractModal(){
+  const modal = document.getElementById('contractModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Apply a chosen contracted start time, log lateness, move into S2
+async function applyContractedStart(hh){
+  closeContractModal();
+
+  // Normalize input: allow "11" or "11:00"
+  let contractedHM;
+  if (typeof hh === 'string' && hh.includes(':')) {
+    contractedHM = hh.slice(0,5);                   // "HH:MM"
+  } else {
+    const H = parseInt(hh, 10);
+    const HH = Number.isFinite(H) ? String(H).padStart(2,'0') : '00';
+    contractedHM = `${HH}:00`;
+  }
+
+  // Read the shift length (9h or 10h) from the hidden field set by the button
+  const lenEl = document.getElementById('tLen');
+  let chosenLen = 9;
+  if (lenEl) {
+    chosenLen = parseInt(lenEl.value, 10) || 9;
+    lenEl.value = String(chosenLen);
+    lenEl.disabled = true; // lock after start
+    lenEl.setAttribute('readonly', 'readonly');
+    lenEl.style.display = 'none';
+  }
 
   const actualHM  = nowHHMM();
   const cMin = hmToMin(contractedHM);
@@ -364,7 +455,15 @@ function hmTo12(hm){
     localStorage.setItem('shiftActive','1');
   } catch (err) {
     console.error('[ShiftStart] Failed to start shift on server', err);
-    showToast?.('Could not start shift on server. Check connection and retry.');
+    const detail = (err && err.message) ? String(err.message) : '';
+    const statusMatch = detail.match(/failed:\s*(\d{3})/i);
+    const statusCode = statusMatch ? statusMatch[1] : null;
+    const trimmed = detail.length > 200 ? detail.slice(0, 200) + '…' : detail;
+    const prefix = statusCode
+      ? `Could not start shift on server (${statusCode})`
+      : 'Could not start shift on server';
+    const msg = trimmed ? `${prefix}: ${trimmed}` : `${prefix}. Check connection and retry.`;
+    showToast?.(msg);
     startTime = '';
     return;
   }
@@ -568,10 +667,7 @@ function startOrder() {
   const total = parseInt((totalInput?.value || '0'), 10);
   const locations = parseInt((locsInput?.value || '0'), 10);
 
-  if (!startTime) {
-    startTime = nowHHMM();
-    beginShift?.();
-  }
+  if (!startTime) return alert('Set shift start before starting an order.');
   pickingCutoff = ""; // resume counting time if we start picking again
     // Onboarding trigger — order started
   Onboard.showHint("orderStarted", "Order started. Your timer is running. Log wraps as you go.");
@@ -647,12 +743,6 @@ function startOrder() {
 
   // Belt-and-braces card visibility
   (function ensureCards(){
-    const shiftCard  = document.getElementById('shiftCard');
-    const activeCard = document.getElementById('activeOrderCard');
-    const doneCard   = document.getElementById('completedCard');
-    if (shiftCard)  shiftCard.style.display  = 'none';
-    if (activeCard) activeCard.style.display = 'block';
-    if (doneCard)   doneCard.style.display   = 'none';
   })();
 
   
@@ -1068,10 +1158,7 @@ setInterval(()=>{
 // Archive + close active order, reset UI to “ready for next order”
 function completeOrder() {
   if (!current)   return alert('Start an order first');
-  if (!startTime) {
-    startTime = nowHHMM();
-    beginShift?.();
-  }
+  if (!startTime) return alert('Add shift start first');
 
   const closeHHMM = nowHHMM();
 
@@ -2748,7 +2835,8 @@ async function endShift(){
   const dateStr = todayISO();
 
   // Shift length: null-safe
-  const shiftLen = (typeof getShiftPref === 'function' ? getShiftPref() : 9);
+  const tLenEl = document.getElementById('tLen');
+  const shiftLen = parseFloat(tLenEl?.value || '9');
 
   // Resolve active shift meta early for recovery fallback data
   let activeMeta = typeof getActiveShiftMeta === 'function' ? getActiveShiftMeta() : null;
@@ -2844,6 +2932,15 @@ async function endShift(){
   }
 
   // Local archive follows server success
+  if (!Array.isArray(historyDays)) {
+    // Defensive: hydrate from main.history if missing
+    if (window.Storage && typeof Storage.loadMain === 'function') {
+      const main = Storage.loadMain();
+      historyDays = Array.isArray(main.history) ? main.history.slice() : [];
+    } else {
+      historyDays = [];
+    }
+  }
   historyDays.push(snapshot);
   saveAll();
   renderHistory();
@@ -2944,12 +3041,6 @@ function clearToday(){
   } catch(e){}
 
   // UI → Active Shift, no open order: show New-Order header form
-  const shiftCard  = document.getElementById('shiftCard');
-  const activeCard = document.getElementById('activeOrderCard');
-  const doneCard   = document.getElementById('completedCard');
-  if (shiftCard)  shiftCard.style.display  = 'none';
-  if (activeCard) activeCard.style.display = 'block';
-  if (doneCard)   doneCard.style.display   = 'none';
 
   const hdrForm = document.getElementById('orderHeaderForm');
   const hdrProg = document.getElementById('orderHeaderProgress');
