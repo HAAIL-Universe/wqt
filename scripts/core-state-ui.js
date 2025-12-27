@@ -47,15 +47,6 @@ if (typeof window !== 'undefined') {
     }
   });
 }
-// ==================== SYNC STATUS INDICATOR ====================
-// Statuses: 'synced', 'pending', 'syncing', 'error'
-const SYNC_STATUS_MAP = {
-  synced:   { color: '#9fd6a5', icon: '🟢', text: 'Saved' },
-  pending:  { color: '#e6cf8a', icon: '🟡', text: 'Offline / Pending' },
-  syncing:  { color: '#8ab6e6', icon: '🔵', text: 'Syncing…' },
-  error:    { color: '#e49b9b', icon: '🔴', text: 'Sync Error' }
-};
-
 let _currentSyncStatus = 'synced';
 
 function setSyncStatus(status) {
@@ -3435,3 +3426,4 @@ async function refreshSupervisorDashboard() {
     }
   }
 }
+
