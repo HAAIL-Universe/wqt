@@ -2696,6 +2696,13 @@ function computeDowntimes(picksArr, shiftBreaksArr){
   return gaps;
 }
 
+function forceShiftTeardownToHome(){
+  try { localStorage.setItem('shiftActive', '0'); } catch (_) {}
+  try { window.activeShiftSession = null; } catch (_) {}
+  clearActiveShiftMeta?.();
+  setWqtShiftUiState?.('shift_home');
+}
+
 // ====== End Shift → archive into History ======
 async function endShift(){
   const recoveryMode = isShiftRecoveryMode?.() === true;
@@ -2802,8 +2809,9 @@ async function endShift(){
   };
 
   // Server-first end request
+  let endResp = null;
   try {
-    await WqtAPI.endShiftSession({
+    endResp = await WqtAPI.endShiftSession({
       shiftId,
       totalUnits,
       avgRate: snapshot.dayRate,
@@ -2812,6 +2820,10 @@ async function endShift(){
     });
   } catch (err) {
     console.error('[endShift] Backend end failed', err);
+    showToast?.('Could not end shift on server. Please retry when online.');
+    return;
+  }
+  if (endResp && endResp.status && endResp.status !== 'ok') {
     showToast?.('Could not end shift on server. Please retry when online.');
     return;
   }
@@ -2838,6 +2850,9 @@ async function endShift(){
   if (typeof exitShiftNoArchive === 'function') {
     exitShiftNoArchive();
   }
+
+  // Enforce deterministic shift teardown (even if helper returns early)
+  forceShiftTeardownToHome();
 
   // Immediately persist the cleared state to localStorage
   if (typeof saveAll === 'function') {

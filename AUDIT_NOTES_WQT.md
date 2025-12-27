@@ -29,3 +29,27 @@
 - Classification: C) Init not called / handlers not bound (header not wired to setWqtShiftUiState).
 - Root cause: Order header lived outside any UI-state switch, so shift_home still showed the order header on end/refresh.
 - Fix summary: Add explicit header containers and toggle them in setWqtShiftUiState.
+2025-12-27: End-shift archive teardown forces shift_home.
+- Branch/SHA: chore/db-schema-audit / 46a1a9a12f59a9bdcd19479a01f2d265bd866192
+- Repro steps: Start shift → complete at least 1 order → click End shift & archive → UI should land on shift_home (order header hidden, home header visible).
+- Console first error: None reported.
+- Network (scripts/failed requests): None reported.
+- Classification: C) Init not called / handlers not bound (archive path didn't assert UI state teardown).
+- Root cause: Archive path relied on helper state without forcing shift_active flags off or UI state to shift_home.
+- Fix summary: After archive success, clear active-shift flags/meta and call setWqtShiftUiState('shift_home').
+2025-12-27: End-shift archive teardown helper refactor.
+- Branch/SHA: chore/db-schema-audit / 46a1a9a40dd574901f8707d53547657d6f1c892d
+- Repro steps: Start shift → complete at least 1 order → click End shift & archive → UI lands on shift_home (order header hidden, home header visible).
+- Console first error: None reported.
+- Network (scripts/failed requests): None reported.
+- Classification: C) Init not called / handlers not bound (archive path didn't centralize teardown).
+- Root cause: Teardown steps were inline and not reusable for archive exit path.
+- Fix summary: Extract teardown into forceShiftTeardownToHome() and call it from endShift().
+2025-12-27: End-shift archive only tears down on success.
+- Branch/SHA: chore/db-schema-audit / 46a1a9a40dd574901f8707d53547657d6f1c892d
+- Repro steps: Start shift → click End shift & archive while backend fails → UI should remain shift_active (no teardown).
+- Console first error: None reported.
+- Network (scripts/failed requests): None reported.
+- Classification: F) Backend error masked as "Failed to fetch" (success-only teardown not enforced).
+- Root cause: Teardown ran even if endShift response was not OK, risking UI desync on failed archive.
+- Fix summary: Gate forceShiftTeardownToHome() on successful /api/shifts/end response.
