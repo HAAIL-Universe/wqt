@@ -151,6 +151,13 @@ class ShiftSession(Base):
     duration_minutes = Column(Integer, nullable=True)
     active_minutes = Column(Integer, nullable=True)
     summary_json = Column(Text, nullable=True)
+    zone_green_seconds = Column(Integer, nullable=True, server_default=text("0"))
+    zone_amber_seconds = Column(Integer, nullable=True, server_default=text("0"))
+    zone_red_seconds = Column(Integer, nullable=True, server_default=text("0"))
+    zone_last = Column(Text, nullable=True)
+    zone_last_at = Column(DateTime(timezone=True), nullable=True)
+    zone_id = Column(Text, nullable=True)
+    zone_label = Column(Text, nullable=True)
     state_version = Column(Integer, nullable=False, default=0)
     active_order_snapshot = Column(Text, nullable=True)  # JSON string for now
 
@@ -189,6 +196,9 @@ class OrderRecord(Base):
     duration_min = Column(Integer, nullable=True)
     excl_min = Column(Integer, nullable=True)                # excluded mins (breaks)
     order_rate_uh = Column(Float, nullable=True)             # units/hour, computed from total_units / (duration_min / 60)
+    perf_score_ph = Column(Float, nullable=True)
+    zone_id = Column(Text, nullable=True)
+    zone_label = Column(Text, nullable=True)
 
     # Status / notes
     closed_early = Column(Boolean, nullable=False, default=False)
@@ -823,6 +833,13 @@ def serialize_shift_session(shift: ShiftSession) -> Dict[str, Any]:
         "avg_rate": shift.avg_rate,
         "duration_minutes": shift.duration_minutes,
         "active_minutes": shift.active_minutes,
+        "zone_green_seconds": shift.zone_green_seconds,
+        "zone_amber_seconds": shift.zone_amber_seconds,
+        "zone_red_seconds": shift.zone_red_seconds,
+        "zone_last": shift.zone_last,
+        "zone_last_at": shift.zone_last_at.isoformat() if shift.zone_last_at else None,
+        "zone_id": shift.zone_id,
+        "zone_label": shift.zone_label,
     }
 
 
@@ -976,6 +993,13 @@ def get_recent_shifts(limit: int = 50, operator_id: Optional[str] = None) -> Lis
                 "ended_at": s.ended_at.isoformat() if s.ended_at else None,
                 "total_units": s.total_units,
                 "avg_rate": s.avg_rate,
+                "zone_green_seconds": s.zone_green_seconds,
+                "zone_amber_seconds": s.zone_amber_seconds,
+                "zone_red_seconds": s.zone_red_seconds,
+                "zone_last": s.zone_last,
+                "zone_last_at": s.zone_last_at.isoformat() if s.zone_last_at else None,
+                "zone_id": s.zone_id,
+                "zone_label": s.zone_label,
             }
             for s in q
         ]
@@ -1248,6 +1272,9 @@ def get_recent_orders_for_operator(
                     "duration_min": o.duration_min,
                     "excl_min": o.excl_min,
                     "order_rate_uh": o.order_rate_uh,
+                    "perf_score_ph": o.perf_score_ph,
+                    "zone_id": o.zone_id,
+                    "zone_label": o.zone_label,
                     "closed_early": o.closed_early,
                     "early_reason": o.early_reason,
                     "notes": o.notes,
@@ -1324,6 +1351,9 @@ def get_history_for_operator(
                     "startTime": start_time_iso,
                     "closeTime": close_time_iso,
                     "orderRate": o.order_rate_uh,
+                    "perfScorePh": o.perf_score_ph,
+                    "zoneId": o.zone_id,
+                    "zoneLabel": o.zone_label,
                 }
             )
         return results

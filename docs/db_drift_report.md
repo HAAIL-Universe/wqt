@@ -20,27 +20,26 @@ Source: docs/schema_inventory.md + code search results.
   - docs/schema_inventory.md:158-184 lists shift_sessions columns without `scheduled_start_at`.
 - Recommendation: add migration to add column or remove code usage.
 
-3) perf_samples table present but unused in code
+3) perf_samples table present but unused in code (RESERVED)
 - Symptom: table exists but no read/write paths in code; unclear ownership.
 - Evidence:
   - docs/schema_inventory.md:133 shows `perf_samples` table.
   - `rg` search found no references in `wqt-backend` or `scripts`.
-- Recommendation: confirm whether this is legacy or owned by an external process; document or deprecate.
+- Recommendation: mark as RESERVED (do not drop) until ownership is confirmed.
 
-4) shift_sessions and orders columns present in DB but not mapped in models
-- Symptom: data may be written by other processes but ignored by current ORM models.
+4) shift_sessions and orders columns mapped in code (RESOLVED)
 - Evidence:
-  - docs/schema_inventory.md:175-182 lists shift_sessions zone_* and zone_id/zone_label columns not present in wqt-backend/app/db.py:145-155.
-  - docs/schema_inventory.md:118-120 lists orders perf_score_ph/zone_id/zone_label not present in wqt-backend/app/db.py:190-201.
-- Recommendation: either map these columns in models or document as legacy/external.
+  - wqt-backend/app/db.py:154-160 maps shift_sessions zone_* + zone_id/zone_label.
+  - wqt-backend/app/db.py:192-194 maps orders perf_score_ph/zone_id/zone_label.
+- Recommendation: verify values are populated by writers or external processes.
 
-5) order_events table defined but no usage found
+5) order_events table defined but no usage found (RESERVED)
 - Symptom: table exists and model is declared, but no ingestion queries found.
 - Evidence:
   - wqt-backend/app/db.py:219 declares `order_events`.
   - docs/schema_inventory.md:68 shows `order_events` table.
   - No write/read usage found outside comments (e.g., wqt-backend/app/db.py:1114-1117 note only).
-- Recommendation: either add ingestion paths or mark as legacy/unused.
+- Recommendation: mark as RESERVED (do not drop) until ingestion is defined.
 
 ## Endpoints tied to schema
 - /api/shifts/start -> shift_sessions (wqt-backend/app/main.py:643)
