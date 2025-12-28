@@ -2613,6 +2613,48 @@ function parseOccupancySearch(raw) {
   };
 }
 
+function parseScannerLocationQuery(raw, defaultWarehouse = '3') {
+  const text = String(raw || '').trim().toUpperCase().replace(/[\s-]+/g, '');
+  if (!text) return null;
+
+  let match = text.match(/^(?:(\d))?([A-Z]{1,3})(\d{1,3})(\d)([LCR])$/);
+  if (match) {
+    const warehouse = match[1] || defaultWarehouse;
+    const rowId = match[2];
+    const bayRaw = match[3];
+    const layer = parseInt(match[4], 10);
+    const spot = match[5];
+    const bayPadded = String(bayRaw).padStart(3, '0');
+    return {
+      kind: 'exact',
+      warehouse,
+      row_id: rowId,
+      bay: parseInt(bayPadded, 10),
+      bay_padded: bayPadded,
+      layer,
+      spot,
+      code: `${warehouse}${rowId}${bayPadded}${layer}${spot}`,
+    };
+  }
+
+  match = text.match(/^(?:(\d))?([A-Z]{1,3})(\d{1,3})$/);
+  if (match) {
+    const warehouse = match[1] || defaultWarehouse;
+    const rowId = match[2];
+    const bayRaw = match[3];
+    const bayPadded = String(bayRaw).padStart(3, '0');
+    return {
+      kind: 'partial',
+      warehouse,
+      row_id: rowId,
+      bay: parseInt(bayPadded, 10),
+      bay_padded: bayPadded,
+    };
+  }
+
+  return null;
+}
+
 function buildBayLayerLayout(warehouseId, locations) {
   const byKey = new Map();
   (locations || []).forEach(loc => {
@@ -2632,7 +2674,16 @@ function buildBayLayerLayout(warehouseId, locations) {
         euro_count: 0,
         uk_count: 2,
         remaining: 0,
+        spots: [],
+        spot_codes: {},
       });
+    }
+    const entry = byKey.get(key);
+    if (entry) {
+      const spot = String(loc.spot || '').toUpperCase();
+      if (spot && !entry.spots.includes(spot)) entry.spots.push(spot);
+      if (spot && loc.code) entry.spot_codes[spot] = loc.code;
+      if (!entry.row_id && loc.row_id) entry.row_id = loc.row_id;
     }
   });
   return Array.from(byKey.values());
@@ -2778,15 +2829,26 @@ function renderBayOccupancyList(rows) {
 
   const searchText = String(wmOccupancySearch || '').trim();
   const parsedSearch = searchText ? parseOccupancySearch(searchText) : null;
+  const defaultWarehouse = String(getActiveWarehouseId() || '3').replace(/\D+/g, '') || '3';
+  const scannerQuery = searchText ? parseScannerLocationQuery(searchText, defaultWarehouse) : null;
   const selectedRowId = String(wmSelectedRowId || wmActiveAisle || '').trim().toUpperCase();
-  const effectiveRowId = parsedSearch?.row_id || selectedRowId;
+  const effectiveRowId = scannerQuery?.row_id || parsedSearch?.row_id || selectedRowId;
   let filtered = Array.isArray(rows) ? rows.slice() : [];
 
   if (effectiveRowId) {
     filtered = filtered.filter(row => String(row?.row_id || '').toUpperCase() === effectiveRowId);
   }
 
-  if (parsedSearch) {
+  if (scannerQuery) {
+    filtered = filtered.filter(row => Number(row?.bay) === scannerQuery.bay);
+    if (scannerQuery.kind === 'exact') {
+      filtered = filtered.filter(row => Number(row?.layer) === scannerQuery.layer);
+      filtered = filtered.filter(row => {
+        const spots = Array.isArray(row?.spots) && row.spots.length ? row.spots : null;
+        return !spots || spots.includes(scannerQuery.spot);
+      });
+    }
+  } else if (parsedSearch) {
     filtered = filtered.filter(row => {
       const bayMatch = Number(row?.bay) === parsedSearch.bay;
       const layerMatch = parsedSearch.layer == null || Number(row?.layer) === parsedSearch.layer;
@@ -2814,7 +2876,7 @@ function renderBayOccupancyList(rows) {
     if (searchText) {
       hint.textContent = `No matches for "${searchText}".`;
     } else {
-      hint.textContent = 'No available space in this aisle. Search to edit full bays.';
+      hint.textContent = 'No available space in this aisle. Tip: search A021 to see L/C/R across layers.';
     }
     list.appendChild(hint);
     return;
@@ -2829,9 +2891,10 @@ function renderBayOccupancyList(rows) {
     const layerB = Number(b?.layer) || 0;
     return layerA - layerB;
   });
+  const capped = scannerQuery?.kind === 'partial' ? sorted.slice(0, 12) : sorted;
 
   const grouped = new Map();
-  sorted.forEach(row => {
+  capped.forEach(row => {
     if (!row) return;
     const bayKey = Number(row.bay) || row.bay || '0';
     if (!grouped.has(bayKey)) grouped.set(bayKey, []);
@@ -2878,7 +2941,10 @@ function renderBayOccupancyList(rows) {
       const status = document.createElement('div');
       status.className = 'wm-aisle-status';
       const remainingText = Number.isFinite(remaining) ? remaining.toFixed(1).replace(/\.0$/, '') : '0';
-      if (row.pending_error) {
+      if (scannerQuery?.kind === 'exact' && scannerQuery.code) {
+        status.textContent = `Match ${scannerQuery.code}`;
+        status.classList.add('empty');
+      } else if (row.pending_error) {
         status.textContent = `Pending error: ${row.pending_error}`;
         status.classList.add('full');
       } else if (allowUk) {
@@ -2894,6 +2960,14 @@ function renderBayOccupancyList(rows) {
 
       detail.appendChild(code);
       detail.appendChild(meta);
+      if (scannerQuery?.kind === 'partial') {
+        const spotMeta = document.createElement('div');
+        spotMeta.className = 'wm-aisle-meta';
+        const spots = Array.isArray(row.spots) && row.spots.length ? row.spots : ['L', 'C', 'R'];
+        const codes = spots.map(spot => `${scannerQuery.warehouse}${scannerQuery.row_id}${scannerQuery.bay_padded}${row.layer}${spot}`);
+        spotMeta.textContent = codes.join(' / ');
+        detail.appendChild(spotMeta);
+      }
       detail.appendChild(status);
 
       const actions = document.createElement('div');
