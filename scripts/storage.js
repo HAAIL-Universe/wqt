@@ -1,5 +1,6 @@
 // ====== Bay Outbox (Offline-first warehouse map updates) ======
 const BAY_OUTBOX_KEY = 'wqt_bay_outbox_v1';
+const BAY_OCCUPANCY_OUTBOX_KEY = 'wqt_bay_occupancy_outbox_v1';
 
 function loadBayOutbox() {
   try {
@@ -67,6 +68,85 @@ function clearBayOutbox() {
   window.localStorage.removeItem(BAY_OUTBOX_KEY);
 }
 
+function loadBayOccupancyOutbox() {
+  try {
+    const raw = window.localStorage.getItem(BAY_OCCUPANCY_OUTBOX_KEY);
+    const parsed = safeParse(raw, null);
+    if (parsed && parsed.version === 1 && Array.isArray(parsed.pending)) return parsed;
+  } catch (_) {}
+  return { version: 1, updated_at: null, pending: [] };
+}
+
+function saveBayOccupancyOutbox(outbox) {
+  try {
+    outbox.version = 1;
+    outbox.updated_at = new Date().toISOString();
+    window.localStorage.setItem(BAY_OCCUPANCY_OUTBOX_KEY, JSON.stringify(outbox));
+  } catch (_) {}
+}
+
+function queueBayOccupancyChange(change) {
+  const outbox = loadBayOccupancyOutbox();
+  if (!change || typeof change !== 'object') {
+    return { count: outbox.pending.length, queued_entry: null };
+  }
+
+  const entry = {
+    warehouse: String(change.warehouse || '').trim(),
+    row_id: String(change.row_id || '').trim(),
+    aisle: String(change.aisle || '').trim(),
+    bay: Number(change.bay),
+    layer: Number(change.layer),
+    delta_euro: Number(change.delta_euro || 0),
+    delta_uk: Number(change.delta_uk || 0),
+    ts: new Date().toISOString(),
+    event_id: generateEventId(),
+  };
+
+  if (!entry.warehouse || !entry.row_id || !entry.aisle) {
+    return { count: outbox.pending.length, queued_entry: null };
+  }
+  if (!Number.isFinite(entry.bay) || !Number.isFinite(entry.layer)) {
+    return { count: outbox.pending.length, queued_entry: null };
+  }
+  if (!entry.delta_euro && !entry.delta_uk) {
+    return { count: outbox.pending.length, queued_entry: null };
+  }
+
+  outbox.pending.push(entry);
+  saveBayOccupancyOutbox(outbox);
+  return { count: outbox.pending.length, queued_entry: entry };
+}
+
+function listBayOccupancyOutboxUpdates() {
+  const outbox = loadBayOccupancyOutbox();
+  return outbox.pending.slice();
+}
+
+function getBayOccupancyOutboxCount() {
+  const outbox = loadBayOccupancyOutbox();
+  return outbox.pending.length;
+}
+
+function removeBayOccupancyOutboxEntries(eventIds) {
+  const outbox = loadBayOccupancyOutbox();
+  const removeSet = new Set(eventIds || []);
+  outbox.pending = outbox.pending.filter(entry => !removeSet.has(entry.event_id));
+  saveBayOccupancyOutbox(outbox);
+  return outbox.pending;
+}
+
+function updateBayOccupancyOutboxErrors(errorsById) {
+  const outbox = loadBayOccupancyOutbox();
+  const errorMap = errorsById || {};
+  outbox.pending.forEach(entry => {
+    if (entry && entry.event_id && Object.prototype.hasOwnProperty.call(errorMap, entry.event_id)) {
+      entry.last_error = String(errorMap[entry.event_id] || '');
+    }
+  });
+  saveBayOccupancyOutbox(outbox);
+}
+
 // Expose to window for use in core-state-ui.js
 if (typeof window !== 'undefined') {
   window.WqtStorage = window.WqtStorage || {};
@@ -77,6 +157,13 @@ if (typeof window !== 'undefined') {
   window.WqtStorage.getBayOutboxCount = getBayOutboxCount;
   window.WqtStorage.listBayOutboxUpdates = listBayOutboxUpdates;
   window.WqtStorage.clearBayOutbox = clearBayOutbox;
+  window.WqtStorage.loadBayOccupancyOutbox = loadBayOccupancyOutbox;
+  window.WqtStorage.saveBayOccupancyOutbox = saveBayOccupancyOutbox;
+  window.WqtStorage.queueBayOccupancyChange = queueBayOccupancyChange;
+  window.WqtStorage.listBayOccupancyOutboxUpdates = listBayOccupancyOutboxUpdates;
+  window.WqtStorage.getBayOccupancyOutboxCount = getBayOccupancyOutboxCount;
+  window.WqtStorage.removeBayOccupancyOutboxEntries = removeBayOccupancyOutboxEntries;
+  window.WqtStorage.updateBayOccupancyOutboxErrors = updateBayOccupancyOutboxErrors;
 }
 // /scripts/storage.js
 // Centralised localStorage wrapper for WQT.

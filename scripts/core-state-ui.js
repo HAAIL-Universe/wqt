@@ -469,6 +469,7 @@ window.updateSummary = function() {
 document.addEventListener('DOMContentLoaded', refreshSummaryChips);
 document.addEventListener('DOMContentLoaded', initUpdateBasePanel);
 document.addEventListener('DOMContentLoaded', initUpdateBaysModal);
+document.addEventListener('DOMContentLoaded', initBayOccupancyControls);
 
 // Hide the shared-dock panel and persist that choice
 function hideSharedDock(){
@@ -2517,8 +2518,14 @@ let warehouseMapData = {
 const WAREHOUSE_AISLES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 'L', 'M', 'O', 'P', 'Q', 'AGL'];
 const SPOT_LABELS = ['L', 'R', 'C'];
 const WAREHOUSE_LOCATION_QUEUE_PREFIX = 'wqt_wm_row_queue';
+const BAY_OCCUPANCY_CACHE_PREFIX = 'wqt_bay_occupancy_cache_v1';
+const BAY_OCCUPANCY_CAPACITY = 3.0;
 let wmAisleSummary = [];
 let wmActiveAisle = null;
+let wmOccupancySnapshot = [];
+let wmOccupancyLayout = [];
+let wmOccupancyWarehouse = null;
+let wmOccupancyAisle = null;
 
 function getActiveWarehouseId() {
   try {
@@ -2553,6 +2560,406 @@ function clearRowPayload(key) {
   try {
     localStorage.removeItem(key);
   } catch (_) {}
+}
+
+function buildOccupancyKey(aisle, bay, layer) {
+  return `${String(aisle || '')}__${Number(bay) || 0}__${Number(layer) || 0}`;
+}
+
+function getOccupancyCacheKey(kind, warehouseId, aisle) {
+  const wid = String(warehouseId || '').replace(/\s+/g, '');
+  const ais = String(aisle || '').replace(/\s+/g, '');
+  return `${BAY_OCCUPANCY_CACHE_PREFIX}_${kind}_${wid}_${ais}`;
+}
+
+function loadOccupancyCache(kind, warehouseId, aisle) {
+  try {
+    const key = getOccupancyCacheKey(kind, warehouseId, aisle);
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveOccupancyCache(kind, warehouseId, aisle, rows) {
+  try {
+    const key = getOccupancyCacheKey(kind, warehouseId, aisle);
+    localStorage.setItem(key, JSON.stringify(rows || []));
+  } catch (_) {}
+}
+
+function computeBayRemaining(euroCount, ukCount) {
+  const used = (Number(euroCount) || 0) + ((Number(ukCount) || 0) * 1.5);
+  return Math.round((BAY_OCCUPANCY_CAPACITY - used) * 10) / 10;
+}
+
+function buildBayLayerLayout(warehouseId, locations) {
+  const byKey = new Map();
+  (locations || []).forEach(loc => {
+    if (!loc) return;
+    const aisle = loc.aisle;
+    const bay = Number(loc.bay);
+    const layer = Number(loc.layer);
+    if (!aisle || !Number.isFinite(bay) || !Number.isFinite(layer)) return;
+    const key = buildOccupancyKey(aisle, bay, layer);
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        warehouse: loc.warehouse || warehouseId,
+        row_id: loc.row_id || '',
+        aisle,
+        bay,
+        layer,
+        euro_count: 0,
+        uk_count: 0,
+        remaining: BAY_OCCUPANCY_CAPACITY,
+      });
+    }
+  });
+  return Array.from(byKey.values());
+}
+
+function mergeOccupancyLayout(layout, snapshot, warehouseId) {
+  const byKey = new Map();
+  (layout || []).forEach(row => {
+    if (!row) return;
+    const key = buildOccupancyKey(row.aisle, row.bay, row.layer);
+    byKey.set(key, {
+      warehouse: row.warehouse || warehouseId,
+      row_id: row.row_id || '',
+      aisle: row.aisle,
+      bay: Number(row.bay),
+      layer: Number(row.layer),
+      euro_count: Number(row.euro_count) || 0,
+      uk_count: Number(row.uk_count) || 0,
+      remaining: computeBayRemaining(row.euro_count, row.uk_count),
+    });
+  });
+
+  (snapshot || []).forEach(entry => {
+    if (!entry) return;
+    const aisle = entry.aisle;
+    const bay = Number(entry.bay);
+    const layer = Number(entry.layer);
+    if (!aisle || !Number.isFinite(bay) || !Number.isFinite(layer)) return;
+    const key = buildOccupancyKey(aisle, bay, layer);
+    const euro = Number(entry.euro_count) || 0;
+    const uk = Number(entry.uk_count) || 0;
+    const existing = byKey.get(key) || {
+      warehouse: entry.warehouse || warehouseId,
+      row_id: entry.row_id || '',
+      aisle,
+      bay,
+      layer,
+    };
+    byKey.set(key, {
+      ...existing,
+      euro_count: euro,
+      uk_count: uk,
+      remaining: computeBayRemaining(euro, uk),
+      updated_at: entry.updated_at || existing.updated_at,
+      updated_by_device_id: entry.updated_by_device_id || existing.updated_by_device_id,
+    });
+  });
+
+  return Array.from(byKey.values());
+}
+
+function applyOccupancyOutbox(rows, outboxEntries) {
+  const byKey = new Map();
+  (rows || []).forEach(row => {
+    if (!row) return;
+    const key = buildOccupancyKey(row.aisle, row.bay, row.layer);
+    byKey.set(key, { ...row });
+  });
+
+  (outboxEntries || []).forEach(entry => {
+    if (!entry) return;
+    const key = buildOccupancyKey(entry.aisle, entry.bay, entry.layer);
+    const existing = byKey.get(key) || {
+      warehouse: entry.warehouse,
+      row_id: entry.row_id,
+      aisle: entry.aisle,
+      bay: Number(entry.bay),
+      layer: Number(entry.layer),
+      euro_count: 0,
+      uk_count: 0,
+    };
+    const euro = (Number(existing.euro_count) || 0) + (Number(entry.delta_euro) || 0);
+    const uk = (Number(existing.uk_count) || 0) + (Number(entry.delta_uk) || 0);
+    byKey.set(key, {
+      ...existing,
+      euro_count: euro,
+      uk_count: uk,
+      remaining: computeBayRemaining(euro, uk),
+      pending: true,
+      pending_error: entry.last_error || existing.pending_error,
+    });
+  });
+
+  return Array.from(byKey.values());
+}
+
+async function loadBayOccupancySnapshot(warehouseId, aisle) {
+  const fetchFn = window?.WqtAPI?.fetchBayOccupancy;
+  if (typeof fetchFn === 'function') {
+    try {
+      const res = await fetchFn(warehouseId, aisle);
+      const rows = Array.isArray(res?.rows) ? res.rows : [];
+      saveOccupancyCache('snapshot', warehouseId, aisle, rows);
+      return rows;
+    } catch (err) {
+      console.warn('[Warehouse Map] Failed to load bay occupancy, using cache', err);
+    }
+  }
+  return loadOccupancyCache('snapshot', warehouseId, aisle);
+}
+
+async function loadBayOccupancyLayout(warehouseId, aisle) {
+  const fetchFn = window?.WqtAPI?.fetchLocationsByAisle;
+  if (typeof fetchFn === 'function') {
+    try {
+      const res = await fetchFn(warehouseId, aisle, false);
+      const locations = Array.isArray(res?.locations) ? res.locations : [];
+      const layout = buildBayLayerLayout(warehouseId, locations);
+      saveOccupancyCache('layout', warehouseId, aisle, layout);
+      return layout;
+    } catch (err) {
+      console.warn('[Warehouse Map] Failed to load bay layout, using cache', err);
+    }
+  }
+  return loadOccupancyCache('layout', warehouseId, aisle);
+}
+
+function getDeviceIdForOccupancy() {
+  if (typeof getDeviceIdSafe === 'function') return getDeviceIdSafe();
+  return window?.WqtAPI?.getDeviceId?.() || null;
+}
+
+function refreshOccupancyPendingCountUI() {
+  const el = document.getElementById('occupancyPendingCount');
+  if (!el || !window.WqtStorage) return;
+  const n = window.WqtStorage.getBayOccupancyOutboxCount?.() || 0;
+  el.textContent = `Pending: ${n}`;
+  el.style.display = n > 0 ? '' : 'none';
+}
+
+function renderBayOccupancyList(rows) {
+  const list = document.getElementById('wmAisleList');
+  if (!list) return;
+
+  if (!rows || !rows.length) {
+    list.innerHTML = '<div class="hint">No bays with available space.</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  const sorted = [...rows].sort((a, b) => {
+    const bayA = Number(a?.bay) || 0;
+    const bayB = Number(b?.bay) || 0;
+    if (bayA !== bayB) return bayA - bayB;
+    const layerA = Number(a?.layer) || 0;
+    const layerB = Number(b?.layer) || 0;
+    return layerA - layerB;
+  });
+
+  const grouped = new Map();
+  sorted.forEach(row => {
+    if (!row) return;
+    const remaining = Number(row.remaining);
+    const allowEuro = remaining >= 1.0;
+    const allowUk = remaining >= 1.5;
+    if (!allowEuro && !allowUk && !row.pending) return;
+    const bayKey = Number(row.bay) || row.bay || '0';
+    if (!grouped.has(bayKey)) grouped.set(bayKey, []);
+    grouped.get(bayKey).push(row);
+  });
+
+  if (!grouped.size) {
+    list.innerHTML = '<div class="hint">No bays with available space.</div>';
+    return;
+  }
+
+  grouped.forEach((bayRows, bay) => {
+    const section = document.createElement('div');
+    section.className = 'wm-bay-section';
+
+    const heading = document.createElement('div');
+    heading.className = 'wm-bay-heading';
+    heading.textContent = `Bay ${bay}`;
+    section.appendChild(heading);
+
+    bayRows.forEach(row => {
+      const remaining = Number(row.remaining);
+      const allowEuro = remaining >= 1.0;
+      const allowUk = remaining >= 1.5;
+      const euroCount = Number(row.euro_count) || 0;
+      const ukCount = Number(row.uk_count) || 0;
+
+      const item = document.createElement('div');
+      item.className = 'wm-aisle-item wm-occupancy-item';
+      if (row.pending) item.classList.add('wm-occupancy-pending');
+
+      const detail = document.createElement('div');
+      detail.className = 'wm-occupancy-detail';
+
+      const code = document.createElement('div');
+      code.className = 'wm-aisle-code';
+      code.textContent = `Layer ${row.layer}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'wm-aisle-meta';
+      const rowLabel = row.row_id ? `Row ${row.row_id}` : 'Row ?';
+      meta.textContent = `${rowLabel} • Euro ${euroCount} • UK ${ukCount}`;
+
+      const status = document.createElement('div');
+      status.className = 'wm-aisle-status';
+      const remainingText = Number.isFinite(remaining) ? remaining.toFixed(1).replace(/\.0$/, '') : '0';
+      if (row.pending_error) {
+        status.textContent = `Pending error: ${row.pending_error}`;
+        status.classList.add('full');
+      } else if (allowUk) {
+        status.textContent = `Available ${remainingText} (EURO/UK)`;
+        status.classList.add('empty');
+      } else if (allowEuro) {
+        status.textContent = `Available ${remainingText} (EURO only)`;
+        status.classList.add('empty');
+      } else {
+        status.textContent = `Available ${remainingText}`;
+        status.classList.add('full');
+      }
+
+      detail.appendChild(code);
+      detail.appendChild(meta);
+      detail.appendChild(status);
+
+      const actions = document.createElement('div');
+      actions.className = 'wm-occupancy-actions';
+
+      const makeBtn = (label, onClick, disabled) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn ghost slim wm-occupancy-btn';
+        btn.textContent = label;
+        btn.disabled = !!disabled;
+        btn.onclick = onClick;
+        return btn;
+      };
+
+      actions.appendChild(makeBtn('+EURO', () => queueBayOccupancyDelta(row, 1, 0), !allowEuro));
+      actions.appendChild(makeBtn('+UK', () => queueBayOccupancyDelta(row, 0, 1), !allowUk));
+      actions.appendChild(makeBtn('-EURO', () => queueBayOccupancyDelta(row, -1, 0), euroCount <= 0));
+      actions.appendChild(makeBtn('-UK', () => queueBayOccupancyDelta(row, 0, -1), ukCount <= 0));
+
+      item.appendChild(detail);
+      item.appendChild(actions);
+      section.appendChild(item);
+    });
+
+    list.appendChild(section);
+  });
+}
+
+function renderCurrentOccupancyList() {
+  const outbox = window.WqtStorage?.listBayOccupancyOutboxUpdates?.() || [];
+  const merged = mergeOccupancyLayout(wmOccupancyLayout, wmOccupancySnapshot, wmOccupancyWarehouse);
+  const withOutbox = applyOccupancyOutbox(merged, outbox);
+  renderBayOccupancyList(withOutbox);
+}
+
+function queueBayOccupancyDelta(row, deltaEuro, deltaUk) {
+  const warehouseId = row?.warehouse || wmOccupancyWarehouse || getActiveWarehouseId();
+  const entry = {
+    warehouse: warehouseId,
+    row_id: row?.row_id || '',
+    aisle: row?.aisle || wmActiveAisle || '',
+    bay: row?.bay,
+    layer: row?.layer,
+    delta_euro: deltaEuro,
+    delta_uk: deltaUk,
+  };
+  const result = window.WqtStorage?.queueBayOccupancyChange?.(entry);
+  if (!result?.queued_entry) {
+    showToast?.('Could not queue occupancy change');
+    return;
+  }
+
+  refreshOccupancyPendingCountUI();
+  renderCurrentOccupancyList();
+}
+
+async function syncBayOccupancyOutbox() {
+  const btn = document.getElementById('btnOccupancySync');
+  const pending = window.WqtStorage?.listBayOccupancyOutboxUpdates?.() || [];
+  if (!pending.length) {
+    showToast?.('No occupancy changes to sync');
+    return;
+  }
+
+  setButtonBusy?.(btn, true, { label: 'Syncing.' });
+  try {
+    const deviceId = getDeviceIdForOccupancy();
+    const applyFn = window?.WqtAPI?.applyBayOccupancyChanges;
+    if (typeof applyFn !== 'function') throw new Error('API missing');
+    const res = await applyFn({ device_id: deviceId, changes: pending });
+    const results = Array.isArray(res?.results) ? res.results : [];
+
+    const successIds = [];
+    const errorMap = {};
+    results.forEach((result, idx) => {
+      const eventId = result?.event_id || pending[idx]?.event_id;
+      if (!eventId) return;
+      if (result?.ok) {
+        successIds.push(eventId);
+      } else {
+        errorMap[eventId] = result?.error || 'apply_failed';
+      }
+    });
+
+    if (successIds.length) {
+      window.WqtStorage?.removeBayOccupancyOutboxEntries?.(successIds);
+    }
+    if (Object.keys(errorMap).length) {
+      window.WqtStorage?.updateBayOccupancyOutboxErrors?.(errorMap);
+    }
+
+    refreshOccupancyPendingCountUI();
+    if (successIds.length && wmActiveAisle) {
+      try {
+        const warehouseId = getActiveWarehouseId();
+        wmOccupancyLayout = await loadBayOccupancyLayout(warehouseId, wmActiveAisle);
+        wmOccupancySnapshot = await loadBayOccupancySnapshot(warehouseId, wmActiveAisle);
+        wmOccupancyWarehouse = warehouseId;
+        wmOccupancyAisle = wmActiveAisle;
+      } catch (err) {
+        console.warn('[Warehouse Map] Failed to refresh occupancy after sync', err);
+      }
+    }
+    renderCurrentOccupancyList();
+
+    const okCount = successIds.length;
+    const errCount = Object.keys(errorMap).length;
+    if (errCount) {
+      showToast?.(`Synced ${okCount}, ${errCount} failed`);
+    } else {
+      showToast?.(`Synced ${okCount} occupancy changes`);
+    }
+  } catch (err) {
+    console.warn('[Warehouse Map] Occupancy sync failed', err);
+    showToast?.('Occupancy sync failed');
+  } finally {
+    setButtonBusy?.(btn, false);
+  }
+}
+
+function initBayOccupancyControls() {
+  const btnSync = document.getElementById('btnOccupancySync');
+  if (btnSync && !btnSync.dataset.wired) {
+    btnSync.dataset.wired = '1';
+    btnSync.addEventListener('click', syncBayOccupancyOutbox);
+  }
+  refreshOccupancyPendingCountUI();
 }
 
 function showRowGeneratorPanel(){
@@ -2734,8 +3141,10 @@ function refreshBayPendingCountUI() {
 function toggleUpdateBaseControls() {
   const btn = document.getElementById('wmUpdateBaseBtn');
   const panel = document.getElementById('wmUpdateBasePanel');
+  const saveBtn = document.getElementById('btnSaveMap');
   const visible = !!window.rowGeneratorUnlocked;
   if (btn) btn.style.display = visible ? '' : 'none';
+  if (saveBtn) saveBtn.style.display = visible ? '' : 'none';
   if (!visible && panel) panel.style.display = 'none';
 }
 
@@ -2946,23 +3355,45 @@ async function selectAisle(aisle) {
 
   const warehouseId = getActiveWarehouseId();
   const mappingMode = !!window.rowGeneratorUnlocked;
-  let locations = [];
+  if (mappingMode) {
+    let locations = [];
+    try {
+      locations = await loadAisleLocations(aisle, mappingMode);
+    } catch (err) {
+      console.warn('[Warehouse Map] Failed to load aisle locations', err);
+      if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';
+      locations = [];
+    }
+    // Overlay outbox
+    let outbox = [];
+    if (window.WqtStorage?.listBayOutboxUpdates) {
+      outbox = window.WqtStorage.listBayOutboxUpdates();
+      // Only include outbox entries for this aisle
+      outbox = outbox.filter(e => e && e.code && (locations.some(l => l.code === e.code) || (e.aisle === aisle || (e.code && e.code[0] === aisle))));
+    }
+    const merged = overlayOutbox(locations, outbox);
+    renderAisleList(merged, { mappingMode });
+    return;
+  }
+
+  let layout = [];
+  let snapshot = [];
   try {
-    locations = await loadAisleLocations(aisle, mappingMode);
+    layout = await loadBayOccupancyLayout(warehouseId, aisle);
   } catch (err) {
-    console.warn('[Warehouse Map] Failed to load aisle locations', err);
-    if (list) list.innerHTML = '<div class="hint">Failed to load locations.</div>';
-    locations = [];
+    console.warn('[Warehouse Map] Failed to load bay layout', err);
   }
-  // Overlay outbox
-  let outbox = [];
-  if (window.WqtStorage?.listBayOutboxUpdates) {
-    outbox = window.WqtStorage.listBayOutboxUpdates();
-    // Only include outbox entries for this aisle
-    outbox = outbox.filter(e => e && e.code && (locations.some(l => l.code === e.code) || (e.aisle === aisle || (e.code && e.code[0] === aisle))));
+  try {
+    snapshot = await loadBayOccupancySnapshot(warehouseId, aisle);
+  } catch (err) {
+    console.warn('[Warehouse Map] Failed to load bay occupancy', err);
   }
-  const merged = overlayOutbox(locations, outbox);
-  renderAisleList(merged, { mappingMode });
+
+  wmOccupancyLayout = layout;
+  wmOccupancySnapshot = snapshot;
+  wmOccupancyWarehouse = warehouseId;
+  wmOccupancyAisle = aisle;
+  renderCurrentOccupancyList();
 }
 
 async function refreshWarehouseAisleBrowser() {
@@ -3383,6 +3814,7 @@ function showTab(which){
     if (area) area.style.display = 'none';
     // Load and render warehouse map
     initWarehouseRowForm();
+    initBayOccupancyControls();
     loadWarehouseMap();
     refreshWarehouseAisleBrowser();
     return;

@@ -16,6 +16,8 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     UniqueConstraint,
+    CheckConstraint,
+    Index,
     case,
 )
 from sqlalchemy import text
@@ -289,6 +291,27 @@ class WarehouseLocation(Base):
     is_empty = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class BayOccupancy(Base):
+    __tablename__ = "bay_occupancy"
+    __table_args__ = (
+        UniqueConstraint("warehouse", "row_id", "aisle", "bay", "layer", name="uq_bay_occupancy_unique"),
+        CheckConstraint("euro_count >= 0", name="ck_bay_occupancy_euro_nonneg"),
+        CheckConstraint("uk_count >= 0", name="ck_bay_occupancy_uk_nonneg"),
+        CheckConstraint("(euro_count * 2 + uk_count * 3) <= 6", name="bay_occupancy_width_check"),
+        Index("ix_bay_occupancy_warehouse_aisle", "warehouse", "aisle"),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    warehouse = Column(Text, nullable=False)
+    row_id = Column(Text, nullable=False)
+    aisle = Column(Text, nullable=False)
+    bay = Column(Integer, nullable=False)
+    layer = Column(Integer, nullable=False)
+    euro_count = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    uk_count = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_by_device_id = Column(Text, nullable=True)
 
 
 # --- Global / device state helpers ---
@@ -723,6 +746,152 @@ def set_location_empty_state(
         raise
     finally:
         session.close()
+
+
+# --- Bay occupancy helpers ---
+
+
+def _compute_bay_remaining(euro_count: int, uk_count: int) -> float:
+    used_units = (int(euro_count or 0) * 2) + (int(uk_count or 0) * 3)
+    remaining_units = 6 - used_units
+    return round(remaining_units / 2.0, 2)
+
+
+def get_bay_occupancy(warehouse: str, aisle: Optional[str] = None) -> List[Dict[str, Any]]:
+    if engine is None:
+        return []
+
+    session = get_session()
+    try:
+        q = session.query(BayOccupancy).filter(BayOccupancy.warehouse == warehouse)
+        if aisle:
+            q = q.filter(BayOccupancy.aisle == aisle)
+        q = q.order_by(
+            BayOccupancy.aisle.asc(),
+            BayOccupancy.bay.asc(),
+            BayOccupancy.layer.asc(),
+        )
+
+        rows: List[Dict[str, Any]] = []
+        for row in q:
+            euro_count = int(row.euro_count or 0)
+            uk_count = int(row.uk_count or 0)
+            rows.append(
+                {
+                    "id": row.id,
+                    "warehouse": row.warehouse,
+                    "row_id": row.row_id,
+                    "aisle": row.aisle,
+                    "bay": row.bay,
+                    "layer": row.layer,
+                    "euro_count": euro_count,
+                    "uk_count": uk_count,
+                    "remaining": _compute_bay_remaining(euro_count, uk_count),
+                    "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+                    "updated_by_device_id": row.updated_by_device_id,
+                }
+            )
+        return rows
+    finally:
+        session.close()
+
+
+def apply_bay_occupancy_changes(
+    device_id: Optional[str],
+    changes: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if engine is None:
+        return []
+
+    results: List[Dict[str, Any]] = []
+    session = get_session()
+    try:
+        for change in changes or []:
+            event_id = None
+            try:
+                if not isinstance(change, dict):
+                    raise ValueError("invalid_change")
+
+                event_id = change.get("event_id")
+                warehouse = str(change.get("warehouse") or "").strip()
+                row_id = str(change.get("row_id") or "").strip()
+                aisle = str(change.get("aisle") or "").strip()
+                bay = int(change.get("bay"))
+                layer = int(change.get("layer"))
+                delta_euro = int(change.get("delta_euro") or 0)
+                delta_uk = int(change.get("delta_uk") or 0)
+
+                if not warehouse or not row_id or not aisle:
+                    raise ValueError("missing_fields")
+                if delta_euro == 0 and delta_uk == 0:
+                    raise ValueError("no_delta")
+
+                row = (
+                    session.query(BayOccupancy)
+                    .filter(
+                        BayOccupancy.warehouse == warehouse,
+                        BayOccupancy.row_id == row_id,
+                        BayOccupancy.aisle == aisle,
+                        BayOccupancy.bay == bay,
+                        BayOccupancy.layer == layer,
+                    )
+                    .first()
+                )
+                if not row:
+                    row = BayOccupancy(
+                        warehouse=warehouse,
+                        row_id=row_id,
+                        aisle=aisle,
+                        bay=bay,
+                        layer=layer,
+                        euro_count=0,
+                        uk_count=0,
+                    )
+                    session.add(row)
+
+                new_euro = int(row.euro_count or 0) + delta_euro
+                new_uk = int(row.uk_count or 0) + delta_uk
+
+                if new_euro < 0 or new_uk < 0:
+                    raise ValueError("negative_count")
+                used_units = (new_euro * 2) + (new_uk * 3)
+                if used_units > 6:
+                    raise ValueError("capacity_exceeded")
+
+                row.euro_count = new_euro
+                row.uk_count = new_uk
+                row.updated_by_device_id = device_id
+                row.updated_at = datetime.now(timezone.utc)
+                session.commit()
+
+                remaining = _compute_bay_remaining(new_euro, new_uk)
+                results.append(
+                    {
+                        "ok": True,
+                        "event_id": event_id,
+                        "warehouse": warehouse,
+                        "row_id": row_id,
+                        "aisle": aisle,
+                        "bay": bay,
+                        "layer": layer,
+                        "euro_count": new_euro,
+                        "uk_count": new_uk,
+                        "remaining": remaining,
+                    }
+                )
+            except Exception as exc:
+                session.rollback()
+                results.append(
+                    {
+                        "ok": False,
+                        "event_id": event_id,
+                        "error": str(exc),
+                    }
+                )
+    finally:
+        session.close()
+
+    return results
 
 
 # --- Shift helpers ---

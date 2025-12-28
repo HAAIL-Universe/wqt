@@ -2773,6 +2773,34 @@ td.small { font-size:12px; color:#9fb3c8; }
   border-radius: 8px;
 }
 
+.wm-occupancy-item {
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.wm-occupancy-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wm-occupancy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.wm-occupancy-btn {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.wm-occupancy-pending {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  background: rgba(148, 163, 184, 0.06);
+}
+
 .wm-aisle-item:last-child {
   border-bottom: none;
 }

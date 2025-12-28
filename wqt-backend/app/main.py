@@ -114,6 +114,8 @@ from .db import (
     get_warehouse_aisle_summary,
     get_locations_by_aisle,
     set_location_empty_state,
+    get_bay_occupancy,
+    apply_bay_occupancy_changes,
     get_session,
     WarehouseLocation,
 )
@@ -1019,6 +1021,22 @@ class WarehouseLocationToggleByCodePayload(BaseModel):
     code: str
 
 
+class BayOccupancyChange(BaseModel):
+    warehouse: str
+    row_id: str
+    aisle: str
+    bay: int
+    layer: int
+    delta_euro: int = 0
+    delta_uk: int = 0
+    event_id: Optional[str] = None
+
+
+class BayOccupancyApplyPayload(BaseModel):
+    device_id: Optional[str] = None
+    changes: List[BayOccupancyChange]
+
+
 @app.post("/api/orders/record")
 async def api_orders_record(
     payload: OrderRecordPayload,
@@ -1136,6 +1154,30 @@ async def api_set_warehouse_map(
     save_global_state(payload)
 
     return {"success": True, "map": payload["warehouse_map"]}
+
+
+@app.get("/api/bay-occupancy")
+async def api_get_bay_occupancy(
+    warehouse: str = Query(...),
+    aisle: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+    rows = get_bay_occupancy(warehouse=warehouse, aisle=aisle)
+    return {"success": True, "rows": rows}
+
+
+@app.post("/api/bay-occupancy/apply")
+async def api_apply_bay_occupancy(
+    payload: BayOccupancyApplyPayload,
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Missing user identity")
+    changes = [c.dict() for c in payload.changes or []]
+    results = apply_bay_occupancy_changes(device_id=payload.device_id, changes=changes)
+    return {"success": True, "results": results}
 
 
 @app.post("/api/warehouse-locations/bulk")

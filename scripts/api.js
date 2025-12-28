@@ -447,6 +447,20 @@ const WqtAPI = {
         });
     },
 
+    async fetchBayOccupancy(warehouseId, aisle) {
+        const qs = `?warehouse=${encodeURIComponent(warehouseId || '')}` +
+            (aisle ? `&aisle=${encodeURIComponent(aisle)}` : '');
+        return fetchJSON(`/api/bay-occupancy${qs}`, { method: 'GET' });
+    },
+
+    async applyBayOccupancyChanges(payload) {
+        return fetchJSON('/api/bay-occupancy/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {}),
+        });
+    },
+
     async saveWarehouseLocationsBulk(payload) {
         return fetchJSON('/api/warehouse-locations/bulk', {
             method: 'POST',
