@@ -2526,6 +2526,7 @@ let wmOccupancySnapshot = [];
 let wmOccupancyLayout = [];
 let wmOccupancyWarehouse = null;
 let wmOccupancyAisle = null;
+let wmOccupancySearch = '';
 
 function getActiveWarehouseId() {
   try {
@@ -2593,6 +2594,21 @@ function saveOccupancyCache(kind, warehouseId, aisle, rows) {
 function computeBayRemaining(euroCount, ukCount) {
   const used = (Number(euroCount) || 0) + ((Number(ukCount) || 0) * 1.5);
   return Math.round((BAY_OCCUPANCY_CAPACITY - used) * 10) / 10;
+}
+
+function parseOccupancySearch(raw) {
+  const text = String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!text) return null;
+  const match = text.match(/^([A-Z]+)?(\d+)(?:[-_:/]?(\d+))?$/);
+  if (!match) return null;
+  const bay = parseInt(match[2], 10);
+  const layer = match[3] ? parseInt(match[3], 10) : null;
+  if (!Number.isFinite(bay)) return null;
+  return {
+    aisle: match[1] || null,
+    bay,
+    layer: Number.isFinite(layer) ? layer : null,
+  };
 }
 
 function buildBayLayerLayout(warehouseId, locations) {
@@ -2749,13 +2765,46 @@ function renderBayOccupancyList(rows) {
   const list = document.getElementById('wmAisleList');
   if (!list) return;
 
-  if (!rows || !rows.length) {
-    list.innerHTML = '<div class="hint">No bays with available space.</div>';
+  const searchText = String(wmOccupancySearch || '').trim();
+  const parsedSearch = searchText ? parseOccupancySearch(searchText) : null;
+  let filtered = Array.isArray(rows) ? rows.slice() : [];
+
+  if (parsedSearch) {
+    filtered = filtered.filter(row => {
+      const bayMatch = Number(row?.bay) === parsedSearch.bay;
+      const layerMatch = parsedSearch.layer == null || Number(row?.layer) === parsedSearch.layer;
+      return bayMatch && layerMatch;
+    });
+  } else if (searchText) {
+    const digits = searchText.match(/(\d+)/);
+    const bay = digits ? parseInt(digits[1], 10) : null;
+    if (Number.isFinite(bay)) {
+      filtered = filtered.filter(row => Number(row?.bay) === bay);
+    } else {
+      filtered = [];
+    }
+  } else {
+    filtered = filtered.filter(row => {
+      const remaining = Number(row?.remaining);
+      return row?.pending || (Number.isFinite(remaining) && remaining >= 1.0);
+    });
+  }
+
+  if (!filtered.length) {
+    list.innerHTML = '';
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    if (searchText) {
+      hint.textContent = `No matches for "${searchText}".`;
+    } else {
+      hint.textContent = 'No available space in this aisle. Search to edit full bays.';
+    }
+    list.appendChild(hint);
     return;
   }
 
   list.innerHTML = '';
-  const sorted = [...rows].sort((a, b) => {
+  const sorted = [...filtered].sort((a, b) => {
     const bayA = Number(a?.bay) || 0;
     const bayB = Number(b?.bay) || 0;
     if (bayA !== bayB) return bayA - bayB;
@@ -2767,10 +2816,6 @@ function renderBayOccupancyList(rows) {
   const grouped = new Map();
   sorted.forEach(row => {
     if (!row) return;
-    const remaining = Number(row.remaining);
-    const allowEuro = remaining >= 1.0;
-    const allowUk = remaining >= 1.5;
-    if (!allowEuro && !allowUk && !row.pending) return;
     const bayKey = Number(row.bay) || row.bay || '0';
     if (!grouped.has(bayKey)) grouped.set(bayKey, []);
     grouped.get(bayKey).push(row);
@@ -2955,9 +3000,33 @@ async function syncBayOccupancyOutbox() {
 
 function initBayOccupancyControls() {
   const btnSync = document.getElementById('btnOccupancySync');
+  const searchInput = document.getElementById('wmOccupancySearch');
+  const searchClear = document.getElementById('wmOccupancySearchClear');
   if (btnSync && !btnSync.dataset.wired) {
     btnSync.dataset.wired = '1';
     btnSync.addEventListener('click', syncBayOccupancyOutbox);
+  }
+  if (searchInput && !searchInput.dataset.wired) {
+    searchInput.dataset.wired = '1';
+    searchInput.addEventListener('input', () => {
+      wmOccupancySearch = searchInput.value || '';
+      renderCurrentOccupancyList();
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        searchInput.value = '';
+        wmOccupancySearch = '';
+        renderCurrentOccupancyList();
+      }
+    });
+  }
+  if (searchClear && !searchClear.dataset.wired) {
+    searchClear.dataset.wired = '1';
+    searchClear.addEventListener('click', () => {
+      if (searchInput) searchInput.value = '';
+      wmOccupancySearch = '';
+      renderCurrentOccupancyList();
+    });
   }
   refreshOccupancyPendingCountUI();
 }
