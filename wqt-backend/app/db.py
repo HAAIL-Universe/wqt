@@ -845,7 +845,7 @@ def apply_bay_occupancy_changes(
                         bay=bay,
                         layer=layer,
                         euro_count=0,
-                        uk_count=0,
+                        uk_count=2,
                     )
                     session.add(row)
 

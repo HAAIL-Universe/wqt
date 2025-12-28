@@ -2592,8 +2592,9 @@ function saveOccupancyCache(kind, warehouseId, aisle, rows) {
 }
 
 function computeBayRemaining(euroCount, ukCount) {
-  const used = (Number(euroCount) || 0) + ((Number(ukCount) || 0) * 1.5);
-  return Math.round((BAY_OCCUPANCY_CAPACITY - used) * 10) / 10;
+  const usedUnits = (Number(euroCount) || 0) * 2 + (Number(ukCount) || 0) * 3;
+  const remainingUnits = 6 - usedUnits;
+  return Math.round((remainingUnits / 2) * 10) / 10;
 }
 
 function parseOccupancySearch(raw) {
@@ -2628,8 +2629,8 @@ function buildBayLayerLayout(warehouseId, locations) {
         bay,
         layer,
         euro_count: 0,
-        uk_count: 0,
-        remaining: BAY_OCCUPANCY_CAPACITY,
+        uk_count: 2,
+        remaining: 0,
       });
     }
   });
@@ -2700,7 +2701,7 @@ function applyOccupancyOutbox(rows, outboxEntries) {
       bay: Number(entry.bay),
       layer: Number(entry.layer),
       euro_count: 0,
-      uk_count: 0,
+      uk_count: 2,
     };
     const euro = (Number(existing.euro_count) || 0) + (Number(entry.delta_euro) || 0);
     const uk = (Number(existing.uk_count) || 0) + (Number(entry.delta_uk) || 0);
