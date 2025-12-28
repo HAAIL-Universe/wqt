@@ -2528,6 +2528,12 @@ let wmOccupancyLayout = [];
 let wmOccupancyWarehouse = null;
 let wmOccupancyAisle = null;
 let wmOccupancySearch = '';
+let wmOccupancySnapshotAll = [];
+let wmOccupancyLayoutAll = [];
+let wmOccupancyWarehouseAll = null;
+let wmOccupancyGlobalLoading = null;
+let wmAisleHasSpace = new Set();
+let wmAisleHasSpaceGlobal = false;
 
 function getActiveWarehouseId() {
   try {
@@ -2596,6 +2602,46 @@ function computeBayRemaining(euroCount, ukCount) {
   const usedUnits = (Number(euroCount) || 0) * 2 + (Number(ukCount) || 0) * 3;
   const remainingUnits = 6 - usedUnits;
   return Math.round((remainingUnits / 2) * 10) / 10;
+}
+
+function updateAisleHasSpace(rows, isGlobal = false) {
+  const next = new Set();
+  (rows || []).forEach(row => {
+    const remaining = Number(row?.remaining);
+    if (!Number.isFinite(remaining) || remaining < 1.0) return;
+    const key = String(row?.row_id || row?.aisle || '').trim().toUpperCase();
+    if (key) next.add(key);
+  });
+  wmAisleHasSpace = next;
+  wmAisleHasSpaceGlobal = !!isGlobal;
+  if (typeof window !== 'undefined') {
+    window.__WQT_DEBUG = window.__WQT_DEBUG || {};
+    window.__WQT_DEBUG.hasSpaceRows = Array.from(next.values());
+  }
+}
+
+async function ensureGlobalOccupancyData() {
+  const warehouseId = getActiveWarehouseId();
+  if (!warehouseId) return;
+  if (wmOccupancyGlobalLoading) return wmOccupancyGlobalLoading;
+  if (wmOccupancyWarehouseAll === warehouseId && wmOccupancyLayoutAll.length) return;
+  const rowIds = (wmAisleSummary || []).map(a => a?.row_id || a?.aisle).filter(Boolean);
+  if (!rowIds.length) return;
+  wmOccupancyGlobalLoading = (async () => {
+    const layouts = [];
+    for (const rowId of rowIds) {
+      const layout = await loadBayOccupancyLayout(warehouseId, rowId);
+      if (Array.isArray(layout) && layout.length) layouts.push(...layout);
+    }
+    wmOccupancyLayoutAll = layouts;
+    wmOccupancySnapshotAll = await loadBayOccupancySnapshot(warehouseId, null);
+    wmOccupancyWarehouseAll = warehouseId;
+  })().catch(err => {
+    console.warn('[Warehouse Map] Failed to load global occupancy data', err);
+  }).finally(() => {
+    wmOccupancyGlobalLoading = null;
+  });
+  return wmOccupancyGlobalLoading;
 }
 
 function parseOccupancySearch(raw) {
@@ -2832,7 +2878,7 @@ function renderBayOccupancyList(rows) {
   const defaultWarehouse = String(getActiveWarehouseId() || '3').replace(/\D+/g, '') || '3';
   const scannerQuery = searchText ? parseScannerLocationQuery(searchText, defaultWarehouse) : null;
   const selectedRowId = String(wmSelectedRowId || wmActiveAisle || '').trim().toUpperCase();
-  const effectiveRowId = scannerQuery?.row_id || parsedSearch?.row_id || selectedRowId;
+  const effectiveRowId = scannerQuery?.row_id || parsedSearch?.row_id || (searchText ? null : selectedRowId);
   let filtered = Array.isArray(rows) ? rows.slice() : [];
 
   if (effectiveRowId) {
@@ -2999,13 +3045,30 @@ function renderBayOccupancyList(rows) {
 
 function renderCurrentOccupancyList() {
   let outbox = window.WqtStorage?.listBayOccupancyOutboxUpdates?.() || [];
-  const merged = mergeOccupancyLayout(wmOccupancyLayout, wmOccupancySnapshot, wmOccupancyWarehouse);
+  const searchText = String(wmOccupancySearch || '').trim();
+  const hasGlobal = wmOccupancyLayoutAll.length || wmOccupancySnapshotAll.length;
+  const useGlobal = !!searchText && hasGlobal;
+  const merged = mergeOccupancyLayout(
+    useGlobal ? wmOccupancyLayoutAll : wmOccupancyLayout,
+    useGlobal ? wmOccupancySnapshotAll : wmOccupancySnapshot,
+    useGlobal ? wmOccupancyWarehouseAll : wmOccupancyWarehouse
+  );
   const invalidErrors = collectInvalidOccupancyErrors(outbox, merged);
   if (Object.keys(invalidErrors).length) {
     markOccupancyOutboxErrors(invalidErrors);
     outbox = window.WqtStorage?.listBayOccupancyOutboxUpdates?.() || outbox;
   }
   const withOutbox = applyOccupancyOutbox(merged, outbox);
+  const globalMerged = hasGlobal
+    ? mergeOccupancyLayout(wmOccupancyLayoutAll, wmOccupancySnapshotAll, wmOccupancyWarehouseAll)
+    : null;
+  const globalWithOutbox = globalMerged ? applyOccupancyOutbox(globalMerged, outbox) : null;
+  if (globalWithOutbox) {
+    updateAisleHasSpace(globalWithOutbox, true);
+  } else {
+    updateAisleHasSpace(withOutbox, false);
+  }
+  if (wmAisleSummary.length) renderAisleChips();
   renderBayOccupancyList(withOutbox);
 }
 
@@ -3200,8 +3263,14 @@ function initBayOccupancyControls() {
   if (searchInput && !searchInput.dataset.wired) {
     searchInput.dataset.wired = '1';
     searchInput.addEventListener('input', () => {
-      wmOccupancySearch = searchInput.value || '';
+      const next = searchInput.value || '';
+      wmOccupancySearch = next;
       renderCurrentOccupancyList();
+      if (String(next).trim()) {
+        ensureGlobalOccupancyData()?.then(() => {
+          if (wmOccupancySearch === next) renderCurrentOccupancyList();
+        });
+      }
     });
     searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -3482,8 +3551,15 @@ function renderAisleChips() {
 
   // Ensure active aisle is valid
   const rowIds = wmAisleSummary.map(a => a.row_id || a.aisle);
-  if (!wmActiveAisle || !rowIds.includes(wmActiveAisle)) {
-    const firstWithSpace = wmAisleSummary.find(a => (a.empty || 0) > 0);
+  const normalizedRowIds = rowIds.map(rowId => String(rowId || '').toUpperCase());
+  if (!wmActiveAisle || !normalizedRowIds.includes(String(wmActiveAisle || '').toUpperCase())) {
+    const firstWithSpace = wmAisleSummary.find(a => {
+      const key = String(a?.row_id || a?.aisle || '').toUpperCase();
+      const summaryHasSpace = Number(a?.empty || 0) > 0;
+      return wmAisleHasSpaceGlobal
+        ? wmAisleHasSpace.has(key)
+        : (wmAisleHasSpace.has(key) || summaryHasSpace);
+    });
     wmActiveAisle = (firstWithSpace?.row_id || firstWithSpace?.aisle) || (wmAisleSummary[0].row_id || wmAisleSummary[0].aisle);
   }
   wmSelectedRowId = wmActiveAisle;
@@ -3499,17 +3575,21 @@ function renderAisleChips() {
     btn.type = 'button';
     btn.className = 'wm-aisle-chip';
     const rowIdValue = item.row_id || item.aisle;
+    const rowKey = String(rowIdValue || '').toUpperCase();
     btn.textContent = rowIdValue;
     const emptyCount = Number(item.empty || 0);
-    if (emptyCount > 0) {
-      btn.classList.add('has-empty');
+    const hasSpace = wmAisleHasSpaceGlobal
+      ? wmAisleHasSpace.has(rowKey)
+      : (wmAisleHasSpace.has(rowKey) || emptyCount > 0);
+    if (hasSpace) {
+      btn.classList.add('wm-chip-has-space');
     } else {
-      btn.classList.add('no-empty');
+      btn.classList.add('wm-chip-no-space');
       // Keep clickable so mappers can still inspect
       btn.disabled = false;
     }
     if (rowIdValue === wmActiveAisle) {
-      btn.classList.add('active');
+      btn.classList.add('wm-chip-selected');
     }
     btn.onclick = () => selectAisle(rowIdValue);
     chips.appendChild(btn);
