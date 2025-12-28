@@ -605,6 +605,18 @@ const WqtAPI = {
         window.location.reload();
     },
 
+    async getMe() {
+        return fetchJSON('/api/me');
+    },
+
+    async updateMe(payload = {}) {
+        return fetchJSON('/api/me', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {}),
+        });
+    },
+
     // ------------------------------------------------------------------
     // Shift/session-side data (outside main blob)
     // These stay in localStorage for now (no schema yet).
@@ -637,7 +649,6 @@ const WqtAPI = {
             operator_name: identity?.displayName || identity?.userId || null,
             site: opts.site || null,
             shift_type: opts.shiftType || null,
-            start_hhmm: opts.startHHMM || opts.start_hhmm || null,
             shift_length_hours: opts.shiftLengthHours || null,
         };
 

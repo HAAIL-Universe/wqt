@@ -69,10 +69,12 @@ if (typeof window !== 'undefined') {
   window.enableShiftRecoveryMode = (meta)=>{
     setShiftRecoveryMode(true);
     // Seed startTime hint if we lack one, using server shift start
-    if (meta?.started_at && typeof window !== 'undefined') {
+    if (meta && typeof window !== 'undefined') {
       const existingStart = window.startTime || '';
       if (!existingStart) {
-        const hhmm = shiftIsoToHHMM(meta.started_at);
+        const hhmm = shiftIsoToHHMM(
+          meta.actual_login_at || meta.started_at || meta.scheduled_start_at || meta.start_time
+        );
         if (hhmm) {
           window.startTime = hhmm;
           try { startTime = hhmm; } catch (_) {}
@@ -241,47 +243,79 @@ function snapToNearestHour(){
   return String(h).padStart(2,'0') + ':00';
 }
 
-// Entrypoint when user taps Start 9h / Start 10h
-function startShift(lenHours){
+// Start a shift using the default shift length (no start time prompt)
+async function startShift(lenHours){
+  const startBtn = document.getElementById('btnStartShift');
+  setButtonBusy?.(startBtn, true, { label: 'Starting…' });
+
   try {
-    // Persist one-time 9h/10h preference
-    const existing = getShiftPref();
-    const chosen = existing || (lenHours | 0);
-    if (!existing && (chosen === 9 || chosen === 10)) setShiftPref(chosen);
+    const defaultLen = (window._wqtDefaultShiftHours === 9 || window._wqtDefaultShiftHours === 10)
+      ? window._wqtDefaultShiftHours
+      : null;
+    const fallbackLen = (lenHours === 9 || lenHours === 10) ? lenHours : null;
+    const chosenLen = defaultLen || fallbackLen || 9;
 
-    // Seed hidden length field for downstream logic and ensure selector is enabled
-    const applyLen = getShiftPref() || (lenHours || 9);
     const lenEl = document.getElementById('tLen');
     if (lenEl) {
-      lenEl.value = String(applyLen);
-      lenEl.disabled = false;
-      lenEl.removeAttribute('readonly');
-      lenEl.style.display = '';
+      lenEl.value = String(chosenLen);
+      lenEl.disabled = true;
+      lenEl.setAttribute('readonly', 'readonly');
+      lenEl.style.display = 'none';
     }
 
-    // Defer actual start to the contracted time picker
-    openContractedStartPicker();
-  } catch (e){
-    // Safe fallback: still route through the picker
-    const lenEl = document.getElementById('tLen');
-    if (lenEl) {
-      lenEl.value = String(lenHours || 9);
-      lenEl.disabled = false;
-      lenEl.removeAttribute('readonly');
-      lenEl.style.display = '';
+    if (!window.WqtAPI?.startShiftSession) {
+      showToast?.('Shift start is unavailable (backend offline).');
+      return false;
     }
-    openContractedStartPicker();
+
+    const started = await window.WqtAPI.startShiftSession({
+      shiftLengthHours: chosenLen,
+    });
+    const meta = (started && started.shift) ? started.shift : started;
+    persistActiveShiftMeta?.(meta || null);
+    localStorage.setItem('shiftActive','1');
+    const hhmm = shiftIsoToHHMM(
+      meta?.actual_login_at || meta?.started_at || meta?.scheduled_start_at || meta?.start_time
+    );
+    if (hhmm) startTime = hhmm;
+
+    beginShift();
+    if (typeof updateSummary === 'function') updateSummary();
+    return true;
+  } catch (err) {
+    console.error('[ShiftStart] Failed to start shift on server', err);
+    const detail = (err && err.message) ? String(err.message) : '';
+    const statusMatch = detail.match(/failed:\s*(\d{3})/i);
+    const statusCode = statusMatch ? statusMatch[1] : null;
+    const trimmed = detail.length > 200 ? detail.slice(0, 200) + '.' : detail;
+    const prefix = statusCode
+      ? `Could not start shift on server (${statusCode})`
+      : 'Could not start shift on server';
+    const msg = trimmed ? `${prefix}: ${trimmed}` : `${prefix}. Check connection and retry.`;
+    showToast?.(msg);
+    startTime = '';
+    return false;
+  } finally {
+    setButtonBusy?.(startBtn, false);
   }
 }
-
 // Transition into main tracker cards after a start time is determined
 function beginShift(){
-  if (!startTime) startTime = snapToNearestHour();
+  if (!startTime) {
+    const hhmm = shiftIsoToHHMM(
+      window.activeShiftSession?.actual_login_at
+      || window.activeShiftSession?.started_at
+      || window.activeShiftSession?.scheduled_start_at
+      || window.activeShiftSession?.start_time
+    );
+    if (hhmm) startTime = hhmm;
+  }
+  setWqtShiftUiState?.('shift_active');
   pickingCutoff = "";
   // Clean any pre-shift hints/notes
   clearStartHint?.();
   // Onboarding trigger — shift started
-  Onboard.showHint("shiftStarted", "Shift started. You can now open a customer order.");
+  window.Onboard?.showHint?.("shiftStarted", "Shift started. You can now open a customer order.");
   // Show tracker UI
   const shift = document.getElementById('shiftCard');
   const active = document.getElementById('activeOrderCard');
@@ -297,7 +331,7 @@ function beginShift(){
   if (hdrForm) hdrForm.style.display = '';
   if (hdrProg) hdrProg.style.display = 'none';
     // Onboarding trigger — explain order header
-  Onboard.showHint("orderHeader", "Choose a customer and enter total units to begin an order.");
+  window.Onboard?.showHint?.("orderHeader", "Choose a customer and enter total units to begin an order.");
 
   // Hide order-only buttons until active
   ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
@@ -325,161 +359,6 @@ function beginShift(){
 }
 
 
-// --- 12h time helpers (no seconds) ---
-// Simple hour label for buttons (7am / 12pm etc.)
-function to12hLabel(hh, mm='00') {
-  let H = parseInt(hh, 10);
-  const ap = (H >= 12) ? 'pm' : 'am';
-  H = ((H + 11) % 12) + 1;      // 0 → 12, 13 → 1
-  return `${H}${ap}`;           // 7am, 12pm
-}
-
-// "HH:MM" → 12h string with optional minutes (7am / 11:43am)
-function hmTo12(hm){
-  const [h, mRaw] = String(hm||'').split(':');
-  const H = parseInt(h, 10) || 0;
-  const M = parseInt(mRaw, 10) || 0;
-  const ap = (H >= 12) ? 'pm' : 'am';
-  const hour12 = ((H + 11) % 12) + 1;
-  // show minutes only if non-zero or explicitly requested
-  return (M === 0)
-    ? `${hour12}${ap}`          // 7am … 12pm
-    : `${hour12}:${String(M).padStart(2,'0')}${ap}`; // 11:43am
-}
-
-// Contracted start modal: build 6 hour buttons around current hour
-function openContractedStartPicker(){
-  const modal = document.getElementById('contractModal');
-  const list  = document.getElementById('contractHourList');
-  if (!modal || !list) return;
-
-  list.innerHTML = '';
-
-  // Base at the current hour (FLOOR) so offsets are stable
-  const now = new Date();
-  const mins = now.getMinutes();
-  const snapped = new Date(now);
-  snapped.setMinutes(0, 0, 0); // 11:20 -> 11:00, 11:45 -> 11:00
-
-  // Option B: if we're past the top of the hour, include +1h and highlight it.
-  // Keep exactly 6 buttons.
-  const justOnHour = (mins === 0);
-  const OFFSETS = justOnHour ? [-5, -4, -3, -2, -1, 0] : [-4, -3, -2, -1, 0, +1];
-  const HIGHLIGHT = justOnHour ? 0 : +1;
-
-  OFFSETS.forEach(off => {
-    const d = new Date(snapped);
-    d.setHours(d.getHours() + off);
-
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = '00';
-
-    const btn = document.createElement('button');
-    btn.className = 'btn';
-    if (off === HIGHLIGHT) btn.classList.add('ok'); // highlight per Option B
-    btn.type = 'button';
-    btn.textContent = to12hLabel(hh, mm);                // plain hour text
-    btn.onclick = () => applyContractedStart(`${hh}:${mm}`);
-    list.appendChild(btn);
-  });
-
-  modal.style.display = 'flex';
-}
-
-// Simple close for contracted-start modal
-function closeContractModal(){
-  const modal = document.getElementById('contractModal');
-  if (modal) modal.style.display = 'none';
-}
-
-// Apply a chosen contracted start time, log lateness, move into S2
-async function applyContractedStart(hh){
-  closeContractModal();
-
-  // Normalize input: allow "11" or "11:00"
-  let contractedHM;
-  if (typeof hh === 'string' && hh.includes(':')) {
-    contractedHM = hh.slice(0,5);                   // "HH:MM"
-  } else {
-    const H = parseInt(hh, 10);
-    const HH = Number.isFinite(H) ? String(H).padStart(2,'0') : '00';
-    contractedHM = `${HH}:00`;
-  }
-
-  // Read the shift length (9h or 10h) from the hidden field set by the button
-  const lenEl = document.getElementById('tLen');
-  let chosenLen = 9;
-  if (lenEl) {
-    chosenLen = parseInt(lenEl.value, 10) || 9;
-    lenEl.value = String(chosenLen);
-    lenEl.disabled = true; // lock after start
-    lenEl.setAttribute('readonly', 'readonly');
-    lenEl.style.display = 'none';
-  }
-
-  const actualHM  = nowHHMM();
-  const cMin = hmToMin(contractedHM);
-  const aMin = hmToMin(actualHM);
-
-  // Effective start: contracted if on-time/early; actual if late
-  const effectiveMin = (aMin <= cMin) ? cMin : aMin;
-  const effectiveHM  = minToHm(effectiveMin);
-
-  // Live rate baseline
-  startTime = effectiveHM;
-
-  // Log lateness
-  const lateMin = aMin - cMin;
-  try {
-    const day = new Date().toISOString().slice(0,10);
-    const raw = localStorage.getItem(LATE_LOG_KEY);
-    const obj = raw ? JSON.parse(raw) : {};
-    obj[day] = {
-      contracted: contractedHM,
-      actual: actualHM,
-      effective: effectiveHM,
-      lateMin,
-      shiftLen: chosenLen
-    };
-    localStorage.setItem(LATE_LOG_KEY, JSON.stringify(obj));
-  } catch(e) {}
-
-  // Try to start server session before entering S2
-  try {
-    const started = await (window.WqtAPI?.startShiftSession?.({
-      startHHMM: effectiveHM,
-      shiftLengthHours: chosenLen,
-    }));
-    const meta = (started && started.shift) ? started.shift : started;
-    persistActiveShiftMeta?.(meta || null);
-    localStorage.setItem('shiftActive','1');
-  } catch (err) {
-    console.error('[ShiftStart] Failed to start shift on server', err);
-    const detail = (err && err.message) ? String(err.message) : '';
-    const statusMatch = detail.match(/failed:\s*(\d{3})/i);
-    const statusCode = statusMatch ? statusMatch[1] : null;
-    const trimmed = detail.length > 200 ? detail.slice(0, 200) + '…' : detail;
-    const prefix = statusCode
-      ? `Could not start shift on server (${statusCode})`
-      : 'Could not start shift on server';
-    const msg = trimmed ? `${prefix}: ${trimmed}` : `${prefix}. Check connection and retry.`;
-    showToast?.(msg);
-    startTime = '';
-    return;
-  }
-
-  // Show S2 (customer selection) view
-  beginShift();
-  if (typeof updateSummary === 'function') updateSummary();
-
-  // S2 note (left side near Log/Delay), formatted nicely
-  const contracted12 = hmTo12?.(contractedHM) || contractedHM;
-  const actual12     = hmTo12?.(actualHM)     || actualHM;
-  const noteText = lateMin > 0 ? `${lateMin}m late`
-                 : lateMin < 0 ? `${-lateMin}m early`
-                 : 'on time';
-  showPreOrderNote?.(`Contracted ${contracted12} • Actual ${actual12} (${noteText})`);
-}
 
 // Enable/disable Start + Shared Start buttons based on customer + units
 function refreshStartButton(){
@@ -2821,158 +2700,190 @@ function computeDowntimes(picksArr, shiftBreaksArr){
   return gaps;
 }
 
+function forceShiftTeardownToHome(){
+  try { localStorage.setItem('shiftActive', '0'); } catch (_) {}
+  try { window.activeShiftSession = null; } catch (_) {}
+  clearActiveShiftMeta?.();
+  setWqtShiftUiState?.('shift_home');
+}
+
 // ====== End Shift → archive into History ======
 async function endShift(){
-  const recoveryMode = isShiftRecoveryMode?.() === true;
+  const endBtn = document.getElementById('btnEndShift');
+  setButtonBusy?.(endBtn, true, { label: 'Ending…' });
 
-  if (!recoveryMode && current){
-    return alert('Complete or undo the current order before ending the shift.');
-  }
-  if (!recoveryMode && !picks.length){
-    return alert('No completed orders to archive.');
-  }
+  try {
+    const recoveryMode = isShiftRecoveryMode?.() === true;
 
-  const dateStr = todayISO();
-
-  // Shift length: null-safe
-  const tLenEl = document.getElementById('tLen');
-  const shiftLen = parseFloat(tLenEl?.value || '9');
-
-  // Resolve active shift meta early for recovery fallback data
-  let activeMeta = typeof getActiveShiftMeta === 'function' ? getActiveShiftMeta() : null;
-  let shiftId = activeMeta?.id;
-
-  let effectiveStartHHMM = startTime || shiftIsoToHHMM(activeMeta?.started_at || activeMeta?.start_time) || '';
-
-  const totalUnits = picks.reduce((a,b)=> a + b.units, 0);
-  const totalLocations = picks.reduce((a,b)=> a + (b.locations || 0), 0);
-  const downtimes  = computeDowntimes(picks, shiftBreaks);
-  const endHHMM    = nowHHMM();
-
-  // If operative work is active at clock-out, close it at end time
-  if (operativeActive && !operativeActive.end) {
-    const toMin = (hhmm)=> Math.round(hm(hhmm) * 60);
-    const start = operativeActive.start || endHHMM;
-    const end   = endHHMM;
-    const mins  = Math.max(0, toMin(end) - toMin(start));
-    operativeActive.end     = end;
-    operativeActive.minutes = mins;
-  }
-
-  // Worked & scheduled minutes to the minute (used by OT / weekly tiles)
-  const toMin       = (hhmm)=> Math.round(hm(hhmm) * 60);
-  let workedMin   = (effectiveStartHHMM && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(effectiveStartHHMM)) : 0;
-  const scheduledMin= Math.round((shiftLen || 9) * 60);
-
-  // Compute dailyPerf as average of perfPerHour from all orders
-  let dailyPerf = 0;
-  if (picks.length > 0) {
-    const validPerfOrders = picks.filter(p => Number.isFinite(p.perfPerHour));
-    if (validPerfOrders.length > 0) {
-      const sumPerf = validPerfOrders.reduce((sum, p) => sum + p.perfPerHour, 0);
-      dailyPerf = Math.round((sumPerf / validPerfOrders.length) * 10) / 10;
+    if (!recoveryMode && current){
+      return alert('Complete or undo the current order before ending the shift.');
     }
-  }
+    if (!recoveryMode && !picks.length){
+      return alert('No completed orders to archive.');
+    }
 
-  // Resolve active shift id from persisted meta or backend
-  if (!shiftId && window.WqtAPI?.fetchActiveShiftSession) {
-    try {
-      const server = await WqtAPI.fetchActiveShiftSession();
-      const meta = server?.shift || null;
-      if (meta) {
-        activeMeta = persistActiveShiftMeta?.(meta) || meta;
-        shiftId = activeMeta?.id;
-        if (!effectiveStartHHMM) {
-          effectiveStartHHMM = shiftIsoToHHMM(activeMeta?.started_at || activeMeta?.start_time) || effectiveStartHHMM;
-          workedMin = (effectiveStartHHMM && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(effectiveStartHHMM)) : workedMin;
-        }
+    const dateStr = todayISO();
+
+    // Shift length: null-safe
+    const tLenEl = document.getElementById('tLen');
+    const shiftLen = parseFloat(tLenEl?.value || '9');
+
+    // Resolve active shift meta early for recovery fallback data
+    let activeMeta = typeof getActiveShiftMeta === 'function' ? getActiveShiftMeta() : null;
+    let shiftId = activeMeta?.id;
+
+    let effectiveStartHHMM = startTime || shiftIsoToHHMM(
+      activeMeta?.actual_login_at
+      || activeMeta?.started_at
+      || activeMeta?.scheduled_start_at
+      || activeMeta?.start_time
+    ) || '';
+
+    const totalUnits = picks.reduce((a,b)=> a + b.units, 0);
+    const totalLocations = picks.reduce((a,b)=> a + (b.locations || 0), 0);
+    const downtimes  = computeDowntimes(picks, shiftBreaks);
+    const endHHMM    = nowHHMM();
+
+    // If operative work is active at clock-out, close it at end time
+    if (operativeActive && !operativeActive.end) {
+      const toMin = (hhmm)=> Math.round(hm(hhmm) * 60);
+      const start = operativeActive.start || endHHMM;
+      const end   = endHHMM;
+      const mins  = Math.max(0, toMin(end) - toMin(start));
+      operativeActive.end     = end;
+      operativeActive.minutes = mins;
+    }
+
+    // Worked & scheduled minutes to the minute (used by OT / weekly tiles)
+    const toMin       = (hhmm)=> Math.round(hm(hhmm) * 60);
+    let workedMin   = (effectiveStartHHMM && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(effectiveStartHHMM)) : 0;
+    const scheduledMin= Math.round((shiftLen || 9) * 60);
+
+    // Compute dailyPerf as average of perfPerHour from all orders
+    let dailyPerf = 0;
+    if (picks.length > 0) {
+      const validPerfOrders = picks.filter(p => Number.isFinite(p.perfPerHour));
+      if (validPerfOrders.length > 0) {
+        const sumPerf = validPerfOrders.reduce((sum, p) => sum + p.perfPerHour, 0);
+        dailyPerf = Math.round((sumPerf / validPerfOrders.length) * 10) / 10;
       }
-    } catch (err) {
-      console.warn('[endShift] Failed to pull active shift from server', err);
     }
-  }
 
-  if (!shiftId) {
-    showToast?.('Server has no active shift for you. Refresh or start a new shift.');
-    return;
-  }
+    // Resolve active shift id from persisted meta or backend
+    if (!shiftId && window.WqtAPI?.fetchActiveShiftSession) {
+      try {
+        const server = await WqtAPI.fetchActiveShiftSession();
+        const meta = server?.shift || null;
+        if (meta) {
+          activeMeta = persistActiveShiftMeta?.(meta) || meta;
+          shiftId = activeMeta?.id;
+          if (!effectiveStartHHMM) {
+            effectiveStartHHMM = shiftIsoToHHMM(
+              activeMeta?.actual_login_at
+              || activeMeta?.started_at
+              || activeMeta?.scheduled_start_at
+              || activeMeta?.start_time
+            ) || effectiveStartHHMM;
+            workedMin = (effectiveStartHHMM && endHHMM) ? Math.max(0, toMin(endHHMM) - toMin(effectiveStartHHMM)) : workedMin;
+          }
+        }
+      } catch (err) {
+        console.warn('[endShift] Failed to pull active shift from server', err);
+      }
+    }
 
-  const snapshot = {
-    date:        dateStr,
-    start:       effectiveStartHHMM,
-    end:         endHHMM || '',
-    shiftLen,
-    totalUnits,
-    totalLocations,
-    dayRate:     shiftLen > 0 ? Math.round(totalUnits / shiftLen) : 0, // keep day avg by full shift
-    dayPerfScore: (workedMin > 0) ? Math.round(((totalUnits + totalLocations * 2) / (workedMin / 60)) * 10) / 10 : 0, // correct perf score: (units + 2*locations) / worked_hours
-    dailyPerf:   dailyPerf, // NEW: average perfPerHour from all orders
-    picks:       picks.slice(0),
-    shiftBreaks: shiftBreaks.slice(0),
-    downtimes,
-    operativeLog: (operativeLog || []).slice(0),
-    // NEW fields used by weekly overtime calc
-    workedMin,
-    scheduledMin
-  };
+    if (!shiftId) {
+      showToast?.('Server has no active shift for you. Refresh or start a new shift.');
+      return;
+    }
 
-  // Server-first end request
-  try {
-    await WqtAPI.endShiftSession({
-      shiftId,
+    const snapshot = {
+      date:        dateStr,
+      start:       effectiveStartHHMM,
+      end:         endHHMM || '',
+      shiftLen,
       totalUnits,
-      avgRate: snapshot.dayRate,
-      summary: snapshot,
-      endTime: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('[endShift] Backend end failed', err);
-    showToast?.('Could not end shift on server. Please retry when online.');
-    return;
-  }
+      totalLocations,
+      dayRate:     shiftLen > 0 ? Math.round(totalUnits / shiftLen) : 0, // keep day avg by full shift
+      dayPerfScore: (workedMin > 0) ? Math.round(((totalUnits + totalLocations * 2) / (workedMin / 60)) * 10) / 10 : 0, // correct perf score: (units + 2*locations) / worked_hours
+      dailyPerf:   dailyPerf, // NEW: average perfPerHour from all orders
+      picks:       picks.slice(0),
+      shiftBreaks: shiftBreaks.slice(0),
+      downtimes,
+      operativeLog: (operativeLog || []).slice(0),
+      // NEW fields used by weekly overtime calc
+      workedMin,
+      scheduledMin
+    };
 
-  // Local archive follows server success
-  if (!Array.isArray(historyDays)) {
-    // Defensive: hydrate from main.history if missing
-    if (window.Storage && typeof Storage.loadMain === 'function') {
-      const main = Storage.loadMain();
-      historyDays = Array.isArray(main.history) ? main.history.slice() : [];
-    } else {
-      historyDays = [];
+    // Server-first end request
+    let endResp = null;
+    try {
+      endResp = await WqtAPI.endShiftSession({
+        shiftId,
+        totalUnits,
+        avgRate: snapshot.dayRate,
+        summary: snapshot,
+        endTime: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('[endShift] Backend end failed', err);
+      showToast?.('Could not end shift on server. Please retry when online.');
+      return;
     }
-  }
-  historyDays.push(snapshot);
-  saveAll();
-  renderHistory();
-  renderWeeklySummary();
+    if (endResp && endResp.status && endResp.status !== 'ok') {
+      showToast?.('Could not end shift on server. Please retry when online.');
+      return;
+    }
 
-  clearActiveShiftMeta?.();
-  clearShiftRecoveryMode?.();
-
-  // Clear all shift state now that backend confirmed end
-  if (typeof exitShiftNoArchive === 'function') {
-    exitShiftNoArchive();
-  }
-
-  // Immediately persist the cleared state to localStorage
-  if (typeof saveAll === 'function') {
+    // Local archive follows server success
+    if (!Array.isArray(historyDays)) {
+      // Defensive: hydrate from main.history if missing
+      if (window.Storage && typeof Storage.loadMain === 'function') {
+        const main = Storage.loadMain();
+        historyDays = Array.isArray(main.history) ? main.history.slice() : [];
+      } else {
+        historyDays = [];
+      }
+    }
+    historyDays.push(snapshot);
     saveAll();
+    renderHistory();
+    renderWeeklySummary();
+
+    clearActiveShiftMeta?.();
+    clearShiftRecoveryMode?.();
+
+    // Clear all shift state now that backend confirmed end
+    if (typeof exitShiftNoArchive === 'function') {
+      exitShiftNoArchive();
+    }
+
+    // Enforce deterministic shift teardown (even if helper returns early)
+    forceShiftTeardownToHome();
+
+    // Immediately persist the cleared state to localStorage
+    if (typeof saveAll === 'function') {
+      saveAll();
+    }
+
+    // Final safety: ensure shiftActive flag is off
+    try {
+      localStorage.setItem('shiftActive', '0');
+      console.log('[endShift] Shift state fully cleared and persisted');
+    } catch (e) {
+      console.warn('[endShift] Failed to set shiftActive flag:', e);
+    }
+
+    showTab?.('tracker');    // land back on the Tracker start screen
+    showToast?.('Shift archived to History');
+
+    updateEndShiftVisibility?.();
+    updateExitShiftVisibility?.();
+    if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
+  } finally {
+    setButtonBusy?.(endBtn, false);
   }
-
-  // Final safety: ensure shiftActive flag is off
-  try {
-    localStorage.setItem('shiftActive', '0');
-    console.log('[endShift] Shift state fully cleared and persisted');
-  } catch (e) {
-    console.warn('[endShift] Failed to set shiftActive flag:', e);
-  }
-
-  showTab?.('tracker');    // land back on the Tracker start screen
-  showToast?.('Shift archived to History');
-
-  updateEndShiftVisibility?.();
-  updateExitShiftVisibility?.();
-  if (typeof refreshSummaryChips === 'function') refreshSummaryChips(); // Ensure chips are in sync
 }
 
 // Manual test matrix:

@@ -122,6 +122,62 @@ if (typeof window !== 'undefined') {
   window.setSyncStatus = setSyncStatus;
   window.getSyncStatus = getSyncStatus;
 }
+
+function ensureBusySpinnerStyle() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('wqt-busy-spinner-style')) return;
+  const style = document.createElement('style');
+  style.id = 'wqt-busy-spinner-style';
+  style.textContent =
+    '.wqt-busy-spinner{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;margin-right:6px;vertical-align:-2px;animation:wqt-spin 0.8s linear infinite;}' +
+    '@keyframes wqt-spin{to{transform:rotate(360deg);}}';
+  document.head.appendChild(style);
+}
+
+function setButtonBusy(btn, busy, opts) {
+  if (!btn) return;
+  const options = opts || {};
+  const label = options.label || 'Loading...';
+  const disableOnly = options.disableOnly === true;
+
+  if (busy) {
+    if (disableOnly) {
+      btn.disabled = true;
+      btn.dataset.wqtBusyDisableOnly = '1';
+      return;
+    }
+    if (btn.dataset.wqtOriginalHtml === undefined) {
+      btn.dataset.wqtOriginalHtml = btn.innerHTML;
+    }
+    if (btn.dataset.wqtOriginalText === undefined) {
+      btn.dataset.wqtOriginalText = btn.textContent || '';
+    }
+    ensureBusySpinnerStyle();
+    btn.innerHTML = `<span class="wqt-busy-spinner" aria-hidden="true"></span>${label}`;
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    return;
+  }
+
+  if (btn.dataset.wqtBusyDisableOnly === '1') {
+    btn.disabled = false;
+    delete btn.dataset.wqtBusyDisableOnly;
+    return;
+  }
+  if (btn.dataset.wqtOriginalHtml !== undefined) {
+    btn.innerHTML = btn.dataset.wqtOriginalHtml;
+    delete btn.dataset.wqtOriginalHtml;
+  } else if (btn.dataset.wqtOriginalText !== undefined) {
+    btn.textContent = btn.dataset.wqtOriginalText;
+  }
+  delete btn.dataset.wqtOriginalText;
+  btn.disabled = false;
+  btn.removeAttribute('aria-busy');
+}
+
+if (typeof window !== 'undefined') {
+  window.setButtonBusy = setButtonBusy;
+}
 // Helper: Overlay outbox entries onto locations (pending edits win)
 function overlayOutbox(locations, outboxEntries) {
   if (!Array.isArray(locations)) locations = [];
@@ -256,6 +312,74 @@ if (typeof window !== 'undefined') {
   window.clearActiveShiftMeta = clearActiveShiftMeta;
 }
 
+function setWqtShiftUiState(nextState){
+  if (typeof document === 'undefined') return;
+  if (!nextState) return;
+  const prevState = window.__WQT_UI_STATE;
+  if (prevState === nextState) return;
+  window.__WQT_UI_STATE = nextState;
+  try { console.log(`[State] STATE -> ${nextState}`); } catch (_) {}
+
+  const onboarding = document.getElementById('onboardingCard');
+  const shiftHome  = document.getElementById('shiftCard');
+  const active     = document.getElementById('activeOrderCard');
+  const done       = document.getElementById('completedCard');
+  const shiftLog   = document.getElementById('shiftLogCard');
+  const tools      = document.getElementById('shift-tools-card');
+  const history    = document.getElementById('historyCard');
+  const manage     = document.getElementById('manageCustomersCard');
+  const orderHeader = document.getElementById('orderHeaderBar');
+  const homeHeader  = document.getElementById('homeHeaderBar');
+
+  const show = (el, on) => {
+    if (!el) return;
+    el.style.display = on ? 'block' : 'none';
+  };
+
+  if (nextState === 'onboarding') {
+    show(onboarding, true);
+    show(shiftHome, false);
+    show(active, false);
+    show(done, false);
+    show(shiftLog, false);
+    show(tools, false);
+    show(history, false);
+    show(manage, false);
+    show(orderHeader, false);
+    show(homeHeader, false);
+    return;
+  }
+
+  if (nextState === 'shift_home') {
+    show(onboarding, false);
+    show(shiftHome, true);
+    show(active, false);
+    show(done, false);
+    show(shiftLog, false);
+    show(tools, true);
+    show(history, true);
+    show(orderHeader, false);
+    show(homeHeader, true);
+    return;
+  }
+
+  if (nextState === 'shift_active') {
+    show(onboarding, false);
+    show(shiftHome, false);
+    show(active, true);
+    show(done, true);
+    show(shiftLog, true);
+    show(tools, true);
+    show(history, true);
+    show(orderHeader, true);
+    show(homeHeader, false);
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.setWqtShiftUiState = setWqtShiftUiState;
+}
+
 // Reset predictive ETA smoothing buffer
 function resetEtaSmoother(){
   etaSmooth = [];
@@ -386,16 +510,7 @@ function openSharedPickModal(){
   document.getElementById('sharedModal').style.display = 'flex';
 }
 
-// ─── Dynamic Start Picker (contracted start) ──────────────────────────────────
-// NOTE: these globals are used by the "contracted start" modal logic
-window._chosenShiftLen = null;
-window._chosenStartHHMM = null;
-
-// Close the contracted-start modal
-function closeContractModal(){
-  const modal = document.getElementById('contractModal');
-  if (modal) modal.style.display = 'none';
-}
+// --- Time helpers (start/end snapping) ---
 
 // Snap a HH:MM value forward to the next 15-minute block
 function snapForwardQuarter(hhmm) {
@@ -428,26 +543,6 @@ function getEffectiveLiveEndHHMM(){
 }
 
 // === SharedPad Persistence + Auto-Hide Helpers ===
-
-// Open dynamic start picker with chosen shift length (e.g. 9h / 10h)
-function openDynamicStartPicker(len){
-  // Store today’s chosen shift length in the hidden field; no long-term preference
-  const lenEl = document.getElementById('tLen');
-  if (lenEl) lenEl.value = String(len || 9);
-  openContractedStartPicker();
-}
-
-// Apply contracted start logic and log lateness for the day
-function applyContractedStart(hhmm){
-  // Delegate to the correct implementation in core-tracker-history.js if present
-  if (typeof window.applyContractedStart === 'function' && window.applyContractedStart !== applyContractedStart) {
-    window.applyContractedStart(hhmm);
-    return;
-  }
-  // Fallback: close modal if no implementation is found
-  closeContractModal();
-}
-
 // Open the Pro Settings modal (advanced config)
 function openProSettingsModal(){
   const m = document.getElementById('proSettingsModal');
@@ -927,35 +1022,6 @@ function closeProSettingsModal(){
   if (!m) return;
   m.style.display = 'none';
 }
-// ─── Patch startShift to honour chosen HH:MM ──────────────────────────────────
-// We avoid changing your original logic; we just enforce startTime after startShift.
-(function wrapStartShiftToUseChosenStart(){
-  if (typeof startShift !== 'function') {
-    // If startShift isn't defined yet, retry after scripts finish loading
-    // (this makes the wrapper resilient to script ordering).
-    setTimeout(wrapStartShiftToUseChosenStart, 0);
-    return;
-  }
-  const _origStartShift = startShift;
-  startShift = function(len){
-    // If a chosen time exists, apply BEFORE calling original
-    // (in case original reads startTime for UI).
-    if (window._chosenStartHHMM) {
-      window.startTime = window._chosenStartHHMM;
-      try { localStorage.setItem('shiftActive','1'); } catch(e){}
-    }
-
-    _origStartShift.call(this, len);
-
-    // And ensure it sticks if original overwrote it
-    if (window._chosenStartHHMM) {
-      window.startTime = window._chosenStartHHMM;
-      try { localStorage.setItem('shiftActive','1'); } catch(e){}
-      // Clear the choice so future shifts use live snapping again
-      window._chosenStartHHMM = null;
-    }
-  };
-})();
 
 // Add a units entry to the Shared Pick modal and update summary
 function sharedAddUnits() {
@@ -1347,6 +1413,18 @@ function exitShiftNoArchive(){
     console.log('[exitShiftNoArchive] Persisted cleared state via saveAll()');
   }
 
+  if (typeof setWqtShiftUiState === 'function') {
+    setWqtShiftUiState('shift_home');
+  } else {
+    const shiftHome = document.getElementById('shiftCard');
+    const active = document.getElementById('activeOrderCard');
+    const done = document.getElementById('completedCard');
+    const shiftLog = document.getElementById('shiftLogCard');
+    if (shiftHome) shiftHome.style.display = 'block';
+    if (active) active.style.display = 'none';
+    if (done) done.style.display = 'none';
+    if (shiftLog) shiftLog.style.display = 'none';
+  }
   showToast?.('Shift ended.');
 
   // After exiting shift, repurpose the ghost button as a one-click restart
@@ -1491,9 +1569,6 @@ const MAP_ADMIN_CODE = '1111';
 
 let proUnlocked  = false;  // Gate: Export/Import/Manage Customers
 
-// Persisted preference: one-time shift length (hours)
-const SHIFT_PREF = 'wqt.shiftLenH';
-
 // Extra safety net save (very infrequent; use debounced saver)
 setInterval(function(){ saveAllDebounced(0); }, 30000);
 
@@ -1501,16 +1576,6 @@ setInterval(function(){ saveAllDebounced(0); }, 30000);
 function clearStartHint(){
   const hint = document.getElementById('snapHint');
   if (hint) hint.textContent = '';
-}
-
-// Fetch stored 9h/10h preference (or null)
-function getShiftPref(){
-  const v = localStorage.getItem(SHIFT_PREF);
-  const n = parseInt(v, 10);
-  return (n === 9 || n === 10) ? n : null;
-}
-function setShiftPref(n){
-  if (n === 9 || n === 10) localStorage.setItem(SHIFT_PREF, String(n));
 }
 
 // ---- Lateness logging ----

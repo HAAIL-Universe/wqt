@@ -129,20 +129,43 @@ function showShiftReconcileModal(serverShift){
   const resumeBtn = document.createElement('button');
   resumeBtn.textContent = 'Resume shift';
   resumeBtn.className = 'btn';
-  resumeBtn.onclick = () => {
-    const hhmm = isoToHHMM(serverShift?.started_at) || nowHHMM();
-    window.startTime = hhmm;
-    try { localStorage.setItem('shiftActive','1'); } catch (_){ }
-    persistActiveShiftMeta?.(serverShift || null);
-    try { beginShift?.(); } catch(_){ }
-    try { clearShiftRecoveryMode?.(); } catch(_){}
-    overlay.remove();
-  };
 
   const endBtn = document.createElement('button');
   endBtn.textContent = 'End it now';
   endBtn.className = 'btn ghost';
+
+  const setReconcileButtonsBusy = (activeBtn, idleBtn, busy, label) => {
+    if (busy) {
+      if (label) {
+        setButtonBusy?.(activeBtn, true, { label });
+      } else {
+        setButtonBusy?.(activeBtn, true);
+      }
+      setButtonBusy?.(idleBtn, true, { disableOnly: true });
+      return;
+    }
+    setButtonBusy?.(activeBtn, false);
+    setButtonBusy?.(idleBtn, false);
+  };
+
+  resumeBtn.onclick = () => {
+    setReconcileButtonsBusy(resumeBtn, endBtn, true, 'Resuming…');
+    try {
+      const hhmm = isoToHHMM(serverShift?.started_at) || nowHHMM();
+      window.startTime = hhmm;
+      try { localStorage.setItem('shiftActive','1'); } catch (_){ }
+      persistActiveShiftMeta?.(serverShift || null);
+      try { beginShift?.(); } catch(_){ }
+      setWqtShiftUiState?.('shift_active');
+      try { clearShiftRecoveryMode?.(); } catch(_){}
+      overlay.remove();
+    } finally {
+      setReconcileButtonsBusy(resumeBtn, endBtn, false);
+    }
+  };
+
   endBtn.onclick = async () => {
+    setReconcileButtonsBusy(endBtn, resumeBtn, true, 'Ending…');
     try {
       await window.WqtAPI?.endShiftSession?.({
         shiftId: serverShift?.id,
@@ -158,6 +181,7 @@ function showShiftReconcileModal(serverShift){
       console.error('[Reconcile] Failed to end server shift', err);
       showToast?.('Could not end shift on server. Try again.');
     } finally {
+      setReconcileButtonsBusy(endBtn, resumeBtn, false);
       try { clearShiftRecoveryMode?.(); } catch(_){}
       overlay.remove();
     }
@@ -176,6 +200,107 @@ function showShiftReconcileModal(serverShift){
   });
 
   document.body.appendChild(overlay);
+}
+
+const ONBOARDING_VERSION = 1;
+
+function normalizeShiftHours(value) {
+  const n = parseInt(value, 10);
+  return (n === 9 || n === 10) ? n : null;
+}
+
+function needsShiftHoursRepair(me) {
+  const completedAt = !!me?.onboarding_completed_at;
+  if (!completedAt) return false;
+  return !normalizeShiftHours(me?.default_shift_hours);
+}
+
+function applyDefaultShiftHours(hours) {
+  const h = normalizeShiftHours(hours);
+  if (!h) return null;
+  window._wqtDefaultShiftHours = h;
+  const lenEl = document.getElementById('tLen');
+  if (lenEl) {
+    lenEl.value = String(h);
+    lenEl.disabled = true;
+    lenEl.setAttribute('readonly', 'readonly');
+    lenEl.style.display = 'none';
+  }
+  return h;
+}
+
+function isOnboardingComplete(me) {
+  const version = Number(me?.onboarding_version) || 0;
+  const completedAt = !!me?.onboarding_completed_at;
+  return completedAt && version >= ONBOARDING_VERSION;
+}
+
+function showShiftLengthOnboarding(mode) {
+  const onboarding = document.getElementById('onboardingCard');
+  if (typeof setWqtShiftUiState === 'function') {
+    setWqtShiftUiState('onboarding');
+  }
+  const shift = document.getElementById('shiftCard');
+  const active = document.getElementById('activeOrderCard');
+  const done = document.getElementById('completedCard');
+  const title = onboarding?.querySelector?.('h3');
+  if (title) {
+    title.textContent = (mode === 'repair')
+      ? 'Finish setup: choose contracted shift length'
+      : 'Select Shift Length (one-time)';
+  }
+  if (onboarding) onboarding.style.display = 'block';
+  if (shift) shift.style.display = 'none';
+  if (active) active.style.display = 'none';
+  if (done) done.style.display = 'none';
+}
+
+async function ensureOnboardingFlow() {
+  if (!window.WqtAPI?.getMe) return { complete: true };
+  try {
+    const me = await WqtAPI.getMe();
+    applyDefaultShiftHours(me?.default_shift_hours);
+    const needsRepair = needsShiftHoursRepair(me);
+    const complete = isOnboardingComplete(me);
+    window._wqtOnboardingComplete = complete;
+    window._wqtOnboardingBlocked = !complete;
+    if (!complete || needsRepair) {
+      showShiftLengthOnboarding(needsRepair ? 'repair' : undefined);
+      return { complete: false, blocked: true };
+    }
+    return { complete: true };
+  } catch (err) {
+    console.warn('[Onboarding] Failed to fetch profile', err);
+    window._wqtOnboardingComplete = true;
+    window._wqtOnboardingBlocked = false;
+    return { complete: true };
+  }
+}
+
+async function submitOnboardingShiftLength(hours) {
+  const choice = normalizeShiftHours(hours);
+  if (!choice) return;
+  if (!window.WqtAPI?.updateMe) {
+    showToast?.('Onboarding update is unavailable (backend offline).');
+    return;
+  }
+  try {
+    const res = await WqtAPI.updateMe({ default_shift_hours: choice });
+    applyDefaultShiftHours(res?.default_shift_hours || choice);
+    window._wqtOnboardingComplete = true;
+    window._wqtOnboardingBlocked = false;
+    if (typeof setWqtShiftUiState === 'function') {
+      setWqtShiftUiState('shift_home');
+    } else {
+      const onboarding = document.getElementById('onboardingCard');
+      const shift = document.getElementById('shiftCard');
+      if (onboarding) onboarding.style.display = 'none';
+      if (shift) shift.style.display = 'block';
+    }
+  } catch (err) {
+    console.error('[Onboarding] Failed to save shift length', err);
+    showToast?.('Could not save shift length. Try again.');
+  }
 }
 
 // ====== Boot ======
@@ -223,7 +348,7 @@ document.addEventListener('DOMContentLoaded', function () {
       loadCustomCodes();
       loadAll(); // hydrates: startTime, current, tempWraps, picks, historyDays, etc.
 
-      const hadShift = !!startTime;
+      let hadShift = !!startTime;
       const hadOpen  = !!(current && Number.isFinite(current.total));
 
       // ── 1b) Reconcile with backend shift session state ──────────
@@ -241,11 +366,36 @@ document.addEventListener('DOMContentLoaded', function () {
             // Local thought it was active, server does not → reset to clean slate
             exitShiftNoArchive?.();
             showTab?.('tracker');
-            openContractedStartPicker?.();
           }
         }
       } catch (err) {
         console.warn('[Boot] Active shift check failed:', err);
+      }
+      const onboarding = await ensureOnboardingFlow();
+      const onboardingBlocked = onboarding?.blocked === true;
+      if (onboardingBlocked) {
+        hadShift = false;
+        setWqtShiftUiState?.('onboarding');
+      } else {
+        if (window.activeShiftSession && !startTime) {
+          const hhmm = shiftIsoToHHMM(
+            window.activeShiftSession.actual_login_at
+            || window.activeShiftSession.started_at
+            || window.activeShiftSession.scheduled_start_at
+            || window.activeShiftSession.start_time
+          );
+          if (hhmm) startTime = hhmm;
+        }
+        const hasActiveShift = !!startTime
+          || localStorage.getItem('shiftActive') === '1'
+          || !!window.activeShiftSession?.id;
+        if (hasActiveShift && window.archived !== true) {
+          hadShift = true;
+          setWqtShiftUiState?.('shift_active');
+        } else {
+          hadShift = false;
+          setWqtShiftUiState?.('shift_home');
+        }
       }
 
       // ── 2) Build customer dropdowns (safe post-restore) ───────────
@@ -291,15 +441,12 @@ document.addEventListener('DOMContentLoaded', function () {
       applyProGate();
 
       // ── 5) Shift/Order shell visibility based on restored flags ───
-      const shift  = document.getElementById('shiftCard');
-      const active = document.getElementById('activeOrderCard');
       const done   = document.getElementById('completedCard');
 
-      if (hadShift && window.archived !== true) {
-        if (shift)  shift.style.display  = 'none';
-        if (active) active.style.display = 'block';
-        if (done)   done.style.display   = (picks.length ? 'block' : 'none');
+      if (!onboardingBlocked && window.archived !== true && hadShift) {
+        if (done) done.style.display = (picks.length ? 'block' : 'none');
       } else {
+        if (done) done.style.display = 'none';
         // No shift yet → hide order-only controls by default
         ['btnDelay','btnUndo','btnB','btnL','btnCloseEarly'].forEach(id=>{
           const el = document.getElementById(id);
