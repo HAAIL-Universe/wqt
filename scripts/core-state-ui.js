@@ -2663,19 +2663,40 @@ function parseScannerLocationQuery(raw, defaultWarehouse = '3') {
   const text = String(raw || '').trim().toUpperCase().replace(/[\s-]+/g, '');
   if (!text) return null;
 
-  let match = text.match(/^(?:(\d))?([A-Z]{1,3})(\d{1,3})(\d)([LCR])$/);
-  if (match) {
-    const warehouse = match[1] || defaultWarehouse;
-    const rowId = match[2];
-    const bayRaw = match[3];
-    const layer = parseInt(match[4], 10);
-    const spot = match[5];
-    const bayPadded = String(bayRaw).padStart(3, '0');
+  const match = text.match(/^(?:(\d))?([A-Z]{1,3})(\d+)([LCR])?$/);
+  if (!match) return null;
+  const warehouse = match[1] || defaultWarehouse;
+  const rowId = match[2];
+  const digits = match[3] || '';
+  const spot = match[4] || null;
+
+  if (digits.length > 3) return null;
+  if (digits.length <= 2) {
+    if (spot) return null;
+    const bayPadded = String(digits).padStart(2, '0');
+    const bay = parseInt(bayPadded, 10);
+    if (!Number.isFinite(bay)) return null;
+    return {
+      kind: 'partial',
+      warehouse,
+      row_id: rowId,
+      bay,
+      bay_padded: bayPadded,
+    };
+  }
+
+  const bayRaw = digits.slice(0, 2);
+  const layerRaw = digits.slice(2, 3);
+  const bayPadded = String(bayRaw).padStart(2, '0');
+  const bay = parseInt(bayPadded, 10);
+  const layer = parseInt(layerRaw, 10);
+  if (!Number.isFinite(bay) || !Number.isFinite(layer)) return null;
+  if (spot) {
     return {
       kind: 'exact',
       warehouse,
       row_id: rowId,
-      bay: parseInt(bayPadded, 10),
+      bay,
       bay_padded: bayPadded,
       layer,
       spot,
@@ -2683,22 +2704,14 @@ function parseScannerLocationQuery(raw, defaultWarehouse = '3') {
     };
   }
 
-  match = text.match(/^(?:(\d))?([A-Z]{1,3})(\d{1,3})$/);
-  if (match) {
-    const warehouse = match[1] || defaultWarehouse;
-    const rowId = match[2];
-    const bayRaw = match[3];
-    const bayPadded = String(bayRaw).padStart(3, '0');
-    return {
-      kind: 'partial',
-      warehouse,
-      row_id: rowId,
-      bay: parseInt(bayPadded, 10),
-      bay_padded: bayPadded,
-    };
-  }
-
-  return null;
+  return {
+    kind: 'partial',
+    warehouse,
+    row_id: rowId,
+    bay,
+    bay_padded: bayPadded,
+    layer,
+  };
 }
 
 function buildBayLayerLayout(warehouseId, locations) {
@@ -2893,6 +2906,8 @@ function renderBayOccupancyList(rows) {
         const spots = Array.isArray(row?.spots) && row.spots.length ? row.spots : null;
         return !spots || spots.includes(scannerQuery.spot);
       });
+    } else if (scannerQuery.layer != null) {
+      filtered = filtered.filter(row => Number(row?.layer) === scannerQuery.layer);
     }
   } else if (parsedSearch) {
     filtered = filtered.filter(row => {
@@ -3009,8 +3024,9 @@ function renderBayOccupancyList(rows) {
       if (scannerQuery?.kind === 'partial') {
         const spotMeta = document.createElement('div');
         spotMeta.className = 'wm-aisle-meta';
+        const layerValue = scannerQuery.layer != null ? scannerQuery.layer : row.layer;
         const spots = Array.isArray(row.spots) && row.spots.length ? row.spots : ['L', 'C', 'R'];
-        const codes = spots.map(spot => `${scannerQuery.warehouse}${scannerQuery.row_id}${scannerQuery.bay_padded}${row.layer}${spot}`);
+        const codes = spots.map(spot => `${scannerQuery.warehouse}${scannerQuery.row_id}${scannerQuery.bay_padded}${layerValue}${spot}`);
         spotMeta.textContent = codes.join(' / ');
         detail.appendChild(spotMeta);
       }
