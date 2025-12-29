@@ -50,4 +50,10 @@
 - Classification (A/B/C/D/E/F): F (UX affordance issue per request).
 - Root cause (file:line): `index.html:797` loader relied on CSS spinner; user reported no visible animation in loading state.
 - Fix summary: replaced CSS-only spinner with inline SVG animateTransform inside `#wmLoading` to guarantee animation.
-- Verification: pending; requires runtime computed styles + visual confirmation of animation.
+- Verification (RUNTIME VERIFIED, user-captured evidence):
+  - Environment: Chrome DevTools, Network throttling Slow 3G, Disable cache enabled, hard refresh during Warehouse Map load.
+  - Loader: “Loading warehouse information…” visible while requests in-flight; loader disappears once map becomes interactive.
+  - DOM: `#wmLoading` contains inline SVG spinner with `<animateTransform attributeName="transform" type="rotate" ... repeatCount="indefinite">`.
+  - Console: no errors observed during capture.
+  - Network: 200 responses observed for `warehouse-map?warehouse=Map-Warehouse3` and `bay-occupancy?warehouse=Map-Warehouse3`.
+  - Evidence: user-provided screenshots captured during live run (slow3g + disable cache).
