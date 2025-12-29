@@ -38,6 +38,18 @@
   - Click "Re-run onboarding" creates `wqt_tour_*` with `status:"active"` and shows Tracker tab.
 - Verification (Render): pending deploy; Render boot.js does not yet include `restartOnboarding`.
 
+## 2025-12-29 19:52 - Render serving stale boot/tour scripts
+- Branch/SHA: test/bay-occupancy-integer-check / 8c4cd051a31a73a233ab88aef9283ae8aee0c3b1
+- Repro steps (Render, pre-fix):
+  1) Pre-set `WQT_CURRENT_USER` in localStorage to avoid redirect.
+  2) Open `https://wqt-kd85.onrender.com/index.html`.
+  3) Click "Re-run onboarding".
+- Console first error: Failed to load resource: the server responded with a status of 401 ().
+- Network (scripts): `/scripts/boot.js` 200; `/scripts/tour.js` 200.
+- Network (failed request): `/api/shifts/active` 401; `/api/me` 401.
+- Classification (A/B/C/D/E/F): A) Script caching (stale assets).
+- Root cause (file:line): `index.html` loads `scripts/boot.js` and `scripts/tour.js` without cache-busting; Render/CDN continues serving pre-fix assets.
+
 ## 2025-12-29 18:40 - Tour reset URL rewrite + no auto-start
 - Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
 - Repro steps:
