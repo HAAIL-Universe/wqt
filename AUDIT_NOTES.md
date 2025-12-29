@@ -80,6 +80,18 @@
 - Evidence:
   - After `tour:shift-length-selected`, tour state becomes `status:"active", stepIndex:0` without shift started.
   - On units step with shift_active, input event advances from stepIndex 2 -> 3 immediately.
+- Fix summary:
+  - Autostart moved to `tour:shift-started`, and only if status is not completed/skipped.
+  - Units/locations no longer auto-advance on input; Enter advances; locations step autofocuses input.
+  - Mobile Next button gets larger, full-width styling on small screens.
+- Verification (local):
+  - `tour:shift-length-selected` does not start tour; `tour:shift-started` starts at customer-select.
+  - Units input no longer auto-advances; Enter advances and focuses `#order-locations`.
+  - Mobile viewport shows larger Next button (padding 10px 12px, font size 14px).
+- Verification (Render, no login):
+  - `scripts/boot.js?v=221275b` 200, `scripts/tour.js?v=221275b` 200; /api 401 pre-login.
+  - `tour.js` contains `tour:shift-started` listener and `applyActionLayout` mobile styles.
+  - Re-run onboarding shows tour overlay on Tracker (visible).
 
 ## 2025-12-29 18:40 - Tour reset URL rewrite + no auto-start
 - Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
