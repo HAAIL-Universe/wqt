@@ -17,7 +17,7 @@
       title: 'Select a customer',
       body: 'Open the customer selector and choose a code.',
       selector: '[data-tour="customer-select"]',
-      advanceOn: { click: true, events: ['tour:customer-selected', 'tour:customer-created'] }
+      advanceOn: { events: ['tour:customer-selected', 'tour:customer-created'] }
     },
     {
       id: 'units-input',
@@ -55,7 +55,7 @@
       title: 'Save wrap',
       body: 'Enter units left and Save Wrap.',
       selector: '[data-tour="wrap-submit"]',
-      advanceOn: { click: true, events: ['tour:wrap-logged'] },
+      advanceOn: { events: ['tour:wrap-logged'] },
       optional: true
     }
   ];
@@ -296,6 +296,23 @@
     return rect.width > 0 && rect.height > 0;
   }
 
+  function getStepTarget(step) {
+    if (!step) return null;
+    if (step.id === 'customer-select') {
+      const modal = document.querySelector('[data-tour="customer-modal"]');
+      if (modal && isVisible(modal) && window.getComputedStyle(modal).display !== 'none') {
+        return modal;
+      }
+    }
+    if (step.id === 'wrap-submit') {
+      const wrapModal = document.getElementById('wrapModal');
+      if (wrapModal && isVisible(wrapModal) && window.getComputedStyle(wrapModal).display !== 'none') {
+        return wrapModal;
+      }
+    }
+    return document.querySelector(step.selector);
+  }
+
   function waitForTarget(step) {
     clearTimers();
     hideOverlay();
@@ -304,7 +321,7 @@
     let lastLog = 0;
     const poll = () => {
       if (state.status !== 'active') return;
-      const el = document.querySelector(step.selector);
+      const el = getStepTarget(step);
       if (el && isVisible(el)) {
         activateStep(step, el);
         return;
@@ -356,6 +373,12 @@
       });
     }
 
+    if (step.id === 'customer-select') {
+      const onClick = () => setTimeout(positionAll, 200);
+      el.addEventListener('click', onClick);
+      activeListeners.push({ el, type: 'click', fn: onClick });
+    }
+
     if (step.advanceOnModal) {
       watchModalOpen(step.advanceOnModal);
     }
@@ -405,6 +428,10 @@
 
   function positionAll() {
     if (!activeTarget || !currentStep) return;
+    const dynamicTarget = getStepTarget(currentStep);
+    if (dynamicTarget && dynamicTarget !== activeTarget) {
+      activeTarget = dynamicTarget;
+    }
     if (!isVisible(activeTarget)) {
       waitForTarget(currentStep);
       return;
@@ -500,8 +527,28 @@
         else if (leftPos >= margin) left = leftPos;
       }
     }
-    tooltip.style.top = `${top}px`;
-    tooltip.style.left = `${left}px`;
+    let finalTop = top;
+    let finalLeft = left;
+    if (overlaps(finalLeft, finalTop)) {
+      const candidates = [
+        { left: margin, top: margin },
+        { left: vw - tooltipRect.width - margin, top: margin },
+        { left: margin, top: vh - tooltipRect.height - margin },
+        { left: vw - tooltipRect.width - margin, top: vh - tooltipRect.height - margin }
+      ].filter(pos =>
+        pos.left >= margin &&
+        pos.top >= margin &&
+        pos.left + tooltipRect.width <= vw - margin &&
+        pos.top + tooltipRect.height <= vh - margin
+      );
+      const next = candidates.find(pos => !overlaps(pos.left, pos.top));
+      if (next) {
+        finalTop = next.top;
+        finalLeft = next.left;
+      }
+    }
+    tooltip.style.top = `${finalTop}px`;
+    tooltip.style.left = `${finalLeft}px`;
     tooltip.style.visibility = 'visible';
   }
 
