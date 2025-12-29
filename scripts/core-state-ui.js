@@ -2534,6 +2534,8 @@ let wmOccupancyWarehouseAll = null;
 let wmOccupancyGlobalLoading = null;
 let wmAisleHasSpace = new Set();
 let wmAisleHasSpaceGlobal = false;
+let warehouseMapReady = false;
+let warehouseMapLoading = null;
 
 function getActiveWarehouseId() {
   try {
@@ -2548,6 +2550,40 @@ function getActiveWarehouseId() {
     if (m && m[1]) return m[1].trim().replace(/\s+/g, '');
   }
   return 'WH3';
+}
+
+function setWarehouseMapReady(ready) {
+  warehouseMapReady = !!ready;
+  const browser = document.getElementById('wmAisleBrowser');
+  if (!browser) return;
+  const loader = document.getElementById('wmLoading');
+  const hint = document.getElementById('wmAisleHint');
+  const chips = document.getElementById('wmAisleChips');
+  const list = document.getElementById('wmAisleList');
+  const searchWrap = browser.querySelector('.wm-occupancy-search');
+  const searchInput = document.getElementById('wmOccupancySearch');
+  const searchClear = document.getElementById('wmOccupancySearchClear');
+
+  if (!warehouseMapReady) {
+    if (loader) loader.style.display = 'block';
+    if (hint) hint.style.display = 'none';
+    if (chips) chips.style.display = 'none';
+    if (searchWrap) searchWrap.style.display = 'none';
+    if (list) list.style.display = 'none';
+    if (list) list.setAttribute('aria-busy', 'true');
+    if (searchInput) searchInput.disabled = true;
+    if (searchClear) searchClear.disabled = true;
+    return;
+  }
+
+  if (loader) loader.style.display = 'none';
+  if (hint) hint.style.display = '';
+  if (chips) chips.style.display = '';
+  if (searchWrap) searchWrap.style.display = '';
+  if (list) list.style.display = '';
+  if (list) list.removeAttribute('aria-busy');
+  if (searchInput) searchInput.disabled = false;
+  if (searchClear) searchClear.disabled = false;
 }
 
 function buildRowQueueKey(warehouseId, rowId) {
@@ -3780,11 +3816,15 @@ async function selectAisle(aisle) {
   renderCurrentOccupancyList();
 }
 
-async function refreshWarehouseAisleBrowser() {
+async function refreshWarehouseAisleBrowser({ deferRender = false } = {}) {
   const chips = document.getElementById('wmAisleChips');
   const list = document.getElementById('wmAisleList');
   if (chips) chips.innerHTML = '';
-  if (list) list.innerHTML = '<div class="hint">Loading aisles…</div>';
+  if (list) {
+    list.innerHTML = warehouseMapReady
+      ? '<div class="hint">Loading aisles…</div>'
+      : '<div class="hint">Loading warehouse information...</div>';
+  }
 
   const warehouseId = getActiveWarehouseId();
   try {
@@ -3793,15 +3833,59 @@ async function refreshWarehouseAisleBrowser() {
 
     const res = await fetchFn(warehouseId);
     wmAisleSummary = Array.isArray(res?.aisles) ? res.aisles : [];
+    if (deferRender) return true;
     renderAisleChips();
     if (wmActiveAisle) selectAisle(wmActiveAisle);
-    ensureGlobalOccupancyData()?.then(() => {
-      renderCurrentOccupancyList();
-    });
+    const ensurePromise = ensureGlobalOccupancyData();
+    if (ensurePromise && typeof ensurePromise.then === 'function') {
+      return ensurePromise.then(() => {
+        renderCurrentOccupancyList();
+      });
+    }
+    return ensurePromise;
   } catch (err) {
     console.warn('[Warehouse Map] Failed to load aisle summary', err);
     if (list) list.innerHTML = '<div class="hint">Failed to load aisles.</div>';
+    return false;
   }
+}
+
+function initWarehouseMapView() {
+  if (warehouseMapLoading) return warehouseMapLoading;
+  let initSucceeded = false;
+
+  setWarehouseMapReady(false);
+  initWarehouseRowForm();
+  initBayOccupancyControls();
+  loadWarehouseMap();
+
+  warehouseMapLoading = (async () => {
+    const summaryOk = await refreshWarehouseAisleBrowser({ deferRender: true });
+    if (summaryOk === false) return;
+    const warehouseId = getActiveWarehouseId();
+    const needsGlobal = !(
+      wmOccupancyWarehouseAll === warehouseId &&
+      wmOccupancyLayoutAll.length &&
+      wmOccupancySnapshotAll.length
+    );
+    await ensureGlobalOccupancyData(needsGlobal);
+    if (window.WqtStorage?.listBayOccupancyOutboxUpdates) {
+      window.WqtStorage.listBayOccupancyOutboxUpdates();
+    }
+    renderCurrentOccupancyList();
+    if (wmActiveAisle) {
+      await selectAisle(wmActiveAisle);
+    }
+    initSucceeded = true;
+  })().catch(err => {
+    console.warn('[Warehouse Map] Failed to initialize map', err);
+  }).finally(() => {
+    warehouseMapLoading = null;
+    setWarehouseMapReady(true);
+    if (initSucceeded) renderCurrentOccupancyList();
+  });
+
+  return warehouseMapLoading;
 }
 
 // Render aisle configuration grid
@@ -4200,10 +4284,7 @@ function showTab(which){
     // hide order-area when on warehouse map
     if (area) area.style.display = 'none';
     // Load and render warehouse map
-    initWarehouseRowForm();
-    initBayOccupancyControls();
-    loadWarehouseMap();
-    refreshWarehouseAisleBrowser();
+    initWarehouseMapView();
     return;
   }
 
