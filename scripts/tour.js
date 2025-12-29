@@ -332,7 +332,20 @@
   function isVisible(el) {
     if (!el) return false;
     const rect = el.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
+    if (rect.width < 8 || rect.height < 8) return false;
+    const style = window.getComputedStyle(el);
+    if (!style || style.display === 'none' || style.visibility === 'hidden') return false;
+    if (el.offsetParent === null && style.position !== 'fixed') return false;
+    return true;
+  }
+
+  function findVisibleAncestor(el) {
+    let node = el && el.parentElement;
+    while (node) {
+      if (isVisible(node)) return node;
+      node = node.parentElement;
+    }
+    return null;
   }
 
   function getStepTarget(step) {
@@ -341,6 +354,14 @@
       const modal = document.querySelector('[data-tour="customer-modal"]');
       if (modal && isVisible(modal) && window.getComputedStyle(modal).display !== 'none') {
         return modal;
+      }
+      const primary = document.querySelector(step.selector);
+      if (isVisible(primary)) return primary;
+      if (primary) {
+        const child = primary.querySelector('input,button,select,textarea');
+        if (isVisible(child)) return child;
+        const fallback = findVisibleAncestor(primary);
+        if (fallback) return fallback;
       }
     }
     if (step.id === 'wrap-submit') {

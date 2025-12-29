@@ -52,10 +52,17 @@ function restartOnboarding() {
     return;
   }
   try { if (typeof tourApi.reset === 'function') tourApi.reset(); } catch (e) {}
-  try {
-    if (typeof tourApi.forceStart === 'function') tourApi.forceStart();
-    else if (typeof tourApi.start === 'function') tourApi.start();
-  } catch (e) {}
+  const startTour = () => {
+    try {
+      if (typeof tourApi.forceStart === 'function') tourApi.forceStart();
+      else if (typeof tourApi.start === 'function') tourApi.start();
+    } catch (e) {}
+  };
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => setTimeout(startTour, 50));
+  } else {
+    setTimeout(startTour, 50);
+  }
 }
 
 function logoutAndReset() {

@@ -50,6 +50,19 @@
 - Classification (A/B/C/D/E/F): A) Script caching (stale assets).
 - Root cause (file:line): `index.html` loads `scripts/boot.js` and `scripts/tour.js` without cache-busting; Render/CDN continues serving pre-fix assets.
 
+## 2025-12-29 20:05 - Tour waits on 0x0 customer-select target
+- Branch/SHA: test/bay-occupancy-integer-check / bae624c5b6c47f4e5ee6aa2364c9644f70cd2182
+- Repro steps (Render):
+  1) Pre-set `WQT_CURRENT_USER` in localStorage.
+  2) Open `https://wqt-kd85.onrender.com/`.
+  3) Click "Re-run onboarding".
+- Console first error: Failed to load resource: the server responded with a status of 401 ().
+- Network (scripts): `https://wqt-kd85.onrender.com/scripts/tour.js?v=8c4cd05` 200.
+- Network (failed request): `/api/shifts/active` 401; `/api/me` 401; `/api/state` 401.
+- Classification (A/B/C/D/E/F): C) Init runs but target never becomes visible.
+- Root cause (file:line): `scripts/tour.js:347` treats any element with rect>0 as visible; `customer-select` exists but rect is 0x0, so overlay never renders.
+- Evidence: target rect `width=0,height=0`; tour state `status:"active", stepIndex:1`, overlay not present.
+
 ## 2025-12-29 18:40 - Tour reset URL rewrite + no auto-start
 - Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
 - Repro steps:
