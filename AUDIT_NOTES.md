@@ -167,3 +167,21 @@
 - Fix summary: None; removal blocked because /api/warehouse-map still depends on global_state.
 - Verification: ripgrep usage scan + Neon read-only queries listed above.
 - Risks: Dropping/renaming public.global_state would break warehouse map fetch/save and shared map commit.
+
+## 2025-12-29 15:05 - Warehouse map state decouple (dual-write)
+- Branch/SHA: test/bay-occupancy-integer-check / 333218938a7f5aebfe9632b1ca8c897d632263a9
+- Repro steps: Not run (pending verification in UI).
+- Console first error: None (not captured).
+- Network (scripts): None (not captured).
+- Network (failed request): None (not captured).
+- Evidence (code-level):
+  - `wqt-backend/migrations/20251229_add_warehouse_map_state.sql` adds warehouse_map_state table.
+  - `wqt-backend/app/db.py` adds WarehouseMapState model + load/save helpers.
+  - `wqt-backend/app/main.py:1133` GET /api/warehouse-map reads warehouse_map_state first, then falls back to global_state.
+  - `wqt-backend/app/main.py:1159` POST /api/warehouse-map dual-writes to warehouse_map_state + global_state.
+  - `scripts/api.js:443` POST /api/warehouse-map now includes ?warehouse= from UI context.
+- Classification (A/B/C/D/E/F): N/A (schema refactor).
+- Root cause (file:line): /api/warehouse-map persisted shared map in global_state (legacy).
+- Fix summary: Introduce warehouse_map_state; GET reads new table first; POST dual-writes to new table + global_state (temporary).
+- Verification: pending (UI save + Neon SELECT count(*) WHERE warehouse='Map-Warehouse3').
+- Risks: If migration not applied in Neon, writes to warehouse_map_state can fail; global_state fallback remains for compatibility.

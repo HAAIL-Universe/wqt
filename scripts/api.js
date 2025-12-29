@@ -84,6 +84,26 @@ function getDeviceId() {
 
 const USER_KEY = 'wqt_username';
 
+function resolveWarehouseId() {
+    try {
+        if (typeof window !== 'undefined' && window.WQT_WAREHOUSE_ID) {
+            return String(window.WQT_WAREHOUSE_ID);
+        }
+    } catch (e) {}
+
+    try {
+        if (typeof document !== 'undefined') {
+            const heading = document.querySelector('#tabWarehouseMap h2');
+            if (heading && heading.textContent) {
+                const m = heading.textContent.match(/Warehouse\s*(.+)$/i);
+                if (m && m[1]) return m[1].trim().replace(/\s+/g, '');
+            }
+        }
+    } catch (e) {}
+
+    return null;
+}
+
 function getLoggedInUser() {
     try {
         // NEW: unified identity object takes priority
@@ -441,7 +461,9 @@ const WqtAPI = {
     },
 
     async saveWarehouseMapToBackend(map) {
-        return fetchJSON('/api/warehouse-map', {
+        const warehouseId = resolveWarehouseId();
+        const qs = warehouseId ? `?warehouse=${encodeURIComponent(warehouseId || '')}` : '';
+        return fetchJSON(`/api/warehouse-map${qs}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ map }),
