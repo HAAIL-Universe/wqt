@@ -2620,18 +2620,22 @@ function updateAisleHasSpace(rows, isGlobal = false) {
   }
 }
 
-async function ensureGlobalOccupancyData() {
+async function ensureGlobalOccupancyData(force = false) {
   const warehouseId = getActiveWarehouseId();
   if (!warehouseId) return;
   if (wmOccupancyGlobalLoading) return wmOccupancyGlobalLoading;
-  if (wmOccupancyWarehouseAll === warehouseId && wmOccupancyLayoutAll.length) return;
+  const hasLayout = wmOccupancyWarehouseAll === warehouseId && wmOccupancyLayoutAll.length;
+  if (!force && hasLayout) return;
   const rowIds = (wmAisleSummary || []).map(a => a?.row_id || a?.aisle).filter(Boolean);
   if (!rowIds.length) return;
   wmOccupancyGlobalLoading = (async () => {
-    const layouts = [];
-    for (const rowId of rowIds) {
-      const layout = await loadBayOccupancyLayout(warehouseId, rowId);
-      if (Array.isArray(layout) && layout.length) layouts.push(...layout);
+    let layouts = wmOccupancyLayoutAll;
+    if (!hasLayout) {
+      layouts = [];
+      for (const rowId of rowIds) {
+        const layout = await loadBayOccupancyLayout(warehouseId, rowId);
+        if (Array.isArray(layout) && layout.length) layouts.push(...layout);
+      }
     }
     wmOccupancyLayoutAll = layouts;
     wmOccupancySnapshotAll = await loadBayOccupancySnapshot(warehouseId, null);
@@ -3084,6 +3088,15 @@ function renderCurrentOccupancyList() {
   } else {
     updateAisleHasSpace(withOutbox, false);
   }
+  if (typeof window !== 'undefined') {
+    window.__WQT_DEBUG = window.__WQT_DEBUG || {};
+    window.__WQT_DEBUG.occupancyCounts = {
+      global_rows: globalWithOutbox ? globalWithOutbox.length : 0,
+      list_rows: withOutbox.length,
+      has_space_rows: Array.from(wmAisleHasSpace.values()),
+      has_space_global: wmAisleHasSpaceGlobal,
+    };
+  }
   if (wmAisleSummary.length) renderAisleChips();
   renderBayOccupancyList(withOutbox);
 }
@@ -3249,6 +3262,9 @@ async function syncBayOccupancyOutbox() {
       } catch (err) {
         console.warn('[Warehouse Map] Failed to refresh occupancy after sync', err);
       }
+    }
+    if (successIds.length) {
+      await ensureGlobalOccupancyData(true);
     }
     renderCurrentOccupancyList();
 
