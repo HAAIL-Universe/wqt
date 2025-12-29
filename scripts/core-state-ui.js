@@ -3593,10 +3593,7 @@ function renderAisleChips() {
     const rowIdValue = item.row_id || item.aisle;
     const rowKey = String(rowIdValue || '').toUpperCase();
     btn.textContent = rowIdValue;
-    const emptyCount = Number(item.empty || 0);
-    const hasSpace = wmAisleHasSpaceGlobal
-      ? wmAisleHasSpace.has(rowKey)
-      : (wmAisleHasSpace.has(rowKey) || emptyCount > 0);
+    const hasSpace = wmAisleHasSpace.has(rowKey);
     if (hasSpace) {
       btn.classList.add('wm-chip-has-space');
     } else {
@@ -3782,6 +3779,9 @@ async function refreshWarehouseAisleBrowser() {
     wmAisleSummary = Array.isArray(res?.aisles) ? res.aisles : [];
     renderAisleChips();
     if (wmActiveAisle) selectAisle(wmActiveAisle);
+    ensureGlobalOccupancyData()?.then(() => {
+      renderCurrentOccupancyList();
+    });
   } catch (err) {
     console.warn('[Warehouse Map] Failed to load aisle summary', err);
     if (list) list.innerHTML = '<div class="hint">Failed to load aisles.</div>';
