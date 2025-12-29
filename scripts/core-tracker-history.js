@@ -1182,6 +1182,9 @@ function completeOrder() {
   tempWraps = [];
   undoStack = [];
 
+  const swapRoot = document.getElementById('activeOrderCard');
+  if (swapRoot) swapRoot.classList.remove('order-active');
+
   try { persistSharedPadOpen(false); } catch(e){}
 
   try {

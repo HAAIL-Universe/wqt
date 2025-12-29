@@ -352,3 +352,50 @@
 - Fix summary: Remove GlobalState model + helpers from runtime code; global_state table now unused by app.
 - Verification checklist (post-rename): open Warehouse Map, confirm GET /api/warehouse-map 200 and no POST; console shows no errors.
 - Risks: If any hidden runtime path still expects global_state, rename would fail; rg suggests none.
+## 2025-12-29 22:52 - Log Wrap Complete does not reset order UI (Playwright)
+- Branch/SHA: test/bay-occupancy-integer-check / 60dc9e622035ff69ff8bec1be219b84fb867b89e
+- Repro steps (Render, Playwright):
+  1) Navigate to https://wqt-kd85.onrender.com/ (headless Chromium).
+  2) Register/login with pin 47251 (picker). Tour overlay visible; clicked Skip. Onboarding overlay visible; clicked Skip for now.
+  3) Click Start shift; backend did not confirm within timeout, forced local startTime for repro.
+  4) Open customer selector (first group/location), set Units=10, Loc=2, click Start.
+  5) Log Wrap → Units left 0 → Complete.
+- Console first error: none.
+- Network (scripts):
+  - https://wqt-kd85.onrender.com/scripts/storage.js 200
+  - https://wqt-kd85.onrender.com/scripts/api.js 200
+  - https://wqt-kd85.onrender.com/scripts/customer-selector-modal.js 200
+  - https://wqt-kd85.onrender.com/scripts/core-state-ui.js 200
+  - https://wqt-kd85.onrender.com/scripts/core-metrics-actions.js 200
+  - https://wqt-kd85.onrender.com/scripts/core-tracker-history.js 200
+  - https://wqt-kd85.onrender.com/scripts/boot.js?v=221275b 200
+  - https://wqt-kd85.onrender.com/scripts/tour.js?v=221275b 200
+  - https://wqt-kd85.onrender.com/scripts/api.js 304
+  - https://wqt-kd85.onrender.com/scripts/storage.js 304
+  - https://wqt-kd85.onrender.com/scripts/core-tracker-history.js 304
+  - https://wqt-kd85.onrender.com/scripts/customer-selector-modal.js 304
+  - https://wqt-kd85.onrender.com/scripts/core-metrics-actions.js 304
+  - https://wqt-kd85.onrender.com/scripts/core-state-ui.js 304
+- Network (Complete / Fetch-XHR):
+  - POST https://wqt-backend.onrender.com/api/state?device-id=78bb7b42-ec92-4b5c-a97f-42644ee13cac 200 (x2)
+  - No failed requests observed for Complete.
+- UI state proof after Complete:
+  - #activeOrderCard classList includes `order-active` (display=block).
+  - #orderHeaderForm display=none; #orderHeaderProgress display=flex; #orderArea display=block.
+  - Customer selector / units / locations present but zero rects (not visible); Start disabled.
+- Storage proof (post-complete):
+  - WQT_CURRENT_USER=47251; shiftActive=1.
+  - wqt_v2722_data current=null, tempWraps=[], startTime=""; lastClose="".
+  - wqt_tour_v1__u_47251 status=skipped.
+- Classification (Contract A–F): C) Init/handler not called — completion path never clears `order-active` or calls restoreActiveOrderUI, so CSS stays in active state.
+- Classification (User A–F): D) State machine mismatch — state cleared but UI remains active due to sticky `order-active`.
+- Root cause (file:line): scripts/core-tracker-history.js:1179-1207 clears `current` but never removes `#activeOrderCard.order-active`; styles in styles/index.css:1654-1656 force active-order UI.
+- Fix summary:
+  - scripts/core-tracker-history.js removes `order-active` when completing an order to allow header form to display.
+- Verification (local, Playwright via http://127.0.0.1:8090/index.html; localStorage bootstrap since patch not deployed):
+  - Console first error: CORS blocked /api/shifts/* from local origin (expected for local static run).
+  - Network (Complete): /api/state and /api/orders/record net::ERR_FAILED due to CORS (expected local).
+  - UI after Complete: #activeOrderCard classList=card (no order-active); orderHeaderForm display=block; orderHeaderProgress/orderArea display=none; customer selector + units/loc inputs visible; Start disabled.
+  - Refresh: idle UI persists; activeOrderCard display=block; orderHeaderForm visible; orderHeaderProgress/orderArea hidden.
+  - Storage after refresh: wqt_v2722_data__u_codex-local current=null, startTime=08:00, picks recorded; shiftActive=1.
+  - Tour state: wqt_tour_v1__u_codex-local status=skipped.
