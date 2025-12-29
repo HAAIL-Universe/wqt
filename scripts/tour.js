@@ -164,6 +164,45 @@
     return Number.isFinite(n) && n > 0;
   }
 
+  function getTourParams() {
+    try {
+      return new URL(window.location.href).searchParams.getAll('tour');
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function hasTourParam() {
+    return getTourParams().indexOf('1') !== -1;
+  }
+
+  function hasTourForceParam() {
+    const params = getTourParams();
+    return params.indexOf('force') !== -1 || params.indexOf('reset') !== -1;
+  }
+
+  function getStepIndex(id) {
+    for (let i = 0; i < steps.length; i++) {
+      if (steps[i].id === id) return i;
+    }
+    return 0;
+  }
+
+  function getInputValue(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : '';
+  }
+
+  function getStartIndexFromUI() {
+    const customer = getInputValue('oCust');
+    if (!customer) return getStepIndex('customer-select');
+    const units = getInputValue('oTotal');
+    if (!isPositiveInt(units)) return getStepIndex('units-input');
+    const locations = getInputValue('order-locations');
+    if (!isPositiveInt(locations)) return getStepIndex('locations-input');
+    return getStepIndex('order-start');
+  }
+
   function ensureUI() {
     if (overlay) return;
     overlay = document.createElement('div');
@@ -586,6 +625,11 @@
     showStep(0);
   }
 
+  function startTourAt(index) {
+    setState({ status: 'active', stepIndex: index });
+    showStep(index);
+  }
+
   function pauseTour() {
     setState({ status: 'paused' });
     hideOverlay();
@@ -622,6 +666,17 @@
       pause: pauseTour,
       skip: skipTour
     };
+
+    if (hasTourParam()) {
+      const forceStart = hasTourForceParam() || window.__TOUR_RESET === true;
+      if (!forceStart && (state.status === 'completed' || state.status === 'skipped')) return;
+      if (state.status === 'active') {
+        showStep(state.stepIndex || 0);
+      } else {
+        startTourAt(getStartIndexFromUI());
+      }
+      return;
+    }
 
     window.addEventListener('tour:shift-length-selected', () => {
       if (state.status === 'inactive') startTour();

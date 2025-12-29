@@ -30,10 +30,15 @@ function getDeviceIdSafe() {
   } catch (e) {
     console.warn('[tour] reset failed', e);
   }
+  window.__TOUR_RESET = true;
   const keep = tourParams.filter(v => v !== 'reset');
   url.searchParams.delete('tour');
   keep.forEach(v => url.searchParams.append('tour', v));
-  window.location.replace(url.toString());
+  if (window.history && typeof window.history.replaceState === 'function') {
+    window.history.replaceState({}, '', url.toString());
+  } else {
+    window.location.replace(url.toString());
+  }
 })();
 
 function logoutAndReset() {

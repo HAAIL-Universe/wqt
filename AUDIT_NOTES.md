@@ -1,3 +1,47 @@
+## 2025-12-29 19:10 - Tour respects skip/completed unless forced
+- Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
+- Repro steps (Render, pre-fix):
+  1) Pre-seed localStorage with `WQT_CURRENT_USER` and `wqt_tour_v1__u_test-user` = `{status:"skipped", stepIndex:3}`.
+  2) Open `https://wqt-kd85.onrender.com/index.html?tour=1`.
+  3) Observe `tour` params remain, boot/tour scripts load, and `/api/*` returns 401 without auth.
+- Console first error: Failed to load resource: the server responded with a status of 401 ().
+- Network (scripts): `https://wqt-kd85.onrender.com/scripts/boot.js` 200; `https://wqt-kd85.onrender.com/scripts/tour.js` 200.
+- Network (failed request): `https://wqt-backend.onrender.com/api/me` 401; `https://wqt-backend.onrender.com/api/shifts/active?...` 401.
+- Classification (A/B/C/D/E/F): C) Init runs but gating is wrong (tour=1 overrides skipped/completed).
+- Root cause (file:line): `scripts/tour.js:662-669` bootstraps on `tour=1` without honoring `state.status === skipped/completed`.
+- Fix summary: add `tour=force` override and only force-start when forced; set a boot flag when reset runs so the tour can honor `tour=reset` even after URL cleanup.
+- Verification (local, post-fix):
+  - `?tour=1` + skipped state preserves `status:"skipped"`.
+  - `?tour=force&tour=1` promotes to `status:"active"`.
+  - `?tour=reset&tour=1` resets and starts (`status:"active"`).
+- Verification (Render, post-fix attempt):
+  - Opened `https://wqt-kd85.onrender.com/index.html?tour=reset&tour=1` with localStorage pre-seeded to completed.
+  - URL settled to `?tour=1`, but stored `wqt_tour_*` remained `status:"completed"` (reset did not clear).
+  - /api responses returned 401 without auth; console first error: "Failed to load resource: the server responded with a status of 401 ()".
+  - Render appears to be running pre-fix assets; requires deploy to validate.
+
+## 2025-12-29 18:40 - Tour reset URL rewrite + no auto-start
+- Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
+- Repro steps:
+  1) Start local static server at repo root (python -m http.server 8081).
+  2) Open `http://127.0.0.1:8081/index.html?tour=reset&tour=1` with `WQT_CURRENT_USER` pre-set in localStorage.
+  3) Observe URL rewrites to `?tour=1`, tour overlay does not show, and no `wqt_tour_*` keys are created.
+- Console first error: Access to fetch at 'https://wqt-backend.onrender.com/api/shifts/active?device-id=...' from origin 'http://127.0.0.1:8081' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Network (scripts): `/scripts/boot.js` 200; `/scripts/tour.js` 200.
+- Network (failed request): `https://wqt-backend.onrender.com/api/shifts/active?...` blocked by CORS (local origin).
+- Classification (A/B/C/D/E/F): C) Init not called / handlers not bound.
+- Root cause (file:line):
+  - `scripts/boot.js:13-36` resets `tour=reset` via `window.location.replace`, triggering an immediate reload to `?tour=1` before tour startup can run.
+  - `scripts/tour.js:626-631` starts only on `tour:shift-length-selected`, so `tour=1` alone never boots when onboarding is already complete.
+- Fix summary:
+  - `scripts/boot.js` switches URL cleanup to `history.replaceState` (no reload).
+  - `scripts/tour.js` bootstraps `tour=1` and selects start step from current UI inputs.
+- Verification (local, headless Playwright):
+  - Opened `http://127.0.0.1:8081/index.html?tour=reset&tour=1` with `WQT_CURRENT_USER` pre-set.
+  - URL settled at `?tour=1` and new `wqt_tour_*` key created (state active, stepIndex=1).
+  - Console: CORS error for Render backend (expected for local origin); no page errors.
+- Risks: `tour=1` now force-starts even if a user previously skipped/completed, but only when explicitly set in the URL.
+
 ## 2025-12-29 11:40 - Warehouse Map loading gate
 - Branch/SHA: test/bay-occupancy-integer-check / 4ae48f32e080655254fb8a550d14e330d1ab7ea0
 - Repro steps:
