@@ -63,6 +63,24 @@
 - Root cause (file:line): `scripts/tour.js:347` treats any element with rect>0 as visible; `customer-select` exists but rect is 0x0, so overlay never renders.
 - Evidence: target rect `width=0,height=0`; tour state `status:"active", stepIndex:1`, overlay not present.
 
+## 2025-12-29 20:16 - Tour autostarts too early + units input auto-advance
+- Branch/SHA: test/bay-occupancy-integer-check / 505fdbc66040ab2b8da3f5a7b1aeeacb5f9fe141
+- Repro steps (local):
+  1) Start local static server at repo root (python -m http.server 8085).
+  2) Pre-set `WQT_CURRENT_USER` in localStorage.
+  3) Dispatch `tour:shift-length-selected` without starting a shift.
+  4) Set UI state to shift_active, activate units step, type a single digit in Units input.
+- Console first error: Access to fetch at 'https://wqt-backend.onrender.com/api/shifts/active?...' from origin 'http://127.0.0.1:8085' has been blocked by CORS policy (expected local origin).
+- Network (scripts): N/A (local static server; no capture).
+- Network (failed request): `https://wqt-backend.onrender.com/api/shifts/active?...` blocked by CORS.
+- Classification (A/B/C/D/E/F): C) Init/handlers bind to the wrong triggers (tour starts before shift is active; input auto-advances).
+- Root cause (file:line):
+  - `scripts/tour.js:671` listens for `tour:shift-length-selected` and starts the tour even before shift start.
+  - `scripts/tour.js:20` units/locations steps use `advanceOn.inputValid`, causing auto-advance on first digit.
+- Evidence:
+  - After `tour:shift-length-selected`, tour state becomes `status:"active", stepIndex:0` without shift started.
+  - On units step with shift_active, input event advances from stepIndex 2 -> 3 immediately.
+
 ## 2025-12-29 18:40 - Tour reset URL rewrite + no auto-start
 - Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
 - Repro steps:

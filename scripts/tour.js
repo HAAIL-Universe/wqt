@@ -23,15 +23,14 @@
       id: 'units-input',
       title: 'Enter total units',
       body: 'Type the total units for this order.',
-      selector: '[data-tour="units-input"]',
-      advanceOn: { inputValid: isPositiveInt }
+      selector: '[data-tour="units-input"]'
     },
     {
       id: 'locations-input',
       title: 'Enter locations',
       body: 'Type the number of locations for this order.',
       selector: '[data-tour="locations-input"]',
-      advanceOn: { inputValid: isPositiveInt }
+      onShow: () => focusLocationsInput()
     },
     {
       id: 'order-start',
@@ -70,6 +69,9 @@
   let btnSkip;
   let btnLater;
   let btnNever;
+  let actionsWrap;
+  let actionsBase;
+  let nextBase;
   let maskTop;
   let maskBottom;
   let maskLeft;
@@ -162,6 +164,13 @@
   function isPositiveInt(value) {
     const n = parseInt(value, 10);
     return Number.isFinite(n) && n > 0;
+  }
+
+  function focusLocationsInput() {
+    const el = document.getElementById('order-locations');
+    if (!el) return;
+    try { el.focus(); } catch (e) {}
+    try { el.click(); } catch (e) {}
   }
 
   function getTourParams() {
@@ -257,6 +266,7 @@
     actions.style.gap = '6px';
     actions.style.flexWrap = 'wrap';
     actions.style.justifyContent = 'flex-end';
+    actionsWrap = actions;
 
     btnLater = createActionButton('Later');
     btnSkip = createActionButton('Skip');
@@ -286,6 +296,9 @@
     btnSkip.addEventListener('click', skipTour);
     btnLater.addEventListener('click', pauseTour);
     btnNever.addEventListener('click', skipTour);
+
+    applyActionLayout();
+    window.addEventListener('resize', applyActionLayout);
   }
 
   function createMask() {
@@ -309,6 +322,46 @@
     btn.style.background = primary ? '#22c55e' : '#0f172a';
     btn.style.color = primary ? '#0b1220' : '#e5e7eb';
     return btn;
+  }
+
+  function applyActionLayout() {
+    if (!actionsWrap || !btnNext) return;
+    if (!actionsBase) {
+      actionsBase = {
+        flexDirection: actionsWrap.style.flexDirection || '',
+        alignItems: actionsWrap.style.alignItems || '',
+        justifyContent: actionsWrap.style.justifyContent || ''
+      };
+    }
+    if (!nextBase) {
+      nextBase = {
+        width: btnNext.style.width || '',
+        padding: btnNext.style.padding || '',
+        fontSize: btnNext.style.fontSize || '',
+        fontWeight: btnNext.style.fontWeight || '',
+        order: btnNext.style.order || ''
+      };
+    }
+    const isMobile = (window.matchMedia && window.matchMedia('(max-width: 520px)').matches) || window.innerWidth <= 520;
+    if (isMobile) {
+      actionsWrap.style.flexDirection = 'column';
+      actionsWrap.style.alignItems = 'stretch';
+      actionsWrap.style.justifyContent = 'stretch';
+      btnNext.style.width = '100%';
+      btnNext.style.padding = '10px 12px';
+      btnNext.style.fontSize = '14px';
+      btnNext.style.fontWeight = '700';
+      btnNext.style.order = '10';
+      return;
+    }
+    actionsWrap.style.flexDirection = actionsBase.flexDirection;
+    actionsWrap.style.alignItems = actionsBase.alignItems;
+    actionsWrap.style.justifyContent = actionsBase.justifyContent;
+    btnNext.style.width = nextBase.width;
+    btnNext.style.padding = nextBase.padding;
+    btnNext.style.fontSize = nextBase.fontSize;
+    btnNext.style.fontWeight = nextBase.fontWeight;
+    btnNext.style.order = nextBase.order;
   }
 
   function showOverlay() {
@@ -403,6 +456,11 @@
     showOverlay();
     positionAll();
     bindAdvanceHandlers(step, el);
+    if (step.onShow) {
+      setTimeout(() => {
+        try { step.onShow(el); } catch (e) {}
+      }, 0);
+    }
     log('step', step.id);
   }
 
@@ -431,6 +489,27 @@
         window.addEventListener(evt, onEvt, { once: true });
         activeListeners.push({ el: window, type: evt, fn: onEvt });
       });
+    }
+
+    if (step.id === 'units-input') {
+      const onKey = (ev) => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        advanceStep();
+        setTimeout(focusLocationsInput, 50);
+      };
+      el.addEventListener('keydown', onKey);
+      activeListeners.push({ el, type: 'keydown', fn: onKey });
+    }
+
+    if (step.id === 'locations-input') {
+      const onKey = (ev) => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        advanceStep();
+      };
+      el.addEventListener('keydown', onKey);
+      activeListeners.push({ el, type: 'keydown', fn: onKey });
     }
 
     if (step.id === 'customer-select') {
@@ -662,11 +741,12 @@
     log('reset');
   }
 
-  function forceStartTour() {
+  function forceStartTour(index) {
     clearTimers();
     cleanupListeners();
     hideOverlay();
-    startTourAt(getStartIndexFromUI());
+    const targetIndex = Number.isFinite(index) ? index : getStartIndexFromUI();
+    startTourAt(targetIndex);
   }
 
   function pauseTour() {
@@ -721,8 +801,9 @@
       return;
     }
 
-    window.addEventListener('tour:shift-length-selected', () => {
-      if (state.status === 'inactive') startTour();
+    window.addEventListener('tour:shift-started', () => {
+      if (state.status === 'completed' || state.status === 'skipped') return;
+      forceStartTour(getStepIndex('customer-select'));
     });
 
     if (state.status === 'active') {
