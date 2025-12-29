@@ -57,3 +57,66 @@
   - Console: no errors observed during capture.
   - Network: 200 responses observed for `warehouse-map?warehouse=Map-Warehouse3` and `bay-occupancy?warehouse=Map-Warehouse3`.
   - Evidence: user-provided screenshots captured during live run (slow3g + disable cache).
+
+## 2025-12-29 14:05 - Bay occupancy warehouse id normalization (Map—Warehouse3)
+- Branch/SHA: test/bay-occupancy-integer-check / 27f2507a02fe433836123a7964087cfdcb63d4d9
+- Repro steps (per user report):
+  1) Open Warehouse Map (Warehouse 3).
+  2) Observe aisles B, D, J, F, H show available in DB, but UI highlights only B, F, H.
+  3) Open aisle D or J; UI reports no available space in the info list.
+- Console first error: None reported (user-provided evidence bundle).
+- Network (failed request): None; `/api/bay-occupancy` + `/api/warehouse-map` return 200 (user-provided evidence bundle).
+- Data evidence (user-provided):
+  - bay_occupancy.json warehouses use EM DASH (U+2014), e.g., "Map—Warehouse3".
+  - Neon COUNT(*) WHERE warehouse = 'Map-Warehouse3' returned 0 (dash mismatch).
+- Classification (A/B/C/D/E/F): F) Backend data mismatch not surfaced in UI (closest fit for required classification).
+- Root cause (file:line):
+  - `index.html:736` uses an EM DASH in the Warehouse Map heading, feeding `scripts/core-state-ui.js` warehouse extraction without normalization.
+  - `wqt-backend/app/db.py:849` filtered bay_occupancy rows by raw warehouse string, allowing Unicode dash variants to diverge.
+- Fix summary:
+  - Normalize warehouse identifiers on UI + backend, and validate bay_occupancy writes against active warehouse_locations to prevent ghost rows.
+- Verification: pending (requires Neon SQL checks + live UI capture per runbook).
+- Risks: If Neon migration is not applied, mixed dash rows can still exist until normalized in DB.
+
+## 2025-12-29 15:10 - Bay occupancy semantics + sanity query
+- Branch/SHA: test/bay-occupancy-integer-check / 27f2507a02fe433836123a7964087cfdcb63d4d9
+- Evidence (code-level):
+  - Occupancy math uses used units: `scripts/core-state-ui.js:2651` (`computeBayRemaining` = 6 - (euro*2 + uk*3)).
+  - UI availability filter: `scripts/core-state-ui.js:2657` (`remaining >= 1.0`).
+  - Table definition names "pallet occupancy" with capacity constraint: `wqt-backend/migrations/20251228_add_bay_occupancy.sql:1-16`.
+  - New row default on write: `wqt-backend/app/db.py:955` seeds `euro_count=0`, `uk_count=2` (full).
+- Sanity query (Neon): compute remaining and available euro units for humans.
+  ```sql
+  SELECT
+    warehouse, row_id, aisle, bay, layer,
+    euro_count, uk_count,
+    (6 - (euro_count * 2 + uk_count * 3)) AS remaining_units,
+    round((6 - (euro_count * 2 + uk_count * 3)) / 2.0, 2) AS available_euro_units
+  FROM public.bay_occupancy
+  WHERE warehouse = '<WAREHOUSE_ID>'
+  ORDER BY aisle, bay, layer;
+  ```
+- Optional API sanity check (browser console after `/api/bay-occupancy`):
+  ```js
+  rows.map(r => ({
+    ...r,
+    remaining_units: 6 - (r.euro_count * 2 + r.uk_count * 3),
+    available_euro_units: Math.round(((6 - (r.euro_count * 2 + r.uk_count * 3)) / 2) * 10) / 10
+  }))
+  ```
+- Follow-up note: If `uk_count=2` should represent empty, current math would be inconsistent. If not intentional, minimal fix is to seed missing rows with `euro_count=0`, `uk_count=0` in `wqt-backend/app/db.py:955` (or avoid auto-creating rows until first write).
+
+## 2025-12-29 15:45 - Seed missing bay_occupancy rows as empty
+- Branch/SHA: test/bay-occupancy-integer-check / 27f2507a02fe433836123a7964087cfdcb63d4d9
+- Repro steps (per user report):
+  1) Open Warehouse Map.
+  2) Click +UK on a bay with no prior occupancy row.
+  3) Observe action behaves like bay is full (capacity_exceeded / no availability).
+- Console first error: None reported (user-provided evidence bundle).
+- Network (failed request): N/A (requires live capture).
+- Classification (A/B/C/D/E/F): F) Backend data mismatch not surfaced in UI.
+- Root cause (file:line): `wqt-backend/app/db.py:955` seeds missing rows as full (`uk_count=2`), so first-touch actions start at capacity.
+- Fix summary: Seed missing bay_occupancy rows as empty (`euro_count=0`, `uk_count=0`) before applying deltas.
+- Verification: pending; requires Neon sanity query + UI click evidence to confirm row initializes at 0/0 then increments.
+- Risks: None known; behavior aligns with occupied-pallet semantics.
+- Note: Prior warehouse-id normalization/debug changes were parked; not part of this fix.
