@@ -3542,10 +3542,8 @@ function refreshBayPendingCountUI() {
 function toggleUpdateBaseControls() {
   const btn = document.getElementById('wmUpdateBaseBtn');
   const panel = document.getElementById('wmUpdateBasePanel');
-  const saveBtn = document.getElementById('btnSaveMap');
   const visible = !!window.rowGeneratorUnlocked;
   if (btn) btn.style.display = visible ? '' : 'none';
-  if (saveBtn) saveBtn.style.display = visible ? '' : 'none';
   if (!visible && panel) panel.style.display = 'none';
 }
 
@@ -3981,28 +3979,7 @@ function handleBayInputChange(e) {
 
 // Save warehouse map (called from Save Map button)
 function saveWarehouseMap() {
-  saveWarehouseMapData();
-
-  try {
-    const saveFn = window?.WqtAPI?.saveWarehouseMapToBackend;
-    if (typeof saveFn === 'function') {
-      Promise.resolve(saveFn(warehouseMapData))
-        .then(() => {
-          showToast?.('Warehouse map committed');
-        })
-        .catch(err => {
-          console.warn('[Warehouse Map] Failed to commit shared map', err);
-          showToast?.('Saved locally; commit failed');
-        });
-      return;
-    }
-  } catch (err) {
-    console.warn('[Warehouse Map] Error while committing shared map', err);
-    showToast?.('Saved locally; commit failed');
-    return;
-  }
-
-  showToast?.('Warehouse map saved');
+  showToast?.('Map layout editing removed');
 }
 
 function initWarehouseRowForm() {

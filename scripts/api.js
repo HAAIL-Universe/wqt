@@ -460,16 +460,6 @@ const WqtAPI = {
         return fetchJSON(`/api/warehouse-map${qs}`, { method: 'GET' });
     },
 
-    async saveWarehouseMapToBackend(map) {
-        const warehouseId = resolveWarehouseId();
-        const qs = warehouseId ? `?warehouse=${encodeURIComponent(warehouseId || '')}` : '';
-        return fetchJSON(`/api/warehouse-map${qs}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ map }),
-        });
-    },
-
     async fetchBayOccupancy(warehouseId, aisle) {
         const qs = `?warehouse=${encodeURIComponent(warehouseId || '')}` +
             (aisle ? `&aisle=${encodeURIComponent(aisle)}` : '');

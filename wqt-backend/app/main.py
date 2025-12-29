@@ -107,10 +107,6 @@ from .db import (
     get_history_for_operator,   # NEW: fetch archived orders for frontend
     load_device_state,          # NEW: legacy fallback
     save_device_state,          # NEW: migrate to user key
-    load_global_state,
-    save_global_state,
-    load_warehouse_map_state,
-    save_warehouse_map_state,
     User,
     bulk_upsert_locations,
     get_warehouse_aisle_summary,
@@ -989,10 +985,6 @@ class OrderRecordPayload(BaseModel):
     notes: Optional[str] = None
 
 
-class WarehouseMapPayload(BaseModel):
-    map: Dict[str, Any]
-
-
 class WarehouseLocationItem(BaseModel):
     aisle: str
     bay: int
@@ -1142,45 +1134,9 @@ async def api_get_warehouse_map(
         warehouse_id = "WH3"
 
     canonical_map = get_warehouse_map_from_locations(warehouse_id)
-    shared_map = load_warehouse_map_state(warehouse_id)
-    legacy_map = shared_map if isinstance(shared_map, dict) else None
-    if legacy_map is None:
-        payload = load_global_state() or {}
-        legacy_map = payload.get("warehouse_map") if isinstance(payload, dict) else None
-    legacy_map = legacy_map if isinstance(legacy_map, dict) else {}
-
     if isinstance(canonical_map, dict) and canonical_map.get("aisles"):
-        merged_map = dict(legacy_map)
-        merged_map.update(canonical_map)
-        merged_map["aisles"] = canonical_map.get("aisles") or {}
-        return {"success": True, "map": merged_map}
-
-    if not legacy_map:
-        legacy_map = {"aisles": {}}
-
-    return {"success": True, "map": legacy_map}
-
-
-@app.post("/api/warehouse-map")
-async def api_set_warehouse_map(
-    data: WarehouseMapPayload,
-    warehouse: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user),
-) -> Dict[str, Any]:
-    warehouse_id = str(warehouse or "").strip()
-    if not warehouse_id:
-        warehouse_id = "WH3"
-
-    payload: Dict[str, Any] = load_global_state() or {}
-    if not isinstance(payload, dict):
-        payload = {}
-
-    payload["warehouse_map"] = data.map
-    save_warehouse_map_state(warehouse_id, data.map)
-    # TODO(2025-12-29): remove global_state dual-write after verifying warehouse_map_state in prod.
-    save_global_state(payload)
-
-    return {"success": True, "map": payload["warehouse_map"]}
+        return {"success": True, "map": canonical_map}
+    return {"success": True, "map": {"aisles": {}}}
 
 
 @app.get("/api/bay-occupancy")

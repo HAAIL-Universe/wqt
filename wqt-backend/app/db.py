@@ -21,7 +21,6 @@ from sqlalchemy import (
     case,
 )
 from sqlalchemy import text
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
 
@@ -102,14 +101,6 @@ class GlobalState(Base):
     __tablename__ = "global_state"
     id = Column(Integer, primary_key=True, index=True)
     payload = Column(Text, nullable=False)
-
-
-class WarehouseMapState(Base):
-    __tablename__ = "warehouse_map_state"
-    warehouse = Column(Text, primary_key=True)
-    state = Column(JSONB, nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_by_device_id = Column(Text, nullable=True)
 
 
 class DeviceState(Base):
@@ -349,61 +340,6 @@ def save_global_state(payload: dict) -> None:
         else:
             row.payload = json.dumps(payload or {})
         session.commit()
-    finally:
-        session.close()
-
-
-def load_warehouse_map_state(warehouse: str) -> Optional[dict]:
-    if engine is None:
-        return None
-    warehouse_value = str(warehouse or "").strip()
-    if not warehouse_value:
-        return None
-    session = get_session()
-    try:
-        row = session.query(WarehouseMapState).filter(WarehouseMapState.warehouse == warehouse_value).first()
-        if not row:
-            return None
-        payload = row.state
-        if isinstance(payload, str):
-            try:
-                return json.loads(payload)
-            except Exception:
-                return None
-        return payload
-    except Exception:
-        return None
-    finally:
-        session.close()
-
-
-def save_warehouse_map_state(
-    warehouse: str,
-    state: dict,
-    updated_by_device_id: Optional[str] = None,
-) -> None:
-    if engine is None:
-        return
-    warehouse_value = str(warehouse or "").strip()
-    if not warehouse_value:
-        return
-    session = get_session()
-    try:
-        row = session.query(WarehouseMapState).filter(WarehouseMapState.warehouse == warehouse_value).first()
-        if not row:
-            session.add(WarehouseMapState(
-                warehouse=warehouse_value,
-                state=state or {},
-                updated_by_device_id=updated_by_device_id,
-            ))
-        else:
-            row.state = state or {}
-            row.updated_at = datetime.now(timezone.utc)
-            if updated_by_device_id is not None:
-                row.updated_by_device_id = updated_by_device_id
-        session.commit()
-    except Exception:
-        session.rollback()
     finally:
         session.close()
 

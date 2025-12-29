@@ -5,8 +5,6 @@ from typing import Optional
 
 from .models import MainState
 from .db import (
-    load_global_state,
-    save_global_state,
     load_device_state,
     save_device_state,
 )
@@ -67,7 +65,7 @@ def load_main(device_id: Optional[str] = None) -> MainState:
     if not payload:
         payload = _load_from_file()
 
-    # 3) Fresh install / first run – minimal sane defaults.
+    # 3) Fresh install / first run - minimal sane defaults.
     if not payload:
         return MainState(version="3.3.55")
 
@@ -89,7 +87,7 @@ def save_main(state: MainState, device_id: Optional[str] = None) -> None:
     if device_id:
         save_device_state(device_id, payload)
     else:
-        # No device_id – only keep a local backup, don't pollute global DB state
+        # No device_id - only keep a local backup, don't pollute global DB state
         _save_to_file(payload)
         return
 

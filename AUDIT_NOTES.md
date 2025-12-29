@@ -185,3 +185,15 @@
 - Fix summary: Introduce warehouse_map_state; GET reads new table first; POST dual-writes to new table + global_state (temporary).
 - Verification: pending (UI save + Neon SELECT count(*) WHERE warehouse='Map-Warehouse3').
 - Risks: If migration not applied in Neon, writes to warehouse_map_state can fail; global_state fallback remains for compatibility.
+
+## 2025-12-29 15:49 - Remove warehouse map layout persistence (product decision)
+- Branch/SHA: test/bay-occupancy-integer-check / e7d56369f744af29c94a6cb27d3060f26fab30f9
+- Repro steps (user-reported): Warehouse Tools → Open Warehouse Map → map loads layout + availability correctly.
+- Console first error: none (user-reported).
+- Network (scripts): not captured.
+- Network (failed request): none (user-reported; no POST /api/warehouse-map in normal flow).
+- Classification (A/B/C/D/E/F): F (backend feature removal; no runtime failure observed).
+- Root cause (file:line): Warehouse map layout persistence is obsolete; shared layout saves should be removed.
+- Fix summary: Remove Save Map control + POST /api/warehouse-map; GET now returns canonical layout only; remove warehouse_map_state model/migration.
+- Verification checklist: open Warehouse Map and confirm layout + occupancy render; DevTools shows GETs only and no POST /api/warehouse-map; console shows no errors.
+- Risks: If any hidden workflow still expects Save Map, it will no longer persist layout.
