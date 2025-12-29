@@ -795,7 +795,11 @@
 
       <div id="wmAisleBrowser">
         <div id="wmLoading" class="hint" style="display:none; margin-bottom:10px;" role="status" aria-live="polite">
-          <span class="wm-spinner" aria-hidden="true"></span>
+          <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 16 16" style="display:inline-block; margin-right:8px; vertical-align:-2px;">
+            <circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-dasharray="10 6">
+              <animateTransform attributeName="transform" type="rotate" from="0 8 8" to="360 8 8" dur="0.8s" repeatCount="indefinite" />
+            </circle>
+          </svg>
           Loading warehouse information...
         </div>
         <div id="wmAisleHint" class="hint" style="margin-bottom:10px;">Tap an aisle to view available bay space.</div>

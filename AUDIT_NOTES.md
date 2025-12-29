@@ -38,3 +38,16 @@
 - Data evidence: public.global_state rowcount = 1; schema columns id (integer), payload (text).
 - Change summary: GET /api/warehouse-map accepts `?warehouse=` and defaults to `WH3` if missing; canonical aisles are merged with legacy map keys, with canonical aisles winning.
 - Verification (runtime): pending; requires live `/api/warehouse-map` response capture and frontend render confirmation.
+
+## 2025-12-29 12:56 - Warehouse Map loader spinner hardening
+- Branch/SHA: test/bay-occupancy-integer-check / fe0126bb97ddb75942760ebfdcb8fe855d01bcf9
+- Repro steps:
+  1) Login to WQT (role does not matter).
+  2) On "Warehouse tools", click "Open Warehouse Map".
+  3) Warehouse Map - Warehouse 3 opens.
+  4) Blocking loader appears; reported spinner not visibly animating.
+- Console first error: No console errors (per user report).
+- Classification (A/B/C/D/E/F): F (UX affordance issue per request).
+- Root cause (file:line): `index.html:797` loader relied on CSS spinner; user reported no visible animation in loading state.
+- Fix summary: replaced CSS-only spinner with inline SVG animateTransform inside `#wmLoading` to guarantee animation.
+- Verification: pending; requires runtime computed styles + visual confirmation of animation.
