@@ -93,16 +93,6 @@ def get_session() -> Session:
 # --- Models ---
 
 
-class GlobalState(Base):
-    """
-    Legacy single row of global payload.
-    Only really used for global admin flags / feature toggles.
-    """
-    __tablename__ = "global_state"
-    id = Column(Integer, primary_key=True, index=True)
-    payload = Column(Text, nullable=False)
-
-
 class DeviceState(Base):
     """
     Legacy state blob per device_id.
@@ -314,34 +304,6 @@ class BayOccupancy(Base):
 
 
 # --- Global / device state helpers ---
-
-
-def load_global_state() -> Optional[dict]:
-    if engine is None:
-        return None
-    session = get_session()
-    try:
-        row = session.query(GlobalState).filter(GlobalState.id == 1).first()
-        return json.loads(row.payload) if row else None
-    except Exception:
-        return None
-    finally:
-        session.close()
-
-
-def save_global_state(payload: dict) -> None:
-    if engine is None:
-        return
-    session = get_session()
-    try:
-        row = session.query(GlobalState).filter(GlobalState.id == 1).first()
-        if not row:
-            session.add(GlobalState(id=1, payload=json.dumps(payload or {})))
-        else:
-            row.payload = json.dumps(payload or {})
-        session.commit()
-    finally:
-        session.close()
 
 
 def load_device_state(device_id: str) -> Optional[dict]:
