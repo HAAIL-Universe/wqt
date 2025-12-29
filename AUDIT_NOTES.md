@@ -145,3 +145,25 @@
 - Fix summary: No further logic changes; confirms counts represent OCCUPIED pallets and UI gating matches capacity rules.
 - Verification: User reports flow is correct and working.
 - Risks: None reported.
+
+## 2025-12-29 14:56 - global_state usage audit
+- Branch/SHA: test/bay-occupancy-integer-check / 06ee2f496f11b01eaeec09c62fa2daefa829b111
+- Repro steps: N/A (DB usage audit; no runtime change).
+- Console first error: None (not captured).
+- Network (scripts): None (not captured).
+- Network (failed request): None (not captured).
+- Evidence (code-level):
+  - `wqt-backend/app/main.py:1133` GET /api/warehouse-map reads global_state via load_global_state.
+  - `wqt-backend/app/main.py:1159` POST /api/warehouse-map writes global_state via save_global_state.
+  - `wqt-backend/app/db.py:101` GlobalState ORM model bound to public.global_state.
+  - `scripts/api.js:438` fetches /api/warehouse-map; `scripts/api.js:443` posts /api/warehouse-map.
+  - `scripts/core-state-ui.js:3987` calls saveWarehouseMapToBackend (shared map commit).
+- Evidence (DB-level via psycopg2 on DATABASE_URL):
+  - public.global_state exists; rowcount = 1.
+  - No views/matviews/functions/triggers referencing global_state.
+  - No FKs referencing global_state.
+  - No pg_cron/pgagent scheduled jobs installed; no jobs referencing global_state.
+- Classification (A/B/C/D/E/F): N/A (non-incident audit).
+- Fix summary: None; removal blocked because /api/warehouse-map still depends on global_state.
+- Verification: ripgrep usage scan + Neon read-only queries listed above.
+- Risks: Dropping/renaming public.global_state would break warehouse map fetch/save and shared map commit.
