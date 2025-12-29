@@ -197,3 +197,17 @@
 - Fix summary: Remove Save Map control + POST /api/warehouse-map; GET now returns canonical layout only; remove warehouse_map_state model/migration.
 - Verification checklist: open Warehouse Map and confirm layout + occupancy render; DevTools shows GETs only and no POST /api/warehouse-map; console shows no errors.
 - Risks: If any hidden workflow still expects Save Map, it will no longer persist layout.
+
+## 2025-12-29 15:57 - Global state cleanup (prep for rename)
+- Branch/SHA: test/bay-occupancy-integer-check / e907a0ad857ce33a8182252d0f250c7771980b71
+- Repro steps: Pending (post-rename verification: open Warehouse Map and confirm layout loads).
+- Console first error: Pending (post-rename).
+- Network (scripts): Pending (post-rename).
+- Network (failed request): Pending (post-rename; ensure no POST /api/warehouse-map).
+- Evidence (code-level):
+  - `wqt-backend/app/db.py` no longer used for global_state at runtime; rg shows only docs/AUDIT references.
+  - No runtime imports/usages of load_global_state/save_global_state remain outside `wqt-backend/app/db.py` prior to removal.
+- Classification (A/B/C/D/E/F): F (backend cleanup; no runtime failure observed).
+- Fix summary: Remove GlobalState model + helpers from runtime code; global_state table now unused by app.
+- Verification checklist (post-rename): open Warehouse Map, confirm GET /api/warehouse-map 200 and no POST; console shows no errors.
+- Risks: If any hidden runtime path still expects global_state, rename would fail; rg suggests none.
