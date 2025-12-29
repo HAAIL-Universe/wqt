@@ -180,7 +180,7 @@
   - `wqt-backend/app/main.py:1133` GET /api/warehouse-map reads warehouse_map_state first, then falls back to global_state.
   - `wqt-backend/app/main.py:1159` POST /api/warehouse-map dual-writes to warehouse_map_state + global_state.
   - `scripts/api.js:443` POST /api/warehouse-map now includes ?warehouse= from UI context.
-- Classification (A/B/C/D/E/F): N/A (schema refactor).
+- Classification (A/B/C/D/E/F): F (backend dependency cleanup; no runtime failure observed).
 - Root cause (file:line): /api/warehouse-map persisted shared map in global_state (legacy).
 - Fix summary: Introduce warehouse_map_state; GET reads new table first; POST dual-writes to new table + global_state (temporary).
 - Verification: pending (UI save + Neon SELECT count(*) WHERE warehouse='Map-Warehouse3').
