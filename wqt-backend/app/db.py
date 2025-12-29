@@ -876,20 +876,11 @@ def apply_bay_occupancy_changes(
                     )
                     .first()
                 )
-                if not row:
-                    row = BayOccupancy(
-                        warehouse=warehouse,
-                        row_id=row_id,
-                        aisle=aisle,
-                        bay=bay,
-                        layer=layer,
-                        euro_count=0,
-                        uk_count=0,
-                    )
-                    session.add(row)
+                base_euro = int(row.euro_count or 0) if row else 0
+                base_uk = int(row.uk_count or 0) if row else 2
 
-                new_euro = int(row.euro_count or 0) + delta_euro
-                new_uk = int(row.uk_count or 0) + delta_uk
+                new_euro = base_euro + delta_euro
+                new_uk = base_uk + delta_uk
 
                 if new_euro < 0 or new_uk < 0:
                     raise ValueError("negative_count")
@@ -897,10 +888,24 @@ def apply_bay_occupancy_changes(
                 if used_units > 6:
                     raise ValueError("capacity_exceeded")
 
-                row.euro_count = new_euro
-                row.uk_count = new_uk
-                row.updated_by_device_id = device_id
-                row.updated_at = datetime.now(timezone.utc)
+                if not row:
+                    row = BayOccupancy(
+                        warehouse=warehouse,
+                        row_id=row_id,
+                        aisle=aisle,
+                        bay=bay,
+                        layer=layer,
+                        euro_count=new_euro,
+                        uk_count=new_uk,
+                        updated_by_device_id=device_id,
+                        updated_at=datetime.now(timezone.utc),
+                    )
+                    session.add(row)
+                else:
+                    row.euro_count = new_euro
+                    row.uk_count = new_uk
+                    row.updated_by_device_id = device_id
+                    row.updated_at = datetime.now(timezone.utc)
                 session.commit()
 
                 remaining = _compute_bay_remaining(new_euro, new_uk)

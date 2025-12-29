@@ -120,3 +120,14 @@
 - Verification: pending; requires Neon sanity query + UI click evidence to confirm row initializes at 0/0 then increments.
 - Risks: None known; behavior aligns with occupied-pallet semantics.
 - Note: Prior warehouse-id normalization/debug changes were parked; not part of this fix.
+- Note: Superseded by 16:10 baseline-derived approach below.
+
+## 2025-12-29 16:10 - Baseline-full derived, not persisted
+- Branch/SHA: test/bay-occupancy-integer-check / 27f2507a02fe433836123a7964087cfdcb63d4d9
+- Evidence (code-level):
+  - Derived baseline-full in UI layout uses `uk_count=2` for unknown bays: `scripts/core-state-ui.js:2774`.
+  - bay_occupancy rows represent observed state overrides (only written via apply).
+- Classification (A/B/C/D/E/F): F) Backend data mismatch not surfaced in UI.
+- Fix summary:
+  - Missing bay_occupancy rows are not persisted as full; apply logic now uses a baseline-full assumption for missing rows when computing deltas, but only writes the resulting counts (observed state).
+- Verification: pending; requires UI + Neon sanity query.
