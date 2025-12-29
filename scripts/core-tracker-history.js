@@ -311,6 +311,9 @@ function beginShift(){
     if (hhmm) startTime = hhmm;
   }
   setWqtShiftUiState?.('shift_active');
+  window.dispatchEvent(new CustomEvent('tour:shift-started', {
+    detail: { shiftId: window.activeShiftSession?.id || null, startTime: startTime || null }
+  }));
   pickingCutoff = "";
   // Clean any pre-shift hints/notes
   clearStartHint?.();
@@ -619,6 +622,9 @@ function startOrder() {
 
   // Swap to Active Open Order using the canonical path
   try { restoreActiveOrderUI?.(); } catch (e) {}
+  window.dispatchEvent(new CustomEvent('tour:order-started', {
+    detail: { customer: finalName, total, locations }
+  }));
 
   // Belt-and-braces card visibility
   (function ensureCards(){
@@ -738,6 +744,9 @@ function logWrap() {
     durationMs: wrapDurationMs
   });
   undoStack.push({ type: 'wrap' });
+  window.dispatchEvent(new CustomEvent('tour:wrap-logged', {
+    detail: { left, done }
+  }));
   
   // Clear wrap active state
   if (current.wrapActive) {

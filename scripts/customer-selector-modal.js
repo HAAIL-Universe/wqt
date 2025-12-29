@@ -137,11 +137,12 @@ function showLocationSelection(prefix) {
     locationsList.innerHTML = '';
     
     locations.forEach(loc => {
-      const btn = document.createElement('button');
-      btn.className = 'btn';
-      btn.type = 'button';
-      btn.style.cssText = 'padding:10px 12px; min-width:90px; max-width:95px; display:flex; flex-direction:column; align-items:center; text-align:center; border-radius:8px;';
-      btn.onclick = () => selectCustomerLocation(loc.fullCode);
+    const btn = document.createElement('button');
+    btn.className = 'btn';
+    btn.type = 'button';
+    btn.dataset.tour = 'customer-location';
+    btn.style.cssText = 'padding:10px 12px; min-width:90px; max-width:95px; display:flex; flex-direction:column; align-items:center; text-align:center; border-radius:8px;';
+    btn.onclick = () => selectCustomerLocation(loc.fullCode);
       
       const codeSpan = document.createElement('div');
       codeSpan.style.cssText = 'font-weight:700; font-size:14px;';
@@ -211,6 +212,7 @@ function selectCustomerLocation(fullCode) {
       // Force numeric keyboard on mobile devices
       unitsInput.click();
     }
+    window.dispatchEvent(new CustomEvent('tour:customer-selected', { detail: { fullCode } }));
   }, 150);
 }
 
@@ -285,6 +287,8 @@ function saveNewCustomer() {
   if (typeof showToast === 'function') {
     showToast(`Added ${code}`);
   }
+
+  window.dispatchEvent(new CustomEvent('tour:customer-created', { detail: { code } }));
 }
 
 // ====== Event Listeners ======

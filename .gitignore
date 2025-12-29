@@ -4,3 +4,5 @@ debug_artifacts/
 wqt.zip
 TODO.txt
 Github-URL.txt
+wqt-backend/data/*
+!wqt-backend/data/.gitkeep

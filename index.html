@@ -273,7 +273,7 @@
   </div>
 
   <!-- Customer Selector Modal -->
-  <div id="customerSelectorModal" class="modal" style="display:none;">
+  <div id="customerSelectorModal" class="modal" style="display:none;" data-tour="customer-modal">
     <div class="box">
       <div class="hdr">
         <h3>Select Customer</h3>
@@ -293,7 +293,7 @@
       
       <!-- Add New Customer Section -->
       <div class="modal-footer">
-        <button id="add-customer-btn" class="btn ghost" type="button">+ Add New Customer</button>
+        <button id="add-customer-btn" class="btn ghost" type="button" data-tour="customer-add">+ Add New Customer</button>
       </div>
       
       <!-- Add Customer Form (hidden initially) -->
@@ -308,7 +308,7 @@
         
         <div class="form-actions">
           <button id="cancel-add-customer" class="btn ghost" type="button">Cancel</button>
-          <button id="save-new-customer" class="btn ok" type="button">Save</button>
+          <button id="save-new-customer" class="btn ok" type="button" data-tour="customer-save">Save</button>
         </div>
       </div>
     </div>
@@ -389,6 +389,7 @@
             <button
               class="btn ok"
               id="btnStartShift"
+              data-tour="shift-start"
               type="button"
               style="min-width:180px;"
               onclick="startShift()">
@@ -413,7 +414,7 @@
         
         <div class="tracker-input-bar">
           <div class="tib-customer">
-            <button id="customer-select-trigger" class="glass-input like-select" type="button">
+            <button id="customer-select-trigger" class="glass-input like-select" type="button" data-tour="customer-select">
               <span id="customer-select-label">Select customer…</span>
             </button>
             <span id="selected-customer-code" class="customer-code-chip" style="display:none;"></span>
@@ -422,11 +423,11 @@
           </div>
           
           <div class="tib-units">
-            <input id="oTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="Units">
+            <input id="oTotal" type="number" min="1" step="1" inputmode="numeric" placeholder="Units" data-tour="units-input">
           </div>
           
           <div class="tib-locations">
-            <input id="order-locations" type="number" min="1" step="1" inputmode="numeric" placeholder="Loc">
+            <input id="order-locations" type="number" min="1" step="1" inputmode="numeric" placeholder="Loc" data-tour="locations-input">
           </div>
         </div>
         </div>
@@ -434,7 +435,7 @@
 
       <div id="orderHeaderProgress" class="progHead" style="display:none; position:relative;">
         <div class="progActions">
-          <button id="btnWrapTop" class="btn slim" type="button" onclick="openWrapModal()" disabled>Log Wrap</button>
+          <button id="btnWrapTop" class="btn slim" type="button" onclick="openWrapModal()" disabled data-tour="wrap-open">Log Wrap</button>
         </div>
         <div class="progMeta">
           <div class="progTitle">
@@ -514,7 +515,7 @@
       </div>
       <div class="right">
         <button class="btn" type="button" id="btnSharedStart" onclick="openSharedStart()" disabled>Shared Pick</button>
-        <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled>Start</button>
+        <button class="btn" type="button" onclick="startOrder()" id="btnStart" disabled data-tour="order-start">Start</button>
         <button id="btnBreakMenu" class="btn" type="button" onclick="openBreakChoiceModal()" style="display:none;">☕ Break</button>
       </div>
     </div>
@@ -1034,14 +1035,14 @@
     </div>
     <div class="fld">
       <label for="wrapLeftInput">Units left on this order</label>
-      <input id="wrapLeftInput" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 413">
+      <input id="wrapLeftInput" type="number" min="0" step="1" inputmode="numeric" placeholder="e.g. 413" data-tour="wrap-input">
       <div class="hint" id="wrapHint">Type 0 to enable Complete.</div>
     </div>
     <div class="actions" style="justify-content:space-between; align-items:center; gap:8px;">
       <button class="btn" type="button" onclick="closeWrapModal(); openCloseEarlyModal();">
         Close Early…
       </button>
-      <button class="btn ok" type="button" onclick="submitWrapLeft()">Save Wrap</button>
+      <button class="btn ok" type="button" onclick="submitWrapLeft()" data-tour="wrap-submit">Save Wrap</button>
       <button class="btn ghost" type="button" onclick="closeWrapModal()">Cancel</button>
     </div>
   </div>
@@ -1242,5 +1243,6 @@
   })();
 </script>
 <script src="scripts/boot.js"></script>
+<script src="scripts/tour.js"></script>
 </body>
 </html>

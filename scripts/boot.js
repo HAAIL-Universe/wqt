@@ -12,6 +12,30 @@ function getDeviceIdSafe() {
   }
 }
 
+(function initTourQueryParams(){
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  const tourParams = url.searchParams.getAll('tour');
+  if (tourParams.includes('1')) {
+    window.__TOUR_DEBUG = true;
+  }
+  if (!tourParams.includes('reset')) return;
+  try {
+    const keysToClear = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.indexOf('wqt_tour_') === 0) keysToClear.push(key);
+    }
+    keysToClear.forEach(k => localStorage.removeItem(k));
+  } catch (e) {
+    console.warn('[tour] reset failed', e);
+  }
+  const keep = tourParams.filter(v => v !== 'reset');
+  url.searchParams.delete('tour');
+  keep.forEach(v => url.searchParams.append('tour', v));
+  window.location.replace(url.toString());
+})();
+
 function logoutAndReset() {
   // ====== NEW: Clear in-memory shift state first ======
   // If exitShiftNoArchive exists, call it to wipe all shift-related state and UI
@@ -297,6 +321,7 @@ async function submitOnboardingShiftLength(hours) {
       if (onboarding) onboarding.style.display = 'none';
       if (shift) shift.style.display = 'block';
     }
+    window.dispatchEvent(new CustomEvent('tour:shift-length-selected', { detail: { hours: choice } }));
   } catch (err) {
     console.error('[Onboarding] Failed to save shift length', err);
     showToast?.('Could not save shift length. Try again.');
