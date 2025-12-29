@@ -20,6 +20,24 @@
   - /api responses returned 401 without auth; console first error: "Failed to load resource: the server responded with a status of 401 ()".
   - Render appears to be running pre-fix assets; requires deploy to validate.
 
+## 2025-12-29 19:32 - Re-run onboarding button is unbound
+- Branch/SHA: test/bay-occupancy-integer-check / 20f4a7b62f47e5a0ff6c0e82fc4fa94a253b7ee9
+- Repro steps (local):
+  1) Start local static server at repo root (python -m http.server 8083).
+  2) Pre-set `WQT_CURRENT_USER` in localStorage.
+  3) Open `http://127.0.0.1:8083/index.html` and click "Re-run onboarding".
+- Console first error: Access to fetch at 'https://wqt-backend.onrender.com/api/shifts/active?device-id=...' from origin 'http://127.0.0.1:8083' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+- Network (scripts): N/A (static server; not captured in this run).
+- Network (failed request): `https://wqt-backend.onrender.com/api/shifts/active?...` blocked by CORS (local origin).
+- Classification (A/B/C/D/E/F): C) Init not called / handlers not bound.
+- Root cause (file:line): `index.html:693` calls `restartOnboarding()` but no function is defined anywhere in scripts.
+- Fix summary:
+  - `scripts/boot.js` defines `restartOnboarding()` and routes to `showTab('tracker')`, `Tour.reset()`, `Tour.forceStart()`.
+  - `scripts/tour.js` exposes `window.Tour` with `reset()` + `forceStart()` so the button can override skipped/completed.
+- Verification (local):
+  - Click "Re-run onboarding" creates `wqt_tour_*` with `status:"active"` and shows Tracker tab.
+- Verification (Render): pending deploy; Render boot.js does not yet include `restartOnboarding`.
+
 ## 2025-12-29 18:40 - Tour reset URL rewrite + no auto-start
 - Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
 - Repro steps:

@@ -41,6 +41,23 @@ function getDeviceIdSafe() {
   }
 })();
 
+function restartOnboarding() {
+  try {
+    if (typeof showTab === 'function') showTab('tracker');
+  } catch (e) {}
+
+  const tourApi = window.Tour || window.WqtTour;
+  if (!tourApi) {
+    console.warn('[tour] Tour API not ready');
+    return;
+  }
+  try { if (typeof tourApi.reset === 'function') tourApi.reset(); } catch (e) {}
+  try {
+    if (typeof tourApi.forceStart === 'function') tourApi.forceStart();
+    else if (typeof tourApi.start === 'function') tourApi.start();
+  } catch (e) {}
+}
+
 function logoutAndReset() {
   // ====== NEW: Clear in-memory shift state first ======
   // If exitShiftNoArchive exists, call it to wipe all shift-related state and UI

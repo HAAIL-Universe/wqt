@@ -630,6 +630,24 @@
     showStep(index);
   }
 
+  function resetTour() {
+    clearTimers();
+    cleanupListeners();
+    hideOverlay();
+    try {
+      localStorage.removeItem(getStorageKey());
+    } catch (e) {}
+    state = { ...STATE_DEFAULTS };
+    log('reset');
+  }
+
+  function forceStartTour() {
+    clearTimers();
+    cleanupListeners();
+    hideOverlay();
+    startTourAt(getStartIndexFromUI());
+  }
+
   function pauseTour() {
     setState({ status: 'paused' });
     hideOverlay();
@@ -660,12 +678,16 @@
   }
 
   function init() {
-    window.WqtTour = {
+    const api = {
       start: startTour,
+      reset: resetTour,
+      forceStart: forceStartTour,
       resume: resumeTour,
       pause: pauseTour,
       skip: skipTour
     };
+    window.Tour = api;
+    window.WqtTour = api;
 
     if (hasTourParam()) {
       const forceStart = hasTourForceParam() || window.__TOUR_RESET === true;
