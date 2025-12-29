@@ -131,3 +131,17 @@
 - Fix summary:
   - Missing bay_occupancy rows are not persisted as full; apply logic now uses a baseline-full assumption for missing rows when computing deltas, but only writes the resulting counts (observed state).
 - Verification: pending; requires UI + Neon sanity query.
+
+## 2025-12-29 16:35 - Runtime verification (user)
+- Branch/SHA: test/bay-occupancy-integer-check / e7962fb975fbb37c70cee45e59428eb179fc3ac2
+- Repro steps:
+  1) Baseline unknown bay treated as full (UK=2).
+  2) UI blocks -EURO at euro_count=0.
+  3) -UK frees capacity; +EURO becomes allowed; -EURO allowed once euro_count > 0.
+- Console first error: None reported (user runtime verification).
+- Network (scripts): N/A (user runtime verification).
+- Network (failed request): N/A (user runtime verification).
+- Classification (A/B/C/D/E/F): N/A (verification).
+- Fix summary: No further logic changes; confirms counts represent OCCUPIED pallets and UI gating matches capacity rules.
+- Verification: User reports flow is correct and working.
+- Risks: None reported.
