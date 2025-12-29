@@ -3570,7 +3570,8 @@ function loadWarehouseMap() {
   try {
     const fetchFn = window?.WqtAPI?.fetchWarehouseMap;
     if (typeof fetchFn === 'function') {
-      fetchFn()
+      const warehouseId = getActiveWarehouseId();
+      fetchFn(warehouseId)
         .then(res => {
           const sharedMap = res?.map;
           if (sharedMap && typeof sharedMap === 'object' && sharedMap.aisles) {

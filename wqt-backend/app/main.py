@@ -113,6 +113,7 @@ from .db import (
     bulk_upsert_locations,
     get_warehouse_aisle_summary,
     get_locations_by_aisle,
+    get_warehouse_map_from_locations,
     set_location_empty_state,
     get_bay_occupancy,
     apply_bay_occupancy_changes,
@@ -1131,14 +1132,28 @@ async def api_history_me(
 # -------------------------------------------------------------------
 @app.get("/api/warehouse-map")
 async def api_get_warehouse_map(
+    warehouse: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    payload = load_global_state() or {}
-    existing_map = payload.get("warehouse_map") if isinstance(payload, dict) else None
-    if not isinstance(existing_map, dict):
-        existing_map = {"aisles": {}}
+    warehouse_id = str(warehouse or "").strip()
+    if not warehouse_id:
+        warehouse_id = "WH3"
 
-    return {"success": True, "map": existing_map}
+    canonical_map = get_warehouse_map_from_locations(warehouse_id)
+    payload = load_global_state() or {}
+    legacy_map = payload.get("warehouse_map") if isinstance(payload, dict) else None
+    legacy_map = legacy_map if isinstance(legacy_map, dict) else {}
+
+    if isinstance(canonical_map, dict) and canonical_map.get("aisles"):
+        merged_map = dict(legacy_map)
+        merged_map.update(canonical_map)
+        merged_map["aisles"] = canonical_map.get("aisles") or {}
+        return {"success": True, "map": merged_map}
+
+    if not legacy_map:
+        legacy_map = {"aisles": {}}
+
+    return {"success": True, "map": legacy_map}
 
 
 @app.post("/api/warehouse-map")

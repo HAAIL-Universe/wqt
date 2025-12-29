@@ -18,3 +18,23 @@
 - Root cause (file:line):
   - `scripts/core-state-ui.js:3796` renders aisle chips before global occupancy + outbox-derived availability is computed.
   - `scripts/core-state-ui.js:3798-3799` loads occupancy asynchronously and only later updates `wmAisleHasSpace` via `renderCurrentOccupancyList`, causing a visible neutral state first.
+
+## 2025-12-29 12:16 - Warehouse Map canonical layout source
+- Branch/SHA: test/bay-occupancy-integer-check / 972abf34b68627f7813a0c0dc0f56d5fd44fb752
+- Repro steps: N/A (DB audit + backend refactor).
+- Console first error: N/A.
+- Network (failed request): N/A.
+- Classification (A/B/C/D/E/F): N/A (refactor).
+- Data evidence: public.global_state rowcount = 1; schema columns id (integer), payload (text).
+- Code usage evidence:
+  - `wqt-backend/app/main.py:1136` GET /api/warehouse-map reads global_state.
+  - `wqt-backend/app/main.py:1149` POST /api/warehouse-map writes global_state.
+  - `wqt-backend/app/db.py:102` GlobalState model.
+- Verification: GET /api/warehouse-map served from canonical tables (validated by code inspection in `wqt-backend/app/main.py:1136` calling `get_warehouse_map_from_locations` before fallback; no runtime test run).
+
+## 2025-12-29 12:22 - Warehouse Map warehouse scoping + legacy merge
+- Branch/SHA: test/bay-occupancy-integer-check / 972abf34b68627f7813a0c0dc0f56d5fd44fb752
+- Repro steps: N/A (backend refactor).
+- Data evidence: public.global_state rowcount = 1; schema columns id (integer), payload (text).
+- Change summary: GET /api/warehouse-map accepts `?warehouse=` and defaults to `WH3` if missing; canonical aisles are merged with legacy map keys, with canonical aisles winning.
+- Verification (runtime): pending; requires live `/api/warehouse-map` response capture and frontend render confirmation.

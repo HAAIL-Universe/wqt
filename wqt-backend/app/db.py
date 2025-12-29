@@ -711,6 +711,46 @@ def get_locations_by_aisle(
         session.close()
 
 
+def get_warehouse_map_from_locations(warehouse: Optional[str] = None) -> Dict[str, Any]:
+    """Build a warehouse map layout from canonical warehouse_locations rows."""
+    if engine is None:
+        return {"aisles": {}}
+
+    warehouse_value = str(warehouse or "").strip()
+    if not warehouse_value:
+        return {"aisles": {}}
+
+    session = get_session()
+    try:
+        q = (
+            session.query(
+                WarehouseLocation.aisle,
+                func.min(WarehouseLocation.bay).label("min_bay"),
+                func.max(WarehouseLocation.bay).label("max_bay"),
+            )
+            .filter(WarehouseLocation.is_active == True)
+            .filter(WarehouseLocation.warehouse == warehouse_value)
+        )
+
+        q = q.group_by(WarehouseLocation.aisle).order_by(WarehouseLocation.aisle.asc())
+
+        aisles: Dict[str, Any] = {}
+        for row in q:
+            aisle = str(row.aisle or "").strip()
+            if not aisle:
+                continue
+            min_bay = int(row.min_bay) if row.min_bay is not None else None
+            max_bay = int(row.max_bay) if row.max_bay is not None else None
+            aisles[aisle] = {
+                "minBay": min_bay,
+                "maxBay": max_bay,
+            }
+
+        return {"aisles": aisles}
+    finally:
+        session.close()
+
+
 def set_location_empty_state(
     *,
     location_id: Optional[int] = None,

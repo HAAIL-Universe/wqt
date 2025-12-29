@@ -435,8 +435,9 @@ const WqtAPI = {
         }
     },
 
-    async fetchWarehouseMap() {
-        return fetchJSON('/api/warehouse-map', { method: 'GET' });
+    async fetchWarehouseMap(warehouseId) {
+        const qs = warehouseId ? `?warehouse=${encodeURIComponent(warehouseId || '')}` : '';
+        return fetchJSON(`/api/warehouse-map${qs}`, { method: 'GET' });
     },
 
     async saveWarehouseMapToBackend(map) {
