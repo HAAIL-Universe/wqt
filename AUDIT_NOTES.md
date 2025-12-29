@@ -1,3 +1,27 @@
+## 2025-12-29 21:45 - Start Order atomic swap + tour reposition (instrumented)
+- Branch/SHA: test/bay-occupancy-integer-check / 8ad5565cfd8dad0484199ac26bfe63efd843ed77
+- Repro steps (local, debug=tour):
+  1) Start local static server at repo root (python -m http.server 8088).
+  2) Pre-set `WQT_CURRENT_USER` in localStorage.
+  3) Open `http://127.0.0.1:8088/index.html?tour=1&debug=tour`, go Tracker, enter customer/units/loc, click Start.
+- Console first error: Pending local run (expect CORS errors only on local origin).
+- Network (scripts): N/A (local run pending).
+- Network (failed request): N/A (local run pending).
+- Evidence (instrumentation logs):
+  - `[tour][swap] pre-swap` ... (pending capture)
+  - `[tour][swap] post-swap` ... (pending capture)
+  - `[tour][swap] post-layout` ... (pending capture)
+  - `[tour] wrap-open target` ... (pending capture)
+  - `[tour] wrap-open overlay` ... (pending capture)
+- Classification (A/B/C/D/E/F): E) Layout shift / render race causing incorrect hitboxes and tour overlay misposition.
+- Root cause (file:line): `scripts/core-tracker-history.js:432` swapped `orderHeaderForm`/`orderHeaderProgress` via non-atomic state (previously `fadeSwap`), allowing an intermediate stacked frame.
+- Fix summary:
+  - `scripts/core-tracker-history.js` toggles `#activeOrderCard.order-active` and swaps header visibility synchronously; adds `ui-swap` to suppress transitions during the flip; defers tour reposition after 2x rAF + 50ms.
+  - `scripts/tour.js` adds debug flag parsing for `?debug=tour`/`__WQT_DEBUG_TOUR`, logs wrap-open target + overlay rects, and exposes `positionAll` for post-layout reposition.
+  - `styles/index.css` adds `order-active` and `ui-swap` visibility/transition guards.
+- Verification (local): pending (no local harness in this environment); run with `?debug=tour` to confirm stable rects and clickable Log Wrap.
+- Verification (Render): Julius to validate using same steps; confirm Log Wrap clickable and highlight aligned.
+
 ## 2025-12-29 19:10 - Tour respects skip/completed unless forced
 - Branch/SHA: test/bay-occupancy-integer-check / f42aa297bb4759abea373ff7d2a19535580df4cb
 - Repro steps (Render, pre-fix):

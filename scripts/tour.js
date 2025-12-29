@@ -85,10 +85,43 @@
   let activeListeners = [];
   let advancing = false;
 
+  (function initTourDebugFlag(){
+    let enabled = false;
+    try {
+      const params = new URL(window.location.href).searchParams.getAll('debug');
+      enabled = params.indexOf('tour') !== -1;
+    } catch (e) {}
+    if (window.__WQT_DEBUG_TOUR) enabled = true;
+    if (enabled) window.__TOUR_DEBUG = true;
+  })();
+
   function log() {
     if (!window.__TOUR_DEBUG) return;
     const args = Array.prototype.slice.call(arguments);
     console.log.apply(console, ['[tour]'].concat(args));
+  }
+
+  function rectToObj(rect) {
+    if (!rect) return null;
+    return {
+      x: rect.x,
+      y: rect.y,
+      top: rect.top,
+      left: rect.left,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
+  function describeEl(el) {
+    if (!el) return null;
+    return {
+      tag: el.tagName ? el.tagName.toLowerCase() : null,
+      id: el.id || null,
+      dataTour: el.getAttribute ? el.getAttribute('data-tour') : null
+    };
   }
 
   function getUserId() {
@@ -423,7 +456,15 @@
         return wrapModal;
       }
     }
-    return document.querySelector(step.selector);
+    const target = document.querySelector(step.selector);
+    if (step.id === 'wrap-open' && window.__TOUR_DEBUG) {
+      log('wrap-open target', {
+        selector: step.selector,
+        target: describeEl(target),
+        rect: rectToObj(target ? target.getBoundingClientRect() : null)
+      });
+    }
+    return target;
   }
 
   function waitForTarget(step) {
@@ -579,6 +620,14 @@
     positionMasks(rect);
     positionHighlight(rect);
     positionTooltip(rect);
+    if (window.__TOUR_DEBUG && currentStep && currentStep.id === 'wrap-open') {
+      log('wrap-open overlay', {
+        selector: currentStep.selector,
+        target: describeEl(activeTarget),
+        targetRect: rectToObj(rect),
+        overlayRect: rectToObj(highlight ? highlight.getBoundingClientRect() : null)
+      });
+    }
   }
 
   function positionMasks(rect) {
@@ -784,6 +833,7 @@
       reset: resetTour,
       forceStart: forceStartTour,
       resume: resumeTour,
+      positionAll: positionAll,
       pause: pauseTour,
       skip: skipTour
     };

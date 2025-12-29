@@ -404,6 +404,24 @@ function restoreActiveOrderUI() {
   const hdrForm   = document.getElementById('orderHeaderForm');
   const hdrProg   = document.getElementById('orderHeaderProgress');
   const orderArea = document.getElementById('orderArea');
+  const swapRoot  = document.getElementById('activeOrderCard');
+
+  if (swapRoot) {
+    const wasActive = swapRoot.classList.contains('order-active');
+    const shouldActive = !!inOrder;
+    if (wasActive !== shouldActive) {
+      swapRoot.classList.add('ui-swap');
+      swapRoot.classList.toggle('order-active', shouldActive);
+      const clearSwap = () => swapRoot.classList.remove('ui-swap');
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => requestAnimationFrame(clearSwap));
+      } else {
+        setTimeout(clearSwap, 0);
+      }
+    } else {
+      swapRoot.classList.toggle('order-active', shouldActive);
+    }
+  }
 
   const show = (id, on, disp = 'inline-block') => {
     const el = document.getElementById(id);
@@ -413,10 +431,8 @@ function restoreActiveOrderUI() {
 
   if (inOrder) {
     // Swap headers
-    if (hdrForm && hdrProg) {
-      if (typeof fadeSwap === 'function') fadeSwap(hdrForm, hdrProg, 'flex');
-      else { hdrForm.style.display = 'none'; hdrProg.style.display = 'flex'; }
-    }
+    if (hdrForm) { hdrForm.style.display = 'none'; hdrForm.classList.remove('show'); }
+    if (hdrProg) hdrProg.style.display = 'flex';
     if (orderArea) orderArea.style.display = 'block';
 
     // ⛔ Remove any pre-order Contracted/Actual note when an order is active
@@ -511,7 +527,7 @@ function restoreActiveOrderUI() {
     // S1/S2: show form, hide progress/area
     if (hdrProg)   hdrProg.style.display = 'none';
     if (orderArea) orderArea.style.display = 'none';
-    if (hdrForm)   hdrForm.style.display = '';
+    if (hdrForm) { hdrForm.style.display = ''; hdrForm.classList.add('show'); }
 
     // Restore contracted note on S1 only (pre-order)
     renderPreOrderNoteFromLog?.();
@@ -620,11 +636,69 @@ function startOrder() {
     }
   })();
 
+  const debugTour = (function(){
+    if (window.__WQT_DEBUG_TOUR || window.__TOUR_DEBUG) return true;
+    try {
+      const params = new URL(window.location.href).searchParams.getAll('debug');
+      return params.indexOf('tour') !== -1;
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  const rectToObj = (rect) => rect ? ({
+    x: rect.x,
+    y: rect.y,
+    top: rect.top,
+    left: rect.left,
+    right: rect.right,
+    bottom: rect.bottom,
+    width: rect.width,
+    height: rect.height
+  }) : null;
+
+  const snapshot = (el) => {
+    if (!el) return { present: false };
+    const rect = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    return {
+      present: true,
+      display: style.display,
+      visibility: style.visibility,
+      rect: rectToObj(rect)
+    };
+  };
+
+  const logSwap = (stage) => {
+    if (!debugTour) return;
+    const pre = document.getElementById('orderHeaderForm');
+    const prog = document.getElementById('orderHeaderProgress');
+    const wrap = document.getElementById('btnWrapTop');
+    console.log('[tour][swap]', stage, {
+      preOrder: snapshot(pre),
+      activeHeader: snapshot(prog),
+      wrapButton: snapshot(wrap)
+    });
+  };
+
   // Swap to Active Open Order using the canonical path
+  logSwap('pre-swap');
   try { restoreActiveOrderUI?.(); } catch (e) {}
+  logSwap('post-swap');
   window.dispatchEvent(new CustomEvent('tour:order-started', {
     detail: { customer: finalName, total, locations }
   }));
+
+  const deferTourPosition = () => {
+    logSwap('post-layout');
+    const tourApi = window.Tour || window.WqtTour;
+    try { tourApi?.positionAll?.(); } catch (e) {}
+  };
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(deferTourPosition, 50)));
+  } else {
+    setTimeout(deferTourPosition, 50);
+  }
 
   // Belt-and-braces card visibility
   (function ensureCards(){

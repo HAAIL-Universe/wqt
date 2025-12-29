@@ -1651,6 +1651,15 @@ td.small { font-size:12px; color:#9fb3c8; }
   flex-wrap: wrap;
   align-items: center;
 }
+#activeOrderCard.order-active #orderHeaderForm { display: none !important; }
+#activeOrderCard.order-active #orderHeaderProgress { display: flex !important; }
+#activeOrderCard.order-active #orderArea { display: block !important; }
+#activeOrderCard.ui-swap #orderHeaderForm,
+#activeOrderCard.ui-swap #orderHeaderProgress,
+#activeOrderCard.ui-swap #orderArea,
+#activeOrderCard.ui-swap .fade {
+  transition: none !important;
+}
 .progDetails .progBullet { opacity:.55; margin:0 4px; }
 .progSub { color: var(--muted); font-size:12px; margin-top:2px; }
 .progBar {
