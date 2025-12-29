@@ -794,7 +794,10 @@
       </div>
 
       <div id="wmAisleBrowser">
-        <div id="wmLoading" class="hint" style="display:none; margin-bottom:10px;">Loading warehouse information...</div>
+        <div id="wmLoading" class="hint" style="display:none; margin-bottom:10px;" role="status" aria-live="polite">
+          <span class="wm-spinner" aria-hidden="true"></span>
+          Loading warehouse information...
+        </div>
         <div id="wmAisleHint" class="hint" style="margin-bottom:10px;">Tap an aisle to view available bay space.</div>
         <div id="wmAisleChips" class="wm-aisle-chips"></div>
         <div class="wm-occupancy-search">
