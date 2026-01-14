@@ -8,7 +8,8 @@ This README is intentionally **safe to share**: it contains **no secrets**, no p
 
 <img width="755" height="1536" alt="image" src="https://github.com/user-attachments/assets/6dfdb113-c636-493c-b69c-2352ce3ae1c2" />
 
-<img width="755" height="1536" alt="image" src="https://github.com/user-attachments/assets/aee7757b-a508-4e09-92f2-544019863e8b" />
+![10586830-E821-4DBE-AAA9-29F33BE01448](https://github.com/user-attachments/assets/1c4fd396-8dbf-4059-b947-6034b291f6a3)
+
 
 <img width="755" height="1536" alt="image" src="https://github.com/user-attachments/assets/70da1ca5-0e19-4447-ab43-8e4ee84e6ce9" />
 
