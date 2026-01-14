@@ -7,12 +7,15 @@ This README is intentionally **safe to share**: it contains **no secrets**, no p
 ## Screenshots
 
 **Live tracker (in-shift)**
+<br>
 <img src="screenshots/10586830-E821-4DBE-AAA9-29F33BE01448.jpeg" width="420" />
 
 **Completed orders + performance breakdown**
+<br>
 <img src="screenshots/624B63E7-840B-4A5D-AD8C-21F8ED4B5043.jpeg" width="480" />
 
 **Order event log (delays, breaks, context)**
+<br>
 <img src="screenshots/70F0C47D-D90E-4ED6-8002-FAEE163E7F06.jpeg" width="420" />
 
 ## Repo layout
