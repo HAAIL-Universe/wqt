@@ -119,8 +119,6 @@ from .db import (
     WarehouseLocation,
 )
 
-app = FastAPI(title="WQT Backend v1")
-
 # -------------------------------------------------------------------
 # Auth configuration
 # -------------------------------------------------------------------

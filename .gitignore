@@ -1,6 +1,8 @@
 debug_artifacts/
 .env
 .env.*
+!.env.example
+!wqt-backend/.env.example
 wqt.zip
 TODO.txt
 Github-URL.txt
