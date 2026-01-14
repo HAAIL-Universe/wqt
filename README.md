@@ -6,7 +6,12 @@ This README is intentionally **safe to share**: it contains **no secrets**, no p
 
 ## Screenshots
 
-*(Add screenshots of the Picking UI and Admin Dashboard here)*
+<img width="755" height="1536" alt="image" src="https://github.com/user-attachments/assets/6dfdb113-c636-493c-b69c-2352ce3ae1c2" />
+
+<img width="755" height="1536" alt="image" src="https://github.com/user-attachments/assets/aee7757b-a508-4e09-92f2-544019863e8b" />
+
+<img width="755" height="1536" alt="image" src="https://github.com/user-attachments/assets/70da1ca5-0e19-4447-ab43-8e4ee84e6ce9" />
+
 
 ## Repo layout
 
