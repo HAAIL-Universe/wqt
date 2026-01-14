@@ -98,18 +98,9 @@ This is a fast-moving, UI-first project. It is not “hardened” by default.
   - *Action*: Rely on server-side role claims in JWT.
 
 ### Medium
-- **Debug Logs**: Backend emits `AUTH_DEBUG` logs in some modes.
-  - *Action*: Ensure `AUDIT_ROUTES` and debug flags are disabled in production.
 - **CORS**: Uses `allow_credentials=True`. 
   - *Action*: Ensure `ALLOWED_ORIGINS` is explicitly defined in production.
 
 ### Operational notes
 - Backend requires Postgres (`DATABASE_URL`) and will fail-fast if missing.
 - Migrations are SQL files in `wqt-backend/migrations/` and should be applied in order against your database.
-
-## Where to look
-
-- **Backend entrypoint**: `wqt-backend/app/main.py`
-- **DB + models**: `wqt-backend/app/db.py`, `wqt-backend/app/models.py`
-- **Frontend API adapter**: `scripts/api.js`
-- **Login flow**: `scripts/login.js`
